@@ -6,12 +6,15 @@ import { getStudentsByCoachId } from '@/lib/notion/students';
 import { findCoachByLineId } from '@/lib/notion/coaches';
 import { findStudentByLineId } from '@/lib/notion/students';
 import { getCheckinsByStudent } from '@/lib/notion/checkins';
+import { getStudentHoursSummary } from '@/lib/notion/hours';
 import {
   startAddStudent,
   handleAddStudentStep,
   getAddStudentState,
   getEditStudentState,
   handleEditStudentStep,
+  getPaymentState,
+  handlePaymentStep,
   handleBinding,
   getBindingState,
   startBinding,
@@ -50,6 +53,21 @@ export async function handleMessage(event: MessageEvent): Promise<void> {
         ]);
       } catch (error) {
         console.error('Edit student step error:', error);
+        await replyText(event.replyToken, TEXT.ERROR);
+      }
+      return;
+    }
+
+    const pmtState = getPaymentState(lineUserId);
+    if (pmtState) {
+      try {
+        const result = await handlePaymentStep(lineUserId, text);
+        const qr = coachQuickReply();
+        await replyMessages(event.replyToken, [
+          { type: 'text', text: result.message, quickReply: result.done ? { items: qr } : undefined },
+        ]);
+      } catch (error) {
+        console.error('Payment step error:', error);
         await replyText(event.replyToken, TEXT.ERROR);
       }
       return;
@@ -126,9 +144,11 @@ async function handleStudentMessage(
         ]);
         return;
       }
-      const records = await getCheckinsByStudent(student.id);
-      const remaining = student.purchasedClasses - student.completedClasses;
-      await replyFlex(replyToken, '上課紀錄', classHistoryCard(student.name, records, remaining));
+      const [records, summary] = await Promise.all([
+        getCheckinsByStudent(student.id),
+        getStudentHoursSummary(student.id),
+      ]);
+      await replyFlex(replyToken, '上課紀錄', classHistoryCard(student.name, records, summary.remainingHours));
       return;
     }
 
@@ -141,7 +161,8 @@ async function handleStudentMessage(
         ]);
         return;
       }
-      await replyFlex(replyToken, `${student.name} 學員資訊`, studentInfoCard(student));
+      const summary = await getStudentHoursSummary(student.id);
+      await replyFlex(replyToken, `${student.name} 學員資訊`, studentInfoCard(student, summary));
       return;
     }
 
@@ -221,7 +242,9 @@ async function handleCoachMessage(
         ));
         return;
       }
-      const bubbles = studentMgmtList(students);
+      const summaries = await Promise.all(students.map(s => getStudentHoursSummary(s.id)));
+      const studentsWithSummary = students.map((s, i) => ({ ...s, summary: summaries[i] }));
+      const bubbles = studentMgmtList(studentsWithSummary);
       await replyFlexCarousel(replyToken, `學員管理（共 ${students.length} 人）`, bubbles);
       return;
     }

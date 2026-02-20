@@ -1,17 +1,16 @@
 import type { messagingApi } from '@line/bot-sdk';
-import type { Student } from '@/types';
+import type { Student, StudentHoursSummary } from '@/types';
+import { formatHours } from '@/lib/utils/date';
 
 type FlexBubble = messagingApi.FlexBubble;
 type FlexComponent = messagingApi.FlexComponent;
 
-export function studentInfoCard(student: Student): FlexBubble {
-  const remaining = student.purchasedClasses - student.completedClasses;
+export function studentInfoCard(student: Student, summary: StudentHoursSummary): FlexBubble {
   const rows: FlexComponent[] = [
     infoRow('姓名', student.name),
-    infoRow('購買堂數', `${student.purchasedClasses} 堂`),
-    infoRow('已上堂數', `${student.completedClasses} 堂`),
-    infoRow('剩餘堂數', `${remaining} 堂`),
-    infoRow('繳費狀態', student.isPaid ? '已繳費' : '未繳費'),
+    infoRow('購買時數', formatHours(summary.purchasedHours)),
+    infoRow('已上時數', formatHours(summary.completedHours)),
+    infoRow('剩餘時數', formatHours(summary.remainingHours)),
   ];
 
   if (student.status) rows.push(infoRow('狀態', student.status));

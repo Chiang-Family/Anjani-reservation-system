@@ -1,5 +1,6 @@
 import type { messagingApi } from '@line/bot-sdk';
 import type { CheckinRecord } from '@/types';
+import { formatHours } from '@/lib/utils/date';
 
 type FlexBubble = messagingApi.FlexBubble;
 type FlexComponent = messagingApi.FlexComponent;
@@ -7,7 +8,7 @@ type FlexComponent = messagingApi.FlexComponent;
 export function classHistoryCard(
   studentName: string,
   records: CheckinRecord[],
-  remaining: number
+  remainingHours: number
 ): FlexBubble {
   const recent = records.slice(0, 10);
 
@@ -28,7 +29,15 @@ export function classHistoryCard(
             text: r.classTimeSlot,
             size: 'sm',
             color: '#333333',
-            flex: 3,
+            flex: 4,
+          },
+          {
+            type: 'text',
+            text: r.durationMinutes > 0 ? `${r.durationMinutes}分` : '-',
+            size: 'sm',
+            color: '#333333',
+            flex: 2,
+            align: 'end',
           },
         ],
         margin: 'sm',
@@ -59,7 +68,7 @@ export function classHistoryCard(
         },
         {
           type: 'text',
-          text: `${studentName}｜剩餘 ${remaining} 堂`,
+          text: `${studentName}｜剩餘 ${formatHours(remainingHours)}`,
           size: 'sm',
           color: '#FFFFFFCC',
           margin: 'sm',
@@ -90,7 +99,16 @@ export function classHistoryCard(
               size: 'xs',
               color: '#999999',
               weight: 'bold',
-              flex: 3,
+              flex: 4,
+            },
+            {
+              type: 'text',
+              text: '時長',
+              size: 'xs',
+              color: '#999999',
+              weight: 'bold',
+              flex: 2,
+              align: 'end',
             },
           ],
         },

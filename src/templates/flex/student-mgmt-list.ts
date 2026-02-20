@@ -1,15 +1,14 @@
 import type { messagingApi } from '@line/bot-sdk';
 import { ACTION } from '@/lib/config/constants';
-import type { Student } from '@/types';
+import type { Student, StudentHoursSummary } from '@/types';
+import { formatHours } from '@/lib/utils/date';
 
 type FlexBubble = messagingApi.FlexBubble;
 type FlexComponent = messagingApi.FlexComponent;
 
-export function studentMgmtList(students: Student[]): FlexBubble[] {
+export function studentMgmtList(students: Array<Student & { summary: StudentHoursSummary }>): FlexBubble[] {
   return students.map((student) => {
-    const remaining = student.purchasedClasses - student.completedClasses;
-    const paymentStatus = student.isPaid ? '已繳費' : '未繳費';
-    const paymentColor = student.isPaid ? '#27ae60' : '#e74c3c';
+    const { summary } = student;
 
     return {
       type: 'bubble',
@@ -33,31 +32,9 @@ export function studentMgmtList(students: Student[]): FlexBubble[] {
         type: 'box',
         layout: 'vertical',
         contents: [
-          infoRow('購買堂數', `${student.purchasedClasses} 堂`),
-          infoRow('已上堂數', `${student.completedClasses} 堂`),
-          infoRow('剩餘堂數', `${remaining} 堂`),
-          infoRow('每堂單價', `${student.pricePerClass} 元`),
-          {
-            type: 'box',
-            layout: 'horizontal',
-            contents: [
-              {
-                type: 'text',
-                text: '繳費狀態',
-                size: 'sm',
-                color: '#999999',
-                flex: 2,
-              },
-              {
-                type: 'text',
-                text: paymentStatus,
-                size: 'sm',
-                weight: 'bold',
-                color: paymentColor,
-                flex: 3,
-              },
-            ],
-          },
+          infoRow('購買時數', formatHours(summary.purchasedHours)),
+          infoRow('已上時數', formatHours(summary.completedHours)),
+          infoRow('剩餘時數', formatHours(summary.remainingHours)),
         ] as FlexComponent[],
         paddingAll: '16px',
         spacing: 'sm',
@@ -70,9 +47,9 @@ export function studentMgmtList(students: Student[]): FlexBubble[] {
             type: 'button',
             action: {
               type: 'postback',
-              label: '加值堂數（續約）',
-              data: `${ACTION.ADD_CLASSES}:${student.id}`,
-              displayText: `為 ${student.name} 加值堂數`,
+              label: '加值時數（續約）',
+              data: `${ACTION.ADD_HOURS}:${student.id}`,
+              displayText: `為 ${student.name} 加值時數`,
             },
             style: 'primary',
             color: '#27ae60',
@@ -82,9 +59,9 @@ export function studentMgmtList(students: Student[]): FlexBubble[] {
             type: 'button',
             action: {
               type: 'postback',
-              label: '修改購買堂數',
-              data: `${ACTION.EDIT_CLASSES}:${student.id}`,
-              displayText: `修改 ${student.name} 的購買堂數`,
+              label: '修改購買時數',
+              data: `${ACTION.EDIT_HOURS}:${student.id}`,
+              displayText: `修改 ${student.name} 的購買時數`,
             },
             style: 'primary',
             color: '#4A90D9',
@@ -94,24 +71,12 @@ export function studentMgmtList(students: Student[]): FlexBubble[] {
             type: 'button',
             action: {
               type: 'postback',
-              label: '修改每堂單價',
-              data: `${ACTION.EDIT_PRICE}:${student.id}`,
-              displayText: `修改 ${student.name} 的每堂單價`,
-            },
-            style: 'primary',
-            color: '#4A90D9',
-            height: 'sm',
-          },
-          {
-            type: 'button',
-            action: {
-              type: 'postback',
-              label: student.isPaid ? '標記為未繳費' : '標記為已繳費',
+              label: '收款',
               data: `${ACTION.TOGGLE_PAYMENT}:${student.id}`,
-              displayText: `切換 ${student.name} 的繳費狀態`,
+              displayText: `為 ${student.name} 收款`,
             },
             style: 'primary',
-            color: student.isPaid ? '#e74c3c' : '#27ae60',
+            color: '#e67e22',
             height: 'sm',
           },
         ] as FlexComponent[],

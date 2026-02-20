@@ -7,6 +7,7 @@ const envSchema = z.object({
   NOTION_STUDENTS_DB_ID: z.string().min(1),
   NOTION_COACHES_DB_ID: z.string().min(1),
   NOTION_CHECKIN_DB_ID: z.string().min(1),
+  NOTION_PAYMENTS_DB_ID: z.string().min(1),
   GOOGLE_CALENDAR_ID: z.string().min(1),
   GOOGLE_SERVICE_ACCOUNT_EMAIL: z.string().min(1),
   GOOGLE_PRIVATE_KEY: z.string().min(1),

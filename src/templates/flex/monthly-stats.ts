@@ -5,6 +5,43 @@ type FlexBubble = messagingApi.FlexBubble;
 type FlexComponent = messagingApi.FlexComponent;
 
 export function monthlyStatsCard(stats: CoachMonthlyStats): FlexBubble {
+  const bodyContents: FlexComponent[] = [
+    statRow('📅 本月排課', `${stats.scheduledClasses} 堂`),
+    statRow('⏱️ 總時數', `${stats.totalHours} 小時`),
+    statRow('👥 學員人數', `${stats.studentCount} 人`),
+    separator(),
+    statRow('💰 已收金額', `$${stats.collectedAmount.toLocaleString()}`),
+    statRow('📋 待收金額', `$${stats.pendingAmount.toLocaleString()}`),
+  ];
+
+  // Renewal forecast section
+  const forecast = stats.renewalForecast;
+  if (forecast.studentCount > 0) {
+    bodyContents.push(separator());
+    bodyContents.push({
+      type: 'text',
+      text: '🔮 預估續約',
+      size: 'sm',
+      weight: 'bold',
+      color: '#333333',
+      margin: 'md',
+    } as FlexComponent);
+    bodyContents.push(
+      statRow('本月到期學員', `${forecast.studentCount} 人`),
+      statRow('預估續約金額', `$${forecast.expectedAmount.toLocaleString()}`),
+    );
+    for (const s of forecast.students) {
+      bodyContents.push({
+        type: 'text',
+        text: `· ${s.name} 剩${s.remainingHours}hr → 續${s.expectedRenewalHours}hr $${s.expectedRenewalAmount.toLocaleString()}`,
+        size: 'xs',
+        color: '#888888',
+        margin: 'sm',
+        wrap: true,
+      } as FlexComponent);
+    }
+  }
+
   return {
     type: 'bubble',
     size: 'mega',
@@ -33,14 +70,7 @@ export function monthlyStatsCard(stats: CoachMonthlyStats): FlexBubble {
     body: {
       type: 'box',
       layout: 'vertical',
-      contents: [
-        statRow('📅 本月排課', `${stats.scheduledClasses} 堂`),
-        statRow('⏱️ 總時數', `${stats.totalHours} 小時`),
-        statRow('👥 學員人數', `${stats.studentCount} 人`),
-        separator(),
-        statRow('💰 已收金額', `$${stats.collectedAmount.toLocaleString()}`),
-        statRow('📋 待收金額', `$${stats.pendingAmount.toLocaleString()}`),
-      ] as FlexComponent[],
+      contents: bodyContents,
       paddingAll: '20px',
       spacing: 'md',
     },

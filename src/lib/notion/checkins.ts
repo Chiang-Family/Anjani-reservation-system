@@ -24,6 +24,11 @@ function getRelationIds(prop: Record<string, unknown>): string[] {
   return relations?.map((r) => r.id) ?? [];
 }
 
+function getNumberValue(prop: Record<string, unknown>): number {
+  if (!prop) return 0;
+  return (prop.number as number) ?? 0;
+}
+
 function getDateValue(prop: Record<string, unknown>): string {
   if (!prop) return '';
   const dateObj = prop.date as { start: string } | null;
@@ -45,6 +50,7 @@ function extractCheckin(page: Record<string, unknown>): CheckinRecord {
     checkinTime,
     classDate: checkinTime ? checkinTime.slice(0, 10) : '',
     classTimeSlot,
+    durationMinutes: getNumberValue(props[CHECKIN_PROPS.DURATION]),
     studentName: title.split(' - ')[0] || undefined,
   };
 }
@@ -56,6 +62,7 @@ export async function createCheckinRecord(params: {
   classDate: string;
   classTimeSlot: string;
   checkinTime: string;
+  durationMinutes: number;
 }): Promise<CheckinRecord> {
   const notion = getNotionClient();
   const title = `${params.studentName} - ${params.classDate}`;
@@ -75,6 +82,9 @@ export async function createCheckinRecord(params: {
     },
     [CHECKIN_PROPS.CHECKIN_TIME]: {
       date: { start: params.checkinTime },
+    },
+    [CHECKIN_PROPS.DURATION]: {
+      number: params.durationMinutes,
     },
   };
 

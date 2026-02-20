@@ -1,7 +1,7 @@
 import type { PostbackEvent } from '@line/bot-sdk';
 import { coachCheckinForStudent } from '@/services/checkin.service';
 import { getCoachScheduleForDate } from '@/services/coach.service';
-import { startEditStudent, toggleStudentPayment } from '@/services/student-management.service';
+import { startEditStudent, startPaymentCollection } from '@/services/student-management.service';
 import { getStudentById } from '@/lib/notion/students';
 import { replyText, replyFlex, replyMessages } from '@/lib/line/reply';
 import { ACTION } from '@/lib/config/constants';
@@ -52,45 +52,31 @@ export async function handlePostback(event: PostbackEvent): Promise<void> {
         return;
       }
 
-      case ACTION.ADD_CLASSES: {
+      case ACTION.ADD_HOURS: {
         const student = await getStudentById(id);
         if (!student) {
           await replyTextWithMenu(event.replyToken, '找不到該學員資料。');
           return;
         }
-        const msg = startEditStudent(lineUserId, 'add_classes', id, student.name);
+        const msg = startEditStudent(lineUserId, 'add_hours', id, student.name);
         await replyText(event.replyToken, msg);
         return;
       }
 
-      case ACTION.EDIT_CLASSES: {
+      case ACTION.EDIT_HOURS: {
         const student = await getStudentById(id);
         if (!student) {
           await replyTextWithMenu(event.replyToken, '找不到該學員資料。');
           return;
         }
-        const msg = startEditStudent(lineUserId, 'classes', id, student.name);
-        await replyText(event.replyToken, msg);
-        return;
-      }
-
-      case ACTION.EDIT_PRICE: {
-        const student = await getStudentById(id);
-        if (!student) {
-          await replyTextWithMenu(event.replyToken, '找不到該學員資料。');
-          return;
-        }
-        const msg = startEditStudent(lineUserId, 'price', id, student.name);
+        const msg = startEditStudent(lineUserId, 'hours', id, student.name);
         await replyText(event.replyToken, msg);
         return;
       }
 
       case ACTION.TOGGLE_PAYMENT: {
-        const msg = await toggleStudentPayment(id);
-        const qr = coachQuickReply();
-        await replyMessages(event.replyToken, [
-          { type: 'text', text: msg, quickReply: { items: qr } },
-        ]);
+        const msg = await startPaymentCollection(id, lineUserId);
+        await replyText(event.replyToken, msg);
         return;
       }
 

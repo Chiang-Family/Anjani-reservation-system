@@ -4,10 +4,6 @@ export const STUDENT_PROPS = {
   NAME: '姓名',
   LINE_USER_ID: 'LINE User ID',
   COACH: '所屬教練',
-  PURCHASED_CLASSES: '購買堂數',
-  PRICE_PER_CLASS: '每堂單價',
-  COMPLETED_CLASSES: '已上堂數',
-  IS_PAID: '是否已繳費',
   STATUS: '狀態',
 } as const;
 
@@ -18,10 +14,23 @@ export const COACH_PROPS = {
   STATUS: '狀態',
 } as const;
 
+export const PAYMENT_PROPS = {
+  TITLE: '標題',
+  STUDENT: '學員',
+  COACH: '教練',
+  PURCHASED_HOURS: '購買時數',
+  PRICE_PER_HOUR: '每小時單價',
+  TOTAL_AMOUNT: '總金額',
+  PAID_AMOUNT: '已付金額',
+  STATUS: '繳費狀態',
+  CREATED_AT: '建立日期',
+} as const;
+
 export const CHECKIN_PROPS = {
   TITLE: '標題',
   STUDENT: '學員',
   COACH: '教練',
   CLASS_TIME_SLOT: '課程時段',
   CHECKIN_TIME: '打卡時間',
+  DURATION: '課程時長',
 } as const;

@@ -64,3 +64,15 @@ export function formatSlotDisplay(date: string, startTime: string, endTime: stri
   const d = toTaipei(date);
   return `${formatDate(d)}（${formatWeekday(d)}）${startTime}–${endTime}`;
 }
+
+/** 計算課程時長（分鐘），從 HH:mm 格式的開始/結束時間 */
+export function computeDurationMinutes(startTime: string, endTime: string): number {
+  const [startH, startM] = startTime.split(':').map(Number);
+  const [endH, endM] = endTime.split(':').map(Number);
+  return (endH * 60 + endM) - (startH * 60 + startM);
+}
+
+/** 格式化小時數為中文顯示（如 7.5 小時） */
+export function formatHours(hours: number): string {
+  return `${Math.round(hours * 10) / 10} 小時`;
+}

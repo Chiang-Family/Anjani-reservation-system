@@ -20,16 +20,6 @@ function getRichTextValue(prop: Record<string, unknown>): string {
   return '';
 }
 
-function getNumberValue(prop: Record<string, unknown>): number {
-  if (!prop) return 0;
-  return (prop.number as number) ?? 0;
-}
-
-function getCheckboxValue(prop: Record<string, unknown>): boolean {
-  if (!prop) return false;
-  return (prop.checkbox as boolean) ?? false;
-}
-
 function getRelationIds(prop: Record<string, unknown>): string[] {
   if (!prop) return [];
   const relations = prop.relation as Array<{ id: string }> | undefined;
@@ -44,10 +34,6 @@ function extractStudent(page: Record<string, unknown>): Student {
     name: getRichTextValue(props[STUDENT_PROPS.NAME]),
     lineUserId: getRichTextValue(props[STUDENT_PROPS.LINE_USER_ID]),
     coachId: coachRelation[0] || undefined,
-    purchasedClasses: getNumberValue(props[STUDENT_PROPS.PURCHASED_CLASSES]),
-    pricePerClass: getNumberValue(props[STUDENT_PROPS.PRICE_PER_CLASS]),
-    completedClasses: getNumberValue(props[STUDENT_PROPS.COMPLETED_CLASSES]),
-    isPaid: getCheckboxValue(props[STUDENT_PROPS.IS_PAID]),
     status: getRichTextValue(props[STUDENT_PROPS.STATUS]) || undefined,
   };
 }
@@ -82,44 +68,6 @@ export async function findStudentByName(name: string): Promise<Student | null> {
   return extractStudent(res.results[0] as unknown as Record<string, unknown>);
 }
 
-export async function updateCompletedClasses(
-  studentId: string,
-  newCount: number
-): Promise<void> {
-  const notion = getNotionClient();
-  await notion.pages.update({
-    page_id: studentId,
-    properties: {
-      [STUDENT_PROPS.COMPLETED_CLASSES]: { number: newCount },
-    },
-  });
-}
-
-export async function updateStudent(
-  studentId: string,
-  fields: {
-    purchasedClasses?: number;
-    pricePerClass?: number;
-    isPaid?: boolean;
-  }
-): Promise<void> {
-  const notion = getNotionClient();
-  const properties: Record<string, unknown> = {};
-  if (fields.purchasedClasses !== undefined) {
-    properties[STUDENT_PROPS.PURCHASED_CLASSES] = { number: fields.purchasedClasses };
-  }
-  if (fields.pricePerClass !== undefined) {
-    properties[STUDENT_PROPS.PRICE_PER_CLASS] = { number: fields.pricePerClass };
-  }
-  if (fields.isPaid !== undefined) {
-    properties[STUDENT_PROPS.IS_PAID] = { checkbox: fields.isPaid };
-  }
-  await notion.pages.update({
-    page_id: studentId,
-    properties: properties as Parameters<typeof notion.pages.update>[0]['properties'],
-  });
-}
-
 export async function bindStudentLineId(
   studentId: string,
   lineUserId: string
@@ -138,9 +86,6 @@ export async function bindStudentLineId(
 export async function createStudent(params: {
   name: string;
   coachId: string;
-  purchasedClasses: number;
-  pricePerClass: number;
-  isPaid: boolean;
 }): Promise<Student> {
   const notion = getNotionClient();
   const properties = {
@@ -149,18 +94,6 @@ export async function createStudent(params: {
     },
     [STUDENT_PROPS.COACH]: {
       relation: [{ id: params.coachId }],
-    },
-    [STUDENT_PROPS.PURCHASED_CLASSES]: {
-      number: params.purchasedClasses,
-    },
-    [STUDENT_PROPS.PRICE_PER_CLASS]: {
-      number: params.pricePerClass,
-    },
-    [STUDENT_PROPS.COMPLETED_CLASSES]: {
-      number: 0,
-    },
-    [STUDENT_PROPS.IS_PAID]: {
-      checkbox: params.isPaid,
     },
   } as Parameters<typeof notion.pages.create>[0]['properties'];
 

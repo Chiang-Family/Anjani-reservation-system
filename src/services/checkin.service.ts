@@ -1,8 +1,9 @@
-import { updateCompletedClasses, getStudentById } from '@/lib/notion/students';
+import { getStudentById } from '@/lib/notion/students';
 import { findCoachByLineId } from '@/lib/notion/coaches';
 import { createCheckinRecord, findCheckinToday } from '@/lib/notion/checkins';
+import { getStudentHoursSummary } from '@/lib/notion/hours';
 import { findStudentEventToday, findStudentEventForDate } from './calendar.service';
-import { todayDateString, formatDateTime, nowTaipei, nowTaipeiISO } from '@/lib/utils/date';
+import { todayDateString, formatDateTime, nowTaipei, nowTaipeiISO, computeDurationMinutes, formatHours } from '@/lib/utils/date';
 import { pushText } from '@/lib/line/push';
 
 export interface CheckinResult {
@@ -10,7 +11,7 @@ export interface CheckinResult {
   message: string;
 }
 
-/** 教練幫學員打卡（直接扣堂），支援指定日期 */
+/** 教練幫學員打卡，支援指定日期 */
 export async function coachCheckinForStudent(
   coachLineUserId: string,
   studentNotionId: string,
@@ -43,8 +44,9 @@ export async function coachCheckinForStudent(
   const now = nowTaipei();
   const checkinTime = nowTaipeiISO();
   const classTimeSlot = `${event.startTime}-${event.endTime}`;
+  const durationMinutes = computeDurationMinutes(event.startTime, event.endTime);
 
-  // Create checkin record
+  // Create checkin record with duration
   await createCheckinRecord({
     studentName: student.name,
     studentId: student.id,
@@ -52,12 +54,11 @@ export async function coachCheckinForStudent(
     classDate: targetDate,
     classTimeSlot,
     checkinTime,
+    durationMinutes,
   });
 
-  // Deduct 1 class
-  const newCompleted = student.completedClasses + 1;
-  await updateCompletedClasses(student.id, newCompleted);
-  const remaining = student.purchasedClasses - newCompleted;
+  // Compute remaining hours from DB
+  const summary = await getStudentHoursSummary(student.id);
 
   // Push notification to student
   if (student.lineUserId) {
@@ -66,8 +67,9 @@ export async function coachCheckinForStudent(
     const studentMsg = [
       `✅ ${dateLabel}課程已完成打卡！`,
       `📅 課程時段：${event.startTime}–${event.endTime}`,
-      `📊 剩餘堂數：${remaining} 堂`,
-      ...(remaining <= 1 ? [`\n⚠️ 剩餘堂數不多，請盡早聯繫教練續約。`] : []),
+      `⏱️ 課程時長：${durationMinutes} 分鐘`,
+      `📊 剩餘時數：${formatHours(summary.remainingHours)}`,
+      ...(summary.remainingHours <= 2 ? [`\n⚠️ 剩餘時數不多，請盡早聯繫教練續約。`] : []),
     ].join('\n');
     pushText(student.lineUserId, studentMsg).catch((err) =>
       console.error('Push notification to student failed:', err)
@@ -75,8 +77,8 @@ export async function coachCheckinForStudent(
   }
 
   let balanceWarning = '';
-  if (remaining <= 2) {
-    balanceWarning = `\n⚠️ ${student.name} 剩餘堂數僅剩 ${remaining} 堂`;
+  if (summary.remainingHours <= 2) {
+    balanceWarning = `\n⚠️ ${student.name} 剩餘時數僅剩 ${formatHours(summary.remainingHours)}`;
   }
 
   const isToday = targetDate === todayDateString();
@@ -89,7 +91,7 @@ export async function coachCheckinForStudent(
       `📅 課程時段：${event.startTime}–${event.endTime}`,
       `⏰ 打卡時間：${formatDateTime(now)}`,
       '',
-      `🎉 已扣除 1 堂，剩餘 ${remaining} 堂`,
+      `🎉 已記錄 ${durationMinutes} 分鐘，剩餘 ${formatHours(summary.remainingHours)}`,
       balanceWarning,
     ].filter(Boolean).join('\n'),
   };

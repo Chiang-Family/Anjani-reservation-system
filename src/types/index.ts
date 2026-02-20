@@ -5,11 +5,20 @@ export interface Student {
   name: string;
   lineUserId: string;
   coachId?: string;
-  purchasedClasses: number;
-  pricePerClass: number;
-  completedClasses: number;
-  isPaid: boolean;
   status?: string;
+}
+
+export interface PaymentRecord {
+  id: string;
+  studentId: string;
+  coachId: string;
+  studentName: string;
+  purchasedHours: number;
+  pricePerHour: number;
+  totalAmount: number;
+  paidAmount: number;
+  status: '已繳費' | '部分繳費' | '未繳費';
+  createdAt: string;
 }
 
 export interface Coach {
@@ -38,7 +47,14 @@ export interface CheckinRecord {
   checkinTime: string;
   classDate: string;
   classTimeSlot: string;
+  durationMinutes: number;
   studentName?: string;
+}
+
+export interface StudentHoursSummary {
+  purchasedHours: number;
+  completedHours: number;
+  remainingHours: number;
 }
 
 export interface UserIdentity {
