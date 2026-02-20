@@ -137,12 +137,6 @@ export async function coachCheckinForStudent(
     return { success: false, message: `今天沒有 ${student.name} 的課程安排。` };
   }
 
-  // Time window check
-  const timeCheck = checkTimeWindow(event);
-  if (!timeCheck.allowed) {
-    return { success: false, message: timeCheck.message! };
-  }
-
   const now = nowTaipei();
   const checkinTime = now.toISOString();
   const classTimeSlot = `${event.startTime}-${event.endTime}`;
