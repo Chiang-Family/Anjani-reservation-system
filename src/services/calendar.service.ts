@@ -1,4 +1,5 @@
-import { getTodayEvents, getMonthEvents, getEventsByColorId } from '@/lib/google/calendar';
+import { getTodayEvents, getMonthEvents } from '@/lib/google/calendar';
+import { findStudentByName, getStudentsByCoachId } from '@/lib/notion/students';
 import type { CalendarEvent } from '@/types';
 
 /** 從今日事件中比對學員名稱 */
@@ -7,20 +8,38 @@ export async function findStudentEventToday(studentName: string): Promise<Calend
   return matchEventByName(events, studentName);
 }
 
-/** 取得某教練今天的課表 */
-export async function getTodayEventsForCoach(calendarColorId: number): Promise<CalendarEvent[]> {
+/** 取得某教練今天的課表（透過 Notion 學員→教練關聯比對） */
+export async function getTodayEventsForCoach(coachNotionId: string): Promise<CalendarEvent[]> {
   const events = await getTodayEvents();
-  return getEventsByColorId(events, calendarColorId);
+  return filterEventsByCoach(events, coachNotionId);
 }
 
-/** 取得某教練指定月份的課表 */
+/** 取得某教練指定月份的課表（透過 Notion 學員→教練關聯比對） */
 export async function getMonthEventsForCoach(
-  calendarColorId: number,
+  coachNotionId: string,
   year: number,
   month: number
 ): Promise<CalendarEvent[]> {
   const events = await getMonthEvents(year, month);
-  return getEventsByColorId(events, calendarColorId);
+  return filterEventsByCoach(events, coachNotionId);
+}
+
+/** 用 Notion 學員的所屬教練關聯來篩選事件 */
+async function filterEventsByCoach(events: CalendarEvent[], coachNotionId: string): Promise<CalendarEvent[]> {
+  // 取得該教練的所有學員名稱
+  const students = await getStudentsByCoachId(coachNotionId);
+  const studentNames = new Set(students.map((s) => s.name));
+
+  return events.filter((event) => {
+    const summary = event.summary.trim();
+    // 精確比對或模糊比對
+    for (const name of studentNames) {
+      if (summary === name || summary.includes(name) || name.includes(summary)) {
+        return true;
+      }
+    }
+    return false;
+  });
 }
 
 /** 模糊比對：event.summary 包含學員名，或學員名包含 event.summary */

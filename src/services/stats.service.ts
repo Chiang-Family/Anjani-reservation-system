@@ -24,20 +24,16 @@ export async function getCoachMonthlyStats(
   const year = now.getFullYear();
   const month = now.getMonth() + 1;
 
-  // Calendar events this month
-  let scheduledClasses = 0;
+  // Calendar events this month (matched by Notion student→coach relation)
+  const events = await getMonthEventsForCoach(coach.id, year, month);
+  const scheduledClasses = events.length;
+
   let totalHours = 0;
-
-  if (coach.calendarColorId) {
-    const events = await getMonthEventsForCoach(coach.calendarColorId, year, month);
-    scheduledClasses = events.length;
-
-    for (const event of events) {
-      const [startH, startM] = event.startTime.split(':').map(Number);
-      const [endH, endM] = event.endTime.split(':').map(Number);
-      const durationMinutes = (endH * 60 + endM) - (startH * 60 + startM);
-      totalHours += durationMinutes / 60;
-    }
+  for (const event of events) {
+    const [startH, startM] = event.startTime.split(':').map(Number);
+    const [endH, endM] = event.endTime.split(':').map(Number);
+    const durationMinutes = (endH * 60 + endM) - (startH * 60 + startM);
+    totalHours += durationMinutes / 60;
   }
 
   // Student financials

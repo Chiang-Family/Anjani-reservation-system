@@ -18,11 +18,7 @@ export async function getCoachTodaySchedule(
   const coach = await findCoachByLineId(lineUserId);
   if (!coach) return null;
 
-  if (!coach.calendarColorId) {
-    return { items: [], coachName: coach.name };
-  }
-
-  const events = await getTodayEventsForCoach(coach.calendarColorId);
+  const events = await getTodayEventsForCoach(coach.id);
   const today = todayDateString();
   const items: ScheduleItem[] = [];
 
