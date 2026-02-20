@@ -18,6 +18,11 @@ function getRichTextValue(prop: Record<string, unknown>): string {
   return '';
 }
 
+function getCheckboxValue(prop: Record<string, unknown>): boolean {
+  if (!prop) return false;
+  return (prop.checkbox as boolean) ?? false;
+}
+
 function getRelationIds(prop: Record<string, unknown>): string[] {
   if (!prop) return [];
   const relations = prop.relation as Array<{ id: string }> | undefined;
@@ -46,6 +51,8 @@ function extractCheckin(page: Record<string, unknown>): CheckinRecord {
     classDate: checkinTime ? checkinTime.slice(0, 10) : '',
     classTimeSlot,
     studentName: title.split(' - ')[0] || undefined,
+    studentChecked: getCheckboxValue(props[CHECKIN_PROPS.STUDENT_CHECKED]),
+    coachChecked: getCheckboxValue(props[CHECKIN_PROPS.COACH_CHECKED]),
   };
 }
 
@@ -56,6 +63,8 @@ export async function createCheckinRecord(params: {
   checkinTime: string;
   classDate: string;
   classTimeSlot: string;
+  studentChecked: boolean;
+  coachChecked: boolean;
 }): Promise<CheckinRecord> {
   const notion = getNotionClient();
   const title = `${params.studentName} - ${params.classDate}`;
@@ -76,6 +85,12 @@ export async function createCheckinRecord(params: {
     [CHECKIN_PROPS.CLASS_TIME_SLOT]: {
       rich_text: [{ type: 'text', text: { content: params.classTimeSlot } }],
     },
+    [CHECKIN_PROPS.STUDENT_CHECKED]: {
+      checkbox: params.studentChecked,
+    },
+    [CHECKIN_PROPS.COACH_CHECKED]: {
+      checkbox: params.coachChecked,
+    },
   } as Parameters<typeof notion.pages.create>[0]['properties'];
 
   const page = await notion.pages.create({
@@ -84,6 +99,24 @@ export async function createCheckinRecord(params: {
   });
 
   return extractCheckin(page as unknown as Record<string, unknown>);
+}
+
+export async function updateCheckinFlags(
+  checkinId: string,
+  flags: { studentChecked?: boolean; coachChecked?: boolean }
+): Promise<void> {
+  const notion = getNotionClient();
+  const properties: Record<string, unknown> = {};
+  if (flags.studentChecked !== undefined) {
+    properties[CHECKIN_PROPS.STUDENT_CHECKED] = { checkbox: flags.studentChecked };
+  }
+  if (flags.coachChecked !== undefined) {
+    properties[CHECKIN_PROPS.COACH_CHECKED] = { checkbox: flags.coachChecked };
+  }
+  await notion.pages.update({
+    page_id: checkinId,
+    properties: properties as Parameters<typeof notion.pages.update>[0]['properties'],
+  });
 }
 
 export async function findCheckinToday(

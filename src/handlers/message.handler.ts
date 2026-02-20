@@ -159,7 +159,7 @@ async function handleCoachMessage(
         ]);
         return;
       }
-      const unchecked = schedule.items.filter((item) => !item.isCheckedIn && item.studentNotionId);
+      const unchecked = schedule.items.filter((item) => !item.coachChecked && item.studentNotionId);
       if (unchecked.length === 0) {
         await replyMessages(replyToken, [
           { type: 'text', text: '今天所有學員都已打卡完成！', quickReply: { items: qr } },

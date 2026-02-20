@@ -9,7 +9,8 @@ export interface ScheduleItem {
   event: CalendarEvent;
   studentName: string;
   studentNotionId?: string;
-  isCheckedIn: boolean;
+  studentChecked: boolean;
+  coachChecked: boolean;
 }
 
 export async function getCoachTodaySchedule(
@@ -25,18 +26,23 @@ export async function getCoachTodaySchedule(
   for (const event of events) {
     const studentName = event.summary.trim();
     const student = await findStudentByName(studentName);
-    let isCheckedIn = false;
+    let studentChecked = false;
+    let coachChecked = false;
 
     if (student) {
       const checkin = await findCheckinToday(student.id, today);
-      isCheckedIn = !!checkin;
+      if (checkin) {
+        studentChecked = checkin.studentChecked;
+        coachChecked = checkin.coachChecked;
+      }
     }
 
     items.push({
       event,
       studentName,
       studentNotionId: student?.id,
-      isCheckedIn,
+      studentChecked,
+      coachChecked,
     });
   }
 

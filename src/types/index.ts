@@ -39,6 +39,8 @@ export interface CheckinRecord {
   classDate: string;
   classTimeSlot: string;
   studentName?: string;
+  studentChecked: boolean;
+  coachChecked: boolean;
 }
 
 export interface UserIdentity {
