@@ -2,7 +2,7 @@ import { updateCompletedClasses, getStudentById } from '@/lib/notion/students';
 import { findCoachByLineId } from '@/lib/notion/coaches';
 import { createCheckinRecord, findCheckinToday } from '@/lib/notion/checkins';
 import { findStudentEventToday } from './calendar.service';
-import { todayDateString, formatDateTime, nowTaipei } from '@/lib/utils/date';
+import { todayDateString, formatDateTime, nowTaipei, nowTaipeiISO } from '@/lib/utils/date';
 import { pushText } from '@/lib/line/push';
 
 export interface CheckinResult {
@@ -38,7 +38,7 @@ export async function coachCheckinForStudent(
   }
 
   const now = nowTaipei();
-  const checkinTime = now.toISOString();
+  const checkinTime = nowTaipeiISO();
   const classTimeSlot = `${event.startTime}-${event.endTime}`;
 
   // Create checkin record

@@ -33,6 +33,12 @@ export function todayDateString(): string {
   return format(nowTaipei(), 'yyyy-MM-dd');
 }
 
+/** 輸出台灣時區 ISO 格式（帶 +08:00），用於存入 Notion */
+export function nowTaipeiISO(): string {
+  return format(nowTaipei(), "yyyy-MM-dd'T'HH:mm:ss") + '+08:00';
+}
+
+
 /** 組合 yyyy-MM-dd + HH:mm → Taipei Date */
 export function parseSlotTime(dateStr: string, timeStr: string): Date {
   const iso = `${dateStr}T${timeStr}:00+08:00`;
