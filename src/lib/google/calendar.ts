@@ -46,15 +46,13 @@ export async function getTodayEvents(): Promise<CalendarEvent[]> {
   const calendar = getCalendarClient();
   const env = getEnv();
 
+  // Use ISO 8601 with +08:00 offset directly — timezone-safe on any server
   const now = toZonedTime(new Date(), TZ);
-  const todayStart = new Date(now);
-  todayStart.setHours(0, 0, 0, 0);
-  const todayEnd = new Date(now);
-  todayEnd.setHours(23, 59, 59, 999);
+  const todayStr = format(now, 'yyyy-MM-dd');
+  const timeMin = `${todayStr}T00:00:00+08:00`;
+  const timeMax = `${todayStr}T23:59:59+08:00`;
 
-  // Convert Taipei time boundaries to UTC for API call
-  const timeMin = new Date(todayStart.getTime() - 8 * 60 * 60 * 1000).toISOString();
-  const timeMax = new Date(todayEnd.getTime() - 8 * 60 * 60 * 1000).toISOString();
+  console.log(`[Calendar] getTodayEvents: ${timeMin} ~ ${timeMax}`);
 
   const res = await calendar.events.list({
     calendarId: env.GOOGLE_CALENDAR_ID,
@@ -64,8 +62,12 @@ export async function getTodayEvents(): Promise<CalendarEvent[]> {
     orderBy: 'startTime',
   });
 
+  const rawItems = res.data.items || [];
+  console.log(`[Calendar] Found ${rawItems.length} raw events`);
+
   const events: CalendarEvent[] = [];
-  for (const item of res.data.items || []) {
+  for (const item of rawItems) {
+    console.log(`[Calendar] Event: "${item.summary}" colorId=${item.colorId} start=${item.start?.dateTime}`);
     const ev = toCalendarEvent(item);
     if (ev) events.push(ev);
   }
@@ -76,12 +78,12 @@ export async function getMonthEvents(year: number, month: number): Promise<Calen
   const calendar = getCalendarClient();
   const env = getEnv();
 
-  // Month boundaries in Taipei time
-  const monthStart = new Date(year, month - 1, 1, 0, 0, 0);
-  const monthEnd = new Date(year, month, 0, 23, 59, 59, 999);
+  const startDay = `${year}-${String(month).padStart(2, '0')}-01`;
+  const lastDay = new Date(year, month, 0).getDate();
+  const endDay = `${year}-${String(month).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
 
-  const timeMin = new Date(monthStart.getTime() - 8 * 60 * 60 * 1000).toISOString();
-  const timeMax = new Date(monthEnd.getTime() - 8 * 60 * 60 * 1000).toISOString();
+  const timeMin = `${startDay}T00:00:00+08:00`;
+  const timeMax = `${endDay}T23:59:59+08:00`;
 
   const res = await calendar.events.list({
     calendarId: env.GOOGLE_CALENDAR_ID,
@@ -100,5 +102,7 @@ export async function getMonthEvents(year: number, month: number): Promise<Calen
 }
 
 export function getEventsByColorId(events: CalendarEvent[], colorId: number): CalendarEvent[] {
-  return events.filter((e) => e.colorId === String(colorId));
+  const filtered = events.filter((e) => e.colorId === String(colorId));
+  console.log(`[Calendar] Filter by colorId=${colorId}: ${filtered.length}/${events.length} events matched`);
+  return filtered;
 }
