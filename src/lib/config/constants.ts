@@ -4,6 +4,7 @@ export const KEYWORD = {
   REMAINING: '剩餘堂數',
   TODAY_SCHEDULE: '今日課表',
   ADD_STUDENT: '新增學員',
+  STUDENT_MGMT: '學員管理',
   MONTHLY_STATS: '本月統計',
   COACH_CHECKIN: '幫學員打卡',
   MENU: '選單',
@@ -13,6 +14,9 @@ export const KEYWORD = {
 export const ACTION = {
   COACH_CHECKIN: 'coach_checkin',
   ADD_STUDENT_CONFIRM: 'add_student_confirm',
+  EDIT_CLASSES: 'edit_classes',
+  EDIT_PRICE: 'edit_price',
+  TOGGLE_PAYMENT: 'toggle_payment',
 } as const;
 
 // 角色

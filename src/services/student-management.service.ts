@@ -1,4 +1,4 @@
-import { createStudent, findStudentByName, bindStudentLineId } from '@/lib/notion/students';
+import { createStudent, findStudentByName, bindStudentLineId, getStudentById, updateStudent } from '@/lib/notion/students';
 import { findCoachByLineId } from '@/lib/notion/coaches';
 
 /** 對話狀態管理（記憶體暫存） */
@@ -123,6 +123,93 @@ export async function handleAddStudentStep(
       };
     }
   }
+}
+
+/** 編輯學員資料（多步驟文字輸入） */
+interface EditStudentState {
+  field: 'classes' | 'price';
+  studentId: string;
+  studentName: string;
+}
+
+const editStudentStates = new Map<string, EditStudentState>();
+
+export function getEditStudentState(lineUserId: string): EditStudentState | undefined {
+  return editStudentStates.get(lineUserId);
+}
+
+export function startEditStudent(lineUserId: string, field: 'classes' | 'price', studentId: string, studentName: string): string {
+  editStudentStates.set(lineUserId, { field, studentId, studentName });
+  if (field === 'classes') {
+    return `請輸入 ${studentName} 的新購買堂數（數字）：`;
+  }
+  return `請輸入 ${studentName} 的新每堂單價（數字）：`;
+}
+
+export async function handleEditStudentStep(
+  lineUserId: string,
+  input: string
+): Promise<{ message: string; done: boolean }> {
+  const state = editStudentStates.get(lineUserId);
+  if (!state) {
+    return { message: '沒有進行中的編輯流程。', done: true };
+  }
+
+  if (input.trim() === '取消') {
+    editStudentStates.delete(lineUserId);
+    return { message: '已取消編輯。', done: true };
+  }
+
+  const num = parseInt(input.trim(), 10);
+  if (isNaN(num) || num <= 0) {
+    return { message: '請輸入有效的正整數（或輸入「取消」放棄）：', done: false };
+  }
+
+  const student = await getStudentById(state.studentId);
+  if (!student) {
+    editStudentStates.delete(lineUserId);
+    return { message: '找不到該學員資料。', done: true };
+  }
+
+  if (state.field === 'classes') {
+    await updateStudent(state.studentId, { purchasedClasses: num });
+    editStudentStates.delete(lineUserId);
+    const remaining = num - student.completedClasses;
+    return {
+      message: [
+        `✅ ${state.studentName} 購買堂數已更新！`,
+        '',
+        `📊 購買堂數：${student.purchasedClasses} → ${num} 堂`,
+        `📊 剩餘堂數：${remaining} 堂`,
+      ].join('\n'),
+      done: true,
+    };
+  }
+
+  await updateStudent(state.studentId, { pricePerClass: num });
+  editStudentStates.delete(lineUserId);
+  return {
+    message: [
+      `✅ ${state.studentName} 每堂單價已更新！`,
+      '',
+      `💰 每堂單價：${student.pricePerClass} → ${num} 元`,
+    ].join('\n'),
+    done: true,
+  };
+}
+
+export async function toggleStudentPayment(studentId: string): Promise<string> {
+  const student = await getStudentById(studentId);
+  if (!student) return '找不到該學員資料。';
+
+  const newStatus = !student.isPaid;
+  await updateStudent(studentId, { isPaid: newStatus });
+
+  return [
+    `✅ ${student.name} 繳費狀態已更新！`,
+    '',
+    `💳 繳費狀態：${student.isPaid ? '已繳費' : '未繳費'} → ${newStatus ? '已繳費' : '未繳費'}`,
+  ].join('\n');
 }
 
 /** 學員綁定 LINE User ID（透過姓名比對） */

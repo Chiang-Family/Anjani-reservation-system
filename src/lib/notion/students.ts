@@ -95,6 +95,31 @@ export async function updateCompletedClasses(
   });
 }
 
+export async function updateStudent(
+  studentId: string,
+  fields: {
+    purchasedClasses?: number;
+    pricePerClass?: number;
+    isPaid?: boolean;
+  }
+): Promise<void> {
+  const notion = getNotionClient();
+  const properties: Record<string, unknown> = {};
+  if (fields.purchasedClasses !== undefined) {
+    properties[STUDENT_PROPS.PURCHASED_CLASSES] = { number: fields.purchasedClasses };
+  }
+  if (fields.pricePerClass !== undefined) {
+    properties[STUDENT_PROPS.PRICE_PER_CLASS] = { number: fields.pricePerClass };
+  }
+  if (fields.isPaid !== undefined) {
+    properties[STUDENT_PROPS.IS_PAID] = { checkbox: fields.isPaid };
+  }
+  await notion.pages.update({
+    page_id: studentId,
+    properties: properties as Parameters<typeof notion.pages.update>[0]['properties'],
+  });
+}
+
 export async function bindStudentLineId(
   studentId: string,
   lineUserId: string

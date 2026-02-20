@@ -3,21 +3,26 @@ import { identifyUser, getStudentInfo } from '@/services/student.service';
 import { studentCheckin } from '@/services/checkin.service';
 import { getCoachTodaySchedule } from '@/services/coach.service';
 import { getCoachMonthlyStats } from '@/services/stats.service';
+import { getStudentsByCoachId } from '@/lib/notion/students';
+import { findCoachByLineId } from '@/lib/notion/coaches';
 import {
   startAddStudent,
   handleAddStudentStep,
   getAddStudentState,
+  getEditStudentState,
+  handleEditStudentStep,
   handleBinding,
   getBindingState,
   startBinding,
 } from '@/services/student-management.service';
-import { replyText, replyFlex, replyMessages } from '@/lib/line/reply';
+import { replyText, replyFlex, replyFlexCarousel, replyMessages } from '@/lib/line/reply';
 import { KEYWORD, ROLE } from '@/lib/config/constants';
 import { TEXT } from '@/templates/text-messages';
 import { studentInfoCard } from '@/templates/flex/student-info';
 import { studentMenu, coachMenu } from '@/templates/flex/main-menu';
 import { todayScheduleList } from '@/templates/flex/today-schedule';
 import { monthlyStatsCard } from '@/templates/flex/monthly-stats';
+import { studentMgmtList } from '@/templates/flex/student-mgmt-list';
 import { emptyStateBubble } from '@/templates/flex/empty-state';
 import { studentQuickReply, coachQuickReply } from '@/templates/quick-reply';
 
@@ -30,8 +35,23 @@ export async function handleMessage(event: MessageEvent): Promise<void> {
   const text = (event.message as TextEventMessage).text.trim();
   const user = await identifyUser(lineUserId);
 
-  // Check if coach is in add-student flow
+  // Check if coach is in a multi-step flow (add student or edit student)
   if (user?.role === ROLE.COACH) {
+    const editState = getEditStudentState(lineUserId);
+    if (editState) {
+      try {
+        const result = await handleEditStudentStep(lineUserId, text);
+        const qr = coachQuickReply();
+        await replyMessages(event.replyToken, [
+          { type: 'text', text: result.message, quickReply: result.done ? { items: qr } : undefined },
+        ]);
+      } catch (error) {
+        console.error('Edit student step error:', error);
+        await replyText(event.replyToken, TEXT.ERROR);
+      }
+      return;
+    }
+
     const addState = getAddStudentState(lineUserId);
     if (addState) {
       try {
@@ -69,7 +89,6 @@ export async function handleMessage(event: MessageEvent): Promise<void> {
       return;
     }
 
-    // First message from unidentified user: start binding
     console.log(`[未識別使用者] LINE User ID: ${lineUserId}`);
     startBinding(lineUserId);
     await replyText(event.replyToken, TEXT.WELCOME_NEW);
@@ -173,6 +192,28 @@ async function handleCoachMessage(
     case KEYWORD.ADD_STUDENT: {
       const msg = await startAddStudent(lineUserId);
       await replyText(replyToken, msg);
+      return;
+    }
+
+    case KEYWORD.STUDENT_MGMT: {
+      const coach = await findCoachByLineId(lineUserId);
+      if (!coach) {
+        await replyMessages(replyToken, [
+          { type: 'text', text: '找不到教練資料。', quickReply: { items: qr } },
+        ]);
+        return;
+      }
+      const students = await getStudentsByCoachId(coach.id);
+      if (students.length === 0) {
+        await replyFlex(replyToken, '沒有學員', emptyStateBubble(
+          '目前沒有學員',
+          '輸入「新增學員」可建立學員資料。',
+          { label: '新增學員', text: KEYWORD.ADD_STUDENT }
+        ));
+        return;
+      }
+      const bubbles = studentMgmtList(students);
+      await replyFlexCarousel(replyToken, `學員管理（共 ${students.length} 人）`, bubbles);
       return;
     }
 
