@@ -1,21 +1,15 @@
 import { getNotionClient } from './client';
 import { getEnv } from '@/lib/config/env';
 import { CHECKIN_PROPS } from './types';
+import { computeDurationMinutes } from '@/lib/utils/date';
 import type { CheckinRecord } from '@/types';
 
 type NotionFilter = Parameters<InstanceType<typeof import('@notionhq/client').Client>['databases']['query']>[0]['filter'];
 
-function getRichTextValue(prop: Record<string, unknown>): string {
+function getTitleValue(prop: Record<string, unknown>): string {
   if (!prop) return '';
-  if (prop.type === 'title') {
-    const titleArr = prop.title as Array<{ plain_text: string }>;
-    return titleArr?.[0]?.plain_text ?? '';
-  }
-  if (prop.type === 'rich_text') {
-    const rtArr = prop.rich_text as Array<{ plain_text: string }>;
-    return rtArr?.[0]?.plain_text ?? '';
-  }
-  return '';
+  const titleArr = (prop as { title: Array<{ plain_text: string }> }).title;
+  return titleArr?.[0]?.plain_text ?? '';
 }
 
 function getRelationIds(prop: Record<string, unknown>): string[] {
@@ -24,24 +18,36 @@ function getRelationIds(prop: Record<string, unknown>): string[] {
   return relations?.map((r) => r.id) ?? [];
 }
 
-function getNumberValue(prop: Record<string, unknown>): number {
-  if (!prop) return 0;
-  return (prop.number as number) ?? 0;
-}
-
 function getDateValue(prop: Record<string, unknown>): string {
   if (!prop) return '';
   const dateObj = prop.date as { start: string } | null;
   return dateObj?.start ?? '';
 }
 
+function getDateRange(prop: Record<string, unknown>): { start: string; end: string } | null {
+  if (!prop || prop.type !== 'date') return null;
+  const dateObj = prop.date as { start: string; end?: string | null } | null;
+  if (!dateObj?.start || !dateObj?.end) return null;
+  return { start: dateObj.start, end: dateObj.end };
+}
+
 function extractCheckin(page: Record<string, unknown>): CheckinRecord {
   const props = (page as { properties: Record<string, unknown> }).properties as Record<string, Record<string, unknown>>;
   const studentRelation = getRelationIds(props[CHECKIN_PROPS.STUDENT]);
   const coachRelation = getRelationIds(props[CHECKIN_PROPS.COACH]);
-  const classTimeSlot = getRichTextValue(props[CHECKIN_PROPS.CLASS_TIME_SLOT]);
-  const title = getRichTextValue(props[CHECKIN_PROPS.TITLE]);
+  const title = getTitleValue(props[CHECKIN_PROPS.TITLE]);
   const checkinTime = getDateValue(props[CHECKIN_PROPS.CHECKIN_TIME]);
+
+  // Parse class time slot from date range
+  const timeRange = getDateRange(props[CHECKIN_PROPS.CLASS_TIME_SLOT]);
+  let classTimeSlot = '';
+  let durationMinutes = 0;
+  if (timeRange) {
+    const startTime = timeRange.start.slice(11, 16);
+    const endTime = timeRange.end.slice(11, 16);
+    classTimeSlot = `${startTime}-${endTime}`;
+    durationMinutes = computeDurationMinutes(startTime, endTime);
+  }
 
   return {
     id: (page as { id: string }).id,
@@ -50,7 +56,7 @@ function extractCheckin(page: Record<string, unknown>): CheckinRecord {
     checkinTime,
     classDate: checkinTime ? checkinTime.slice(0, 10) : '',
     classTimeSlot,
-    durationMinutes: getNumberValue(props[CHECKIN_PROPS.DURATION]),
+    durationMinutes,
     studentName: title.split(' - ')[0] || undefined,
   };
 }
@@ -60,9 +66,9 @@ export async function createCheckinRecord(params: {
   studentId: string;
   coachId: string;
   classDate: string;
-  classTimeSlot: string;
+  classStartTime: string;  // ISO datetime e.g. "2026-02-21T10:00:00+08:00"
+  classEndTime: string;    // ISO datetime e.g. "2026-02-21T11:00:00+08:00"
   checkinTime: string;
-  durationMinutes: number;
 }): Promise<CheckinRecord> {
   const notion = getNotionClient();
   const title = `${params.studentName} - ${params.classDate}`;
@@ -78,13 +84,10 @@ export async function createCheckinRecord(params: {
       relation: [{ id: params.coachId }],
     },
     [CHECKIN_PROPS.CLASS_TIME_SLOT]: {
-      rich_text: [{ type: 'text', text: { content: params.classTimeSlot } }],
+      date: { start: params.classStartTime, end: params.classEndTime },
     },
     [CHECKIN_PROPS.CHECKIN_TIME]: {
       date: { start: params.checkinTime },
-    },
-    [CHECKIN_PROPS.DURATION]: {
-      number: params.durationMinutes,
     },
   };
 

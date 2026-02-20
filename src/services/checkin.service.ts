@@ -43,18 +43,19 @@ export async function coachCheckinForStudent(
 
   const now = nowTaipei();
   const checkinTime = nowTaipeiISO();
-  const classTimeSlot = `${event.startTime}-${event.endTime}`;
   const durationMinutes = computeDurationMinutes(event.startTime, event.endTime);
+  const classStartTime = `${targetDate}T${event.startTime}:00+08:00`;
+  const classEndTime = `${targetDate}T${event.endTime}:00+08:00`;
 
-  // Create checkin record with duration
+  // Create checkin record with date range
   await createCheckinRecord({
     studentName: student.name,
     studentId: student.id,
     coachId: coach.id,
     classDate: targetDate,
-    classTimeSlot,
+    classStartTime,
+    classEndTime,
     checkinTime,
-    durationMinutes,
   });
 
   // Compute remaining hours from DB
