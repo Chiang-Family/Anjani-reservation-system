@@ -22,8 +22,9 @@ export const CHECKIN_PROPS = {
   TITLE: '標題',
   STUDENT: '學員',
   COACH: '教練',
-  CHECKIN_TIME: '打卡時間',
   CLASS_TIME_SLOT: '課程時段',
   STUDENT_CHECKED: '學員已打卡',
   COACH_CHECKED: '教練已打卡',
+  STUDENT_CHECKIN_TIME: '學員打卡時間',
+  COACH_CHECKIN_TIME: '教練打卡時間',
 } as const;

@@ -2,12 +2,36 @@ import { findStudentByLineId, updateCompletedClasses, getStudentById } from '@/l
 import { findCoachByLineId } from '@/lib/notion/coaches';
 import { createCheckinRecord, findCheckinToday, updateCheckinFlags } from '@/lib/notion/checkins';
 import { findStudentEventToday } from './calendar.service';
-import { todayDateString, formatDateTime, nowTaipei } from '@/lib/utils/date';
-import type { Student } from '@/types';
+import { todayDateString, formatDateTime, nowTaipei, parseSlotTime } from '@/lib/utils/date';
+import type { Student, CalendarEvent } from '@/types';
 
 export interface CheckinResult {
   success: boolean;
   message: string;
+}
+
+/** 檢查是否在打卡時間窗口內（活動前 15 分鐘 ~ 結束後 15 分鐘） */
+function checkTimeWindow(event: CalendarEvent): { allowed: boolean; message?: string } {
+  const now = nowTaipei();
+  const slotStart = parseSlotTime(event.date, event.startTime);
+  const slotEnd = parseSlotTime(event.date, event.endTime);
+  const windowStart = new Date(slotStart.getTime() - 15 * 60 * 1000);
+  const windowEnd = new Date(slotEnd.getTime() + 15 * 60 * 1000);
+
+  if (now < windowStart || now > windowEnd) {
+    const fmtTime = (d: Date) =>
+      `${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}`;
+    return {
+      allowed: false,
+      message: [
+        '⏰ 目前不在打卡時段。',
+        `課程時間：${event.startTime}–${event.endTime}`,
+        `可打卡時間：${fmtTime(windowStart)}–${fmtTime(windowEnd)}`,
+      ].join('\n'),
+    };
+  }
+
+  return { allowed: true };
 }
 
 /** 學員自己打卡 */
@@ -20,25 +44,32 @@ export async function studentCheckin(lineUserId: string): Promise<CheckinResult>
   const today = todayDateString();
   const existing = await findCheckinToday(student.id, today);
 
-  // Already checked in by student
   if (existing?.studentChecked) {
     return { success: false, message: '您今天已經打過卡了！' };
   }
 
-  // Find today's calendar event
   const event = await findStudentEventToday(student.name);
   if (!event) {
     return { success: false, message: '今天沒有您的課程安排。' };
   }
 
+  // Time window check
+  const timeCheck = checkTimeWindow(event);
+  if (!timeCheck.allowed) {
+    return { success: false, message: timeCheck.message! };
+  }
+
   const now = nowTaipei();
+  const checkinTime = now.toISOString();
   const classTimeSlot = `${event.startTime}-${event.endTime}`;
 
   if (existing) {
-    // Record exists (coach checked in first) → mark student checked
-    await updateCheckinFlags(existing.id, { studentChecked: true });
+    // Coach already checked in → mark student checked
+    await updateCheckinFlags(existing.id, {
+      studentChecked: true,
+      studentCheckinTime: checkinTime,
+    });
 
-    // Both checked in → deduct class
     if (existing.coachChecked) {
       return completeCheckin(student, event.startTime, event.endTime, now);
     }
@@ -55,16 +86,16 @@ export async function studentCheckin(lineUserId: string): Promise<CheckinResult>
     };
   }
 
-  // No record yet → create with student checked
+  // No record → create with student checked
   await createCheckinRecord({
     studentName: student.name,
     studentId: student.id,
     coachId: student.coachId || '',
-    checkinTime: now.toISOString(),
     classDate: today,
     classTimeSlot,
     studentChecked: true,
     coachChecked: false,
+    studentCheckinTime: checkinTime,
   });
 
   return {
@@ -97,25 +128,32 @@ export async function coachCheckinForStudent(
   const today = todayDateString();
   const existing = await findCheckinToday(student.id, today);
 
-  // Already checked in by coach
   if (existing?.coachChecked) {
     return { success: false, message: `已經幫 ${student.name} 打過卡了！` };
   }
 
-  // Find today's calendar event
   const event = await findStudentEventToday(student.name);
   if (!event) {
     return { success: false, message: `今天沒有 ${student.name} 的課程安排。` };
   }
 
+  // Time window check
+  const timeCheck = checkTimeWindow(event);
+  if (!timeCheck.allowed) {
+    return { success: false, message: timeCheck.message! };
+  }
+
   const now = nowTaipei();
+  const checkinTime = now.toISOString();
   const classTimeSlot = `${event.startTime}-${event.endTime}`;
 
   if (existing) {
-    // Record exists (student checked in first) → mark coach checked
-    await updateCheckinFlags(existing.id, { coachChecked: true });
+    // Student already checked in → mark coach checked
+    await updateCheckinFlags(existing.id, {
+      coachChecked: true,
+      coachCheckinTime: checkinTime,
+    });
 
-    // Both checked in → deduct class
     if (existing.studentChecked) {
       const newCompleted = student.completedClasses + 1;
       await updateCompletedClasses(student.id, newCompleted);
@@ -139,22 +177,23 @@ export async function coachCheckinForStudent(
       message: [
         `✅ 已為 ${student.name} 打卡！`,
         `📅 課程時段：${event.startTime}–${event.endTime}`,
+        `⏰ 打卡時間：${formatDateTime(now)}`,
         '',
         `⏳ 等待學員打卡後將扣除堂數。`,
       ].join('\n'),
     };
   }
 
-  // No record yet → create with coach checked
+  // No record → create with coach checked
   await createCheckinRecord({
     studentName: student.name,
     studentId: student.id,
     coachId: coach.id,
-    checkinTime: now.toISOString(),
     classDate: today,
     classTimeSlot,
     studentChecked: false,
     coachChecked: true,
+    coachCheckinTime: checkinTime,
   });
 
   return {
@@ -162,6 +201,7 @@ export async function coachCheckinForStudent(
     message: [
       `✅ 已為 ${student.name} 打卡！`,
       `📅 課程時段：${event.startTime}–${event.endTime}`,
+      `⏰ 打卡時間：${formatDateTime(now)}`,
       '',
       `⏳ 等待學員打卡後將扣除堂數。`,
     ].join('\n'),
