@@ -6,6 +6,7 @@ import { ROLE } from '@/lib/config/constants';
 import { getEnv } from '@/lib/config/env';
 import { TEXT } from '@/templates/text-messages';
 import { studentMenu, coachMenu } from '@/templates/flex/main-menu';
+import { startBinding } from '@/services/student-management.service';
 
 export async function handleFollow(event: FollowEvent): Promise<void> {
   const lineUserId = event.source.userId;
@@ -14,6 +15,8 @@ export async function handleFollow(event: FollowEvent): Promise<void> {
   const user = await identifyUser(lineUserId);
 
   if (!user) {
+    // Start binding flow for new user
+    startBinding(lineUserId);
     await replyText(event.replyToken, TEXT.WELCOME_NEW);
     return;
   }
@@ -21,7 +24,6 @@ export async function handleFollow(event: FollowEvent): Promise<void> {
   const env = getEnv();
 
   if (user.role === ROLE.STUDENT) {
-    // Link student rich menu
     if (env.RICH_MENU_STUDENT_ID) {
       try {
         await linkRichMenuToUser(lineUserId, env.RICH_MENU_STUDENT_ID);
@@ -29,9 +31,8 @@ export async function handleFollow(event: FollowEvent): Promise<void> {
         console.error('Failed to link student rich menu:', err);
       }
     }
-    await replyFlex(event.replyToken, 'Anjani 預約系統', studentMenu(user.name));
+    await replyFlex(event.replyToken, 'Anjani 健身管理', studentMenu(user.name));
   } else {
-    // Link coach rich menu
     if (env.RICH_MENU_COACH_ID) {
       try {
         await linkRichMenuToUser(lineUserId, env.RICH_MENU_COACH_ID);

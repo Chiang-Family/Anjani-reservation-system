@@ -5,12 +5,15 @@ type FlexBubble = messagingApi.FlexBubble;
 type FlexComponent = messagingApi.FlexComponent;
 
 export function studentInfoCard(student: Student): FlexBubble {
+  const remaining = student.purchasedClasses - student.completedClasses;
   const rows: FlexComponent[] = [
     infoRow('姓名', student.name),
-    infoRow('剩餘堂數', `${student.remainingClasses} 堂`),
+    infoRow('購買堂數', `${student.purchasedClasses} 堂`),
+    infoRow('已上堂數', `${student.completedClasses} 堂`),
+    infoRow('剩餘堂數', `${remaining} 堂`),
+    infoRow('繳費狀態', student.isPaid ? '已繳費' : '未繳費'),
   ];
 
-  if (student.phone) rows.push(infoRow('電話', student.phone));
   if (student.status) rows.push(infoRow('狀態', student.status));
 
   return {

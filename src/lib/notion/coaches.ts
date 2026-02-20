@@ -20,12 +20,19 @@ function getRichTextValue(prop: Record<string, unknown>): string {
   return '';
 }
 
+function getNumberValue(prop: Record<string, unknown>): number {
+  if (!prop) return 0;
+  return (prop.number as number) ?? 0;
+}
+
 function extractCoach(page: Record<string, unknown>): Coach {
   const props = (page as { properties: Record<string, unknown> }).properties as Record<string, Record<string, unknown>>;
+  const colorId = getNumberValue(props[COACH_PROPS.CALENDAR_COLOR_ID]);
   return {
     id: (page as { id: string }).id,
     name: getRichTextValue(props[COACH_PROPS.NAME]),
     lineUserId: getRichTextValue(props[COACH_PROPS.LINE_USER_ID]),
+    calendarColorId: colorId || undefined,
     status: getRichTextValue(props[COACH_PROPS.STATUS]) || undefined,
   };
 }

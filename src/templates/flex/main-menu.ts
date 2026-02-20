@@ -3,7 +3,7 @@ import { KEYWORD } from '@/lib/config/constants';
 
 type FlexBubble = messagingApi.FlexBubble;
 
-function menuButton(label: string): messagingApi.FlexButton {
+function menuButton(label: string, color = '#4A90D9'): messagingApi.FlexButton {
   return {
     type: 'button',
     action: {
@@ -12,7 +12,7 @@ function menuButton(label: string): messagingApi.FlexButton {
       text: label,
     },
     style: 'primary',
-    color: '#4A90D9',
+    color,
     margin: 'sm',
   };
 }
@@ -27,7 +27,7 @@ export function studentMenu(name: string): FlexBubble {
       contents: [
         {
           type: 'text',
-          text: 'Anjani 預約系統',
+          text: 'Anjani 健身管理',
           weight: 'bold',
           size: 'lg',
           color: '#FFFFFF',
@@ -60,11 +60,8 @@ export function studentMenu(name: string): FlexBubble {
       type: 'box',
       layout: 'vertical',
       contents: [
-        menuButton(KEYWORD.RESERVE),
-        menuButton(KEYWORD.MY_RESERVATIONS),
-        menuButton(KEYWORD.CHECKIN),
+        menuButton(KEYWORD.CHECKIN, '#27ae60'),
         menuButton(KEYWORD.REMAINING),
-        menuButton(KEYWORD.HISTORY),
       ] as messagingApi.FlexComponent[],
       paddingAll: '16px',
       spacing: 'sm',
@@ -115,10 +112,10 @@ export function coachMenu(name: string): FlexBubble {
       type: 'box',
       layout: 'vertical',
       contents: [
-        menuButton(KEYWORD.TODAY_CLASSES),
-        menuButton(KEYWORD.UPCOMING_CLASSES),
-        menuButton(KEYWORD.CREATE_SLOT),
-        menuButton(KEYWORD.RECHARGE),
+        menuButton(KEYWORD.TODAY_SCHEDULE),
+        menuButton(KEYWORD.COACH_CHECKIN, '#27ae60'),
+        menuButton(KEYWORD.ADD_STUDENT, '#e67e22'),
+        menuButton(KEYWORD.MONTHLY_STATS, '#8e44ad'),
       ] as messagingApi.FlexComponent[],
       paddingAll: '16px',
       spacing: 'sm',

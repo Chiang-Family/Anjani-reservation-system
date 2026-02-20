@@ -5,21 +5,18 @@ type QuickReplyItem = messagingApi.QuickReplyItem;
 
 export function studentQuickReply(): QuickReplyItem[] {
   return [
-    quickReplyButton(KEYWORD.RESERVE),
-    quickReplyButton(KEYWORD.MY_RESERVATIONS),
     quickReplyButton(KEYWORD.CHECKIN),
     quickReplyButton(KEYWORD.REMAINING),
-    quickReplyButton(KEYWORD.HISTORY),
     quickReplyButton(KEYWORD.MENU),
   ];
 }
 
 export function coachQuickReply(): QuickReplyItem[] {
   return [
-    quickReplyButton(KEYWORD.TODAY_CLASSES),
-    quickReplyButton(KEYWORD.UPCOMING_CLASSES),
-    quickReplyButton(KEYWORD.CREATE_SLOT),
-    quickReplyButton(KEYWORD.RECHARGE),
+    quickReplyButton(KEYWORD.TODAY_SCHEDULE),
+    quickReplyButton(KEYWORD.COACH_CHECKIN),
+    quickReplyButton(KEYWORD.ADD_STUDENT),
+    quickReplyButton(KEYWORD.MONTHLY_STATS),
     quickReplyButton(KEYWORD.MENU),
   ];
 }

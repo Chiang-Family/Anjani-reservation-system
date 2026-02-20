@@ -1,8 +1,3 @@
 {
-  "regions": ["hnd1"],
-  "crons": [
-    { "path": "/api/cron/mark-absent", "schedule": "0 22 * * *" },
-    { "path": "/api/cron/send-reminders", "schedule": "0 22 * * *" },
-    { "path": "/api/cron/weekly-report", "schedule": "0 1 * * 1" }
-  ]
+  "regions": ["hnd1"]
 }

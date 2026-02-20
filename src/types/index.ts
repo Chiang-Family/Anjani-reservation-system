@@ -1,48 +1,44 @@
-import type { ReservationStatus, Role } from '@/lib/config/constants';
+import type { Role } from '@/lib/config/constants';
 
 export interface Student {
-  id: string; // Notion page ID
+  id: string;
   name: string;
   lineUserId: string;
-  remainingClasses: number;
-  phone?: string;
-  status?: string;
   coachId?: string;
+  purchasedClasses: number;
+  pricePerClass: number;
+  completedClasses: number;
+  isPaid: boolean;
+  status?: string;
 }
 
 export interface Coach {
-  id: string; // Notion page ID
+  id: string;
   name: string;
   lineUserId: string;
+  calendarColorId?: number;
   status?: string;
 }
 
-export interface ClassSlot {
-  id: string; // Notion page ID
-  title: string;
-  coachId: string;
-  date: string; // yyyy-MM-dd
-  startTime: string; // HH:mm（從 Notion date start 提取）
-  endTime: string; // HH:mm（從 Notion date end 提取）
-  maxCapacity: number;
-  currentCount: number;
-  status?: string;
-  coachName?: string;
+export interface CalendarEvent {
+  id: string;
+  summary: string;
+  start: string;
+  end: string;
+  colorId?: string;
+  date: string;
+  startTime: string;
+  endTime: string;
 }
 
-export interface Reservation {
-  id: string; // Notion page ID
+export interface CheckinRecord {
+  id: string;
   studentId: string;
-  classSlotId: string;
-  status: ReservationStatus;
-  checkinTime?: string;
-  bookingTime?: string;
-  // 以下欄位透過查詢關聯資料填入
-  classSlotTitle?: string;
+  coachId: string;
+  checkinTime: string;
+  classDate: string;
+  classTimeSlot: string;
   studentName?: string;
-  date?: string;
-  startTime?: string;
-  endTime?: string;
 }
 
 export interface UserIdentity {
