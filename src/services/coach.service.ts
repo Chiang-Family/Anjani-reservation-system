@@ -1,7 +1,7 @@
 import { findCoachByLineId } from '@/lib/notion/coaches';
 import { findStudentByName } from '@/lib/notion/students';
 import { findCheckinToday } from '@/lib/notion/checkins';
-import { getTodayEventsForCoach } from './calendar.service';
+import { getTodayEventsForCoach, getEventsForDateByCoach } from './calendar.service';
 import { todayDateString } from '@/lib/utils/date';
 import type { CalendarEvent } from '@/types';
 
@@ -12,14 +12,18 @@ export interface ScheduleItem {
   isCheckedIn: boolean;
 }
 
-export async function getCoachTodaySchedule(
-  lineUserId: string
-): Promise<{ items: ScheduleItem[]; coachName: string } | null> {
+export async function getCoachScheduleForDate(
+  lineUserId: string,
+  dateStr?: string
+): Promise<{ items: ScheduleItem[]; coachName: string; date: string } | null> {
   const coach = await findCoachByLineId(lineUserId);
   if (!coach) return null;
 
-  const events = await getTodayEventsForCoach(coach.id);
-  const today = todayDateString();
+  const targetDate = dateStr || todayDateString();
+  const events = dateStr
+    ? await getEventsForDateByCoach(coach.id, dateStr)
+    : await getTodayEventsForCoach(coach.id);
+
   const items: ScheduleItem[] = [];
 
   for (const event of events) {
@@ -28,7 +32,7 @@ export async function getCoachTodaySchedule(
     let isCheckedIn = false;
 
     if (student) {
-      const checkin = await findCheckinToday(student.id, today);
+      const checkin = await findCheckinToday(student.id, targetDate);
       if (checkin) {
         isCheckedIn = true;
       }
@@ -42,5 +46,5 @@ export async function getCoachTodaySchedule(
     });
   }
 
-  return { items, coachName: coach.name };
+  return { items, coachName: coach.name, date: targetDate };
 }

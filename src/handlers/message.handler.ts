@@ -1,6 +1,6 @@
 import type { MessageEvent, TextEventMessage } from '@line/bot-sdk';
 import { identifyUser, getStudentInfo } from '@/services/student.service';
-import { getCoachTodaySchedule } from '@/services/coach.service';
+import { getCoachScheduleForDate } from '@/services/coach.service';
 import { getCoachMonthlyStats } from '@/services/stats.service';
 import { getStudentsByCoachId } from '@/lib/notion/students';
 import { findCoachByLineId } from '@/lib/notion/coaches';
@@ -21,7 +21,8 @@ import { KEYWORD, ROLE } from '@/lib/config/constants';
 import { TEXT } from '@/templates/text-messages';
 import { studentInfoCard } from '@/templates/flex/student-info';
 import { studentMenu, coachMenu } from '@/templates/flex/main-menu';
-import { todayScheduleList } from '@/templates/flex/today-schedule';
+import { scheduleList } from '@/templates/flex/today-schedule';
+import { todayDateString } from '@/lib/utils/date';
 import { monthlyStatsCard } from '@/templates/flex/monthly-stats';
 import { studentMgmtList } from '@/templates/flex/student-mgmt-list';
 import { emptyStateBubble } from '@/templates/flex/empty-state';
@@ -165,21 +166,21 @@ async function handleCoachMessage(
 
   switch (text) {
     case KEYWORD.TODAY_SCHEDULE: {
-      const schedule = await getCoachTodaySchedule(lineUserId);
-      if (!schedule || schedule.items.length === 0) {
-        await replyFlex(replyToken, '今日沒有排定的課程', emptyStateBubble(
-          '今日沒有排定的課程',
-          '今天沒有安排課程。',
-          { label: '回到選單', text: KEYWORD.MENU }
-        ));
+      const today = todayDateString();
+      const schedule = await getCoachScheduleForDate(lineUserId);
+      if (!schedule) {
+        await replyMessages(replyToken, [
+          { type: 'text', text: '找不到教練資料。', quickReply: { items: qr } },
+        ]);
         return;
       }
-      await replyFlex(replyToken, `今日課表（共 ${schedule.items.length} 堂）`, todayScheduleList(schedule.items));
+      await replyFlex(replyToken, `今日課表（共 ${schedule.items.length} 堂）`, scheduleList(schedule.items, today));
       return;
     }
 
     case KEYWORD.COACH_CHECKIN: {
-      const schedule = await getCoachTodaySchedule(lineUserId);
+      const today = todayDateString();
+      const schedule = await getCoachScheduleForDate(lineUserId);
       if (!schedule || schedule.items.length === 0) {
         await replyMessages(replyToken, [
           { type: 'text', text: '今天沒有安排課程，無法幫學員打卡。', quickReply: { items: qr } },
@@ -193,7 +194,7 @@ async function handleCoachMessage(
         ]);
         return;
       }
-      await replyFlex(replyToken, '幫學員打卡', todayScheduleList(unchecked));
+      await replyFlex(replyToken, '幫學員打卡', scheduleList(unchecked, today));
       return;
     }
 

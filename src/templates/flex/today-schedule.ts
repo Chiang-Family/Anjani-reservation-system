@@ -1,79 +1,137 @@
 import type { messagingApi } from '@line/bot-sdk';
 import { ACTION } from '@/lib/config/constants';
+import { todayDateString, addDays, formatDateLabel } from '@/lib/utils/date';
 import type { ScheduleItem } from '@/services/coach.service';
 
 type FlexBubble = messagingApi.FlexBubble;
 type FlexComponent = messagingApi.FlexComponent;
 
-export function todayScheduleList(items: ScheduleItem[]): FlexBubble {
-  const rows: FlexComponent[] = items.map((item) => {
-    const statusText = item.isCheckedIn ? '✅ 已打卡' : '⏳ 未打卡';
-    const statusColor = item.isCheckedIn ? '#27ae60' : '#e67e22';
+export function scheduleList(items: ScheduleItem[], dateStr: string): FlexBubble {
+  const today = todayDateString();
+  const isToday = dateStr === today;
+  const dateLabel = formatDateLabel(dateStr);
+  const headerText = isToday ? `今日課表 ${dateLabel}` : `課表 ${dateLabel}`;
 
-    const contents: FlexComponent[] = [
-      {
-        type: 'box',
-        layout: 'vertical',
-        contents: [
+  const rows: FlexComponent[] = items.length > 0
+    ? items.map((item) => {
+        const statusText = item.isCheckedIn ? '✅ 已打卡' : '⏳ 未打卡';
+        const statusColor = item.isCheckedIn ? '#27ae60' : '#e67e22';
+
+        const contents: FlexComponent[] = [
           {
             type: 'box',
-            layout: 'horizontal',
+            layout: 'vertical',
             contents: [
               {
-                type: 'text',
-                text: `${item.event.startTime}–${item.event.endTime}`,
-                size: 'sm',
-                color: '#555555',
-                flex: 3,
+                type: 'box',
+                layout: 'horizontal',
+                contents: [
+                  {
+                    type: 'text',
+                    text: `${item.event.startTime}–${item.event.endTime}`,
+                    size: 'sm',
+                    color: '#555555',
+                    flex: 3,
+                  },
+                  {
+                    type: 'text',
+                    text: item.studentName,
+                    size: 'sm',
+                    weight: 'bold',
+                    color: '#333333',
+                    flex: 3,
+                  },
+                ],
               },
               {
                 type: 'text',
-                text: item.studentName,
-                size: 'sm',
-                weight: 'bold',
-                color: '#333333',
-                flex: 3,
+                text: statusText,
+                size: 'xs',
+                color: statusColor,
+                margin: 'sm',
               },
             ],
           },
-          {
-            type: 'text',
-            text: statusText,
-            size: 'xs',
-            color: statusColor,
+        ];
+
+        if (!item.isCheckedIn && item.studentNotionId) {
+          contents.push({
+            type: 'button',
+            action: {
+              type: 'postback',
+              label: '打卡',
+              data: `${ACTION.COACH_CHECKIN}:${item.studentNotionId}:${dateStr}`,
+              displayText: `幫 ${item.studentName} 打卡`,
+            },
+            style: 'primary',
+            color: '#27ae60',
+            height: 'sm',
             margin: 'sm',
-          },
-        ],
+          } as FlexComponent);
+        }
+
+        return {
+          type: 'box',
+          layout: 'vertical',
+          contents,
+          paddingAll: '12px',
+          backgroundColor: item.isCheckedIn ? '#f0fdf4' : '#ffffff',
+          cornerRadius: '8px',
+          margin: 'sm',
+        } as FlexComponent;
+      })
+    : [
+        {
+          type: 'text',
+          text: '這天沒有安排課程。',
+          size: 'sm',
+          color: '#999999',
+          margin: 'md',
+          align: 'center',
+        } as FlexComponent,
+      ];
+
+  // Navigation buttons (±7 days from today)
+  const prevDate = addDays(dateStr, -1);
+  const nextDate = addDays(dateStr, 1);
+  const minDate = addDays(today, -7);
+  const maxDate = addDays(today, 7);
+
+  const navButtons: FlexComponent[] = [];
+
+  if (prevDate >= minDate) {
+    navButtons.push({
+      type: 'button',
+      action: {
+        type: 'postback',
+        label: `← ${formatDateLabel(prevDate)}`,
+        data: `${ACTION.VIEW_SCHEDULE}:${prevDate}`,
+        displayText: `查看 ${formatDateLabel(prevDate)} 課表`,
       },
-    ];
+      style: 'link',
+      height: 'sm',
+      flex: 1,
+    } as FlexComponent);
+  } else {
+    navButtons.push({ type: 'filler' } as FlexComponent);
+  }
 
-    // Show check-in button only if not yet checked in and student is in Notion
-    if (!item.isCheckedIn && item.studentNotionId) {
-      contents.push({
-        type: 'button',
-        action: {
-          type: 'postback',
-          label: '打卡',
-          data: `${ACTION.COACH_CHECKIN}:${item.studentNotionId}`,
-          displayText: `幫 ${item.studentName} 打卡`,
-        },
-        style: 'primary',
-        color: '#27ae60',
-        height: 'sm',
-        margin: 'sm',
-      } as FlexComponent);
-    }
-
-    return {
-      type: 'box',
-      layout: 'vertical',
-      contents,
-      paddingAll: '12px',
-      backgroundColor: item.isCheckedIn ? '#f0fdf4' : '#ffffff',
-      cornerRadius: '8px',
-      margin: 'sm',
-    } as FlexComponent;
-  });
+  if (nextDate <= maxDate) {
+    navButtons.push({
+      type: 'button',
+      action: {
+        type: 'postback',
+        label: `${formatDateLabel(nextDate)} →`,
+        data: `${ACTION.VIEW_SCHEDULE}:${nextDate}`,
+        displayText: `查看 ${formatDateLabel(nextDate)} 課表`,
+      },
+      style: 'link',
+      height: 'sm',
+      flex: 1,
+    } as FlexComponent);
+  } else {
+    navButtons.push({ type: 'filler' } as FlexComponent);
+  }
 
   return {
     type: 'bubble',
@@ -84,7 +142,7 @@ export function todayScheduleList(items: ScheduleItem[]): FlexBubble {
       contents: [
         {
           type: 'text',
-          text: '今日課表',
+          text: headerText,
           weight: 'bold',
           size: 'lg',
           color: '#FFFFFF',
@@ -106,6 +164,13 @@ export function todayScheduleList(items: ScheduleItem[]): FlexBubble {
       contents: rows,
       paddingAll: '12px',
       spacing: 'none',
+    },
+    footer: {
+      type: 'box',
+      layout: 'horizontal',
+      contents: navButtons,
+      paddingAll: '8px',
+      spacing: 'sm',
     },
   };
 }

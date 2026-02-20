@@ -39,6 +39,21 @@ export function nowTaipeiISO(): string {
 }
 
 
+/** yyyy-MM-dd 加減天數 */
+export function addDays(dateStr: string, days: number): string {
+  const d = new Date(dateStr + 'T00:00:00+08:00');
+  d.setDate(d.getDate() + days);
+  return format(toZonedTime(d, TZ), 'yyyy-MM-dd');
+}
+
+/** 格式化日期為中文顯示 (M/d（週X）) */
+export function formatDateLabel(dateStr: string): string {
+  const d = new Date(dateStr + 'T00:00:00+08:00');
+  const zoned = toZonedTime(d, TZ);
+  const weekdays = ['日', '一', '二', '三', '四', '五', '六'];
+  return `${zoned.getMonth() + 1}/${zoned.getDate()}（${weekdays[zoned.getDay()]}）`;
+}
+
 /** 組合 yyyy-MM-dd + HH:mm → Taipei Date */
 export function parseSlotTime(dateStr: string, timeStr: string): Date {
   const iso = `${dateStr}T${timeStr}:00+08:00`;

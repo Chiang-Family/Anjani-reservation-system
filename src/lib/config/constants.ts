@@ -13,6 +13,7 @@ export const KEYWORD = {
 // Postback action 前綴
 export const ACTION = {
   COACH_CHECKIN: 'coach_checkin',
+  VIEW_SCHEDULE: 'view_schedule',
   ADD_STUDENT_CONFIRM: 'add_student_confirm',
   EDIT_CLASSES: 'edit_classes',
   EDIT_PRICE: 'edit_price',

@@ -74,6 +74,29 @@ export async function getTodayEvents(): Promise<CalendarEvent[]> {
   return events;
 }
 
+export async function getEventsForDate(dateStr: string): Promise<CalendarEvent[]> {
+  const calendar = getCalendarClient();
+  const env = getEnv();
+
+  const timeMin = `${dateStr}T00:00:00+08:00`;
+  const timeMax = `${dateStr}T23:59:59+08:00`;
+
+  const res = await calendar.events.list({
+    calendarId: env.GOOGLE_CALENDAR_ID,
+    timeMin,
+    timeMax,
+    singleEvents: true,
+    orderBy: 'startTime',
+  });
+
+  const events: CalendarEvent[] = [];
+  for (const item of res.data.items || []) {
+    const ev = toCalendarEvent(item);
+    if (ev) events.push(ev);
+  }
+  return events;
+}
+
 export async function getMonthEvents(year: number, month: number): Promise<CalendarEvent[]> {
   const calendar = getCalendarClient();
   const env = getEnv();

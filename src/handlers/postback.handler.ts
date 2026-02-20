@@ -1,10 +1,13 @@
 import type { PostbackEvent } from '@line/bot-sdk';
 import { coachCheckinForStudent } from '@/services/checkin.service';
+import { getCoachScheduleForDate } from '@/services/coach.service';
 import { startEditStudent, toggleStudentPayment } from '@/services/student-management.service';
 import { getStudentById } from '@/lib/notion/students';
-import { replyText, replyMessages } from '@/lib/line/reply';
+import { replyText, replyFlex, replyMessages } from '@/lib/line/reply';
 import { ACTION } from '@/lib/config/constants';
 import { TEXT } from '@/templates/text-messages';
+import { scheduleList } from '@/templates/flex/today-schedule';
+import { formatDateLabel } from '@/lib/utils/date';
 import { menuQuickReply, coachQuickReply } from '@/templates/quick-reply';
 
 function replyTextWithMenu(replyToken: string, text: string) {
@@ -21,15 +24,31 @@ export async function handlePostback(event: PostbackEvent): Promise<void> {
   const parts = data.split(':');
   const action = parts[0];
   const id = parts[1];
+  const extra = parts[2];
 
   try {
     switch (action) {
       case ACTION.COACH_CHECKIN: {
-        const result = await coachCheckinForStudent(lineUserId, id);
+        // data = coach_checkin:{studentId}:{date?}
+        const dateStr = extra || undefined;
+        const result = await coachCheckinForStudent(lineUserId, id, dateStr);
         const qr = coachQuickReply();
         await replyMessages(event.replyToken, [
           { type: 'text', text: result.message, quickReply: { items: qr } },
         ]);
+        return;
+      }
+
+      case ACTION.VIEW_SCHEDULE: {
+        // data = view_schedule:{date}
+        const dateStr = id;
+        const schedule = await getCoachScheduleForDate(lineUserId, dateStr);
+        if (!schedule) {
+          await replyTextWithMenu(event.replyToken, '找不到教練資料。');
+          return;
+        }
+        const label = formatDateLabel(dateStr);
+        await replyFlex(event.replyToken, `${label} 課表`, scheduleList(schedule.items, dateStr));
         return;
       }
 
