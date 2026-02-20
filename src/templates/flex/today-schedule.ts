@@ -5,24 +5,10 @@ import type { ScheduleItem } from '@/services/coach.service';
 type FlexBubble = messagingApi.FlexBubble;
 type FlexComponent = messagingApi.FlexComponent;
 
-function checkinStatus(studentChecked: boolean, coachChecked: boolean): { text: string; color: string } {
-  if (studentChecked && coachChecked) {
-    return { text: '✅ 雙方已打卡', color: '#27ae60' };
-  }
-  if (studentChecked) {
-    return { text: '👤 學員已打卡', color: '#2980b9' };
-  }
-  if (coachChecked) {
-    return { text: '🏋️ 教練已打卡', color: '#8e44ad' };
-  }
-  return { text: '⏳ 未打卡', color: '#e67e22' };
-}
-
 export function todayScheduleList(items: ScheduleItem[]): FlexBubble {
-  const bothDone = (item: ScheduleItem) => item.studentChecked && item.coachChecked;
-
   const rows: FlexComponent[] = items.map((item) => {
-    const status = checkinStatus(item.studentChecked, item.coachChecked);
+    const statusText = item.isCheckedIn ? '✅ 已打卡' : '⏳ 未打卡';
+    const statusColor = item.isCheckedIn ? '#27ae60' : '#e67e22';
 
     const contents: FlexComponent[] = [
       {
@@ -52,22 +38,22 @@ export function todayScheduleList(items: ScheduleItem[]): FlexBubble {
           },
           {
             type: 'text',
-            text: status.text,
+            text: statusText,
             size: 'xs',
-            color: status.color,
+            color: statusColor,
             margin: 'sm',
           },
         ],
       },
     ];
 
-    // Show check-in button only if coach hasn't checked in yet and student is in Notion
-    if (!item.coachChecked && item.studentNotionId) {
+    // Show check-in button only if not yet checked in and student is in Notion
+    if (!item.isCheckedIn && item.studentNotionId) {
       contents.push({
         type: 'button',
         action: {
           type: 'postback',
-          label: '教練打卡',
+          label: '打卡',
           data: `${ACTION.COACH_CHECKIN}:${item.studentNotionId}`,
           displayText: `幫 ${item.studentName} 打卡`,
         },
@@ -83,7 +69,7 @@ export function todayScheduleList(items: ScheduleItem[]): FlexBubble {
       layout: 'vertical',
       contents,
       paddingAll: '12px',
-      backgroundColor: bothDone(item) ? '#f0fdf4' : '#ffffff',
+      backgroundColor: item.isCheckedIn ? '#f0fdf4' : '#ffffff',
       cornerRadius: '8px',
       margin: 'sm',
     } as FlexComponent;

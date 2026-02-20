@@ -1,6 +1,6 @@
 // 關鍵字指令
 export const KEYWORD = {
-  CHECKIN: '打卡',
+  CLASS_HISTORY: '上課紀錄',
   REMAINING: '剩餘堂數',
   TODAY_SCHEDULE: '今日課表',
   ADD_STUDENT: '新增學員',
@@ -17,6 +17,7 @@ export const ACTION = {
   EDIT_CLASSES: 'edit_classes',
   EDIT_PRICE: 'edit_price',
   TOGGLE_PAYMENT: 'toggle_payment',
+  ADD_CLASSES: 'add_classes',
 } as const;
 
 // 角色

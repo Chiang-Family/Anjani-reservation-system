@@ -26,7 +26,21 @@ export async function handlePostback(event: PostbackEvent): Promise<void> {
     switch (action) {
       case ACTION.COACH_CHECKIN: {
         const result = await coachCheckinForStudent(lineUserId, id);
-        await replyTextWithMenu(event.replyToken, result.message);
+        const qr = coachQuickReply();
+        await replyMessages(event.replyToken, [
+          { type: 'text', text: result.message, quickReply: { items: qr } },
+        ]);
+        return;
+      }
+
+      case ACTION.ADD_CLASSES: {
+        const student = await getStudentById(id);
+        if (!student) {
+          await replyTextWithMenu(event.replyToken, '找不到該學員資料。');
+          return;
+        }
+        const msg = startEditStudent(lineUserId, 'add_classes', id, student.name);
+        await replyText(event.replyToken, msg);
         return;
       }
 

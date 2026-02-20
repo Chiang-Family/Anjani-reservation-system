@@ -1,10 +1,11 @@
 import type { MessageEvent, TextEventMessage } from '@line/bot-sdk';
 import { identifyUser, getStudentInfo } from '@/services/student.service';
-import { studentCheckin } from '@/services/checkin.service';
 import { getCoachTodaySchedule } from '@/services/coach.service';
 import { getCoachMonthlyStats } from '@/services/stats.service';
 import { getStudentsByCoachId } from '@/lib/notion/students';
 import { findCoachByLineId } from '@/lib/notion/coaches';
+import { findStudentByLineId } from '@/lib/notion/students';
+import { getCheckinsByStudent } from '@/lib/notion/checkins';
 import {
   startAddStudent,
   handleAddStudentStep,
@@ -24,6 +25,7 @@ import { todayScheduleList } from '@/templates/flex/today-schedule';
 import { monthlyStatsCard } from '@/templates/flex/monthly-stats';
 import { studentMgmtList } from '@/templates/flex/student-mgmt-list';
 import { emptyStateBubble } from '@/templates/flex/empty-state';
+import { classHistoryCard } from '@/templates/flex/class-history';
 import { studentQuickReply, coachQuickReply } from '@/templates/quick-reply';
 
 export async function handleMessage(event: MessageEvent): Promise<void> {
@@ -113,20 +115,26 @@ async function handleStudentMessage(
   text: string,
   name: string
 ): Promise<void> {
-  const qr = studentQuickReply();
-
   switch (text) {
-    case KEYWORD.CHECKIN: {
-      const result = await studentCheckin(lineUserId);
-      await replyMessages(replyToken, [
-        { type: 'text', text: result.message, quickReply: { items: qr } },
-      ]);
+    case KEYWORD.CLASS_HISTORY: {
+      const student = await findStudentByLineId(lineUserId);
+      if (!student) {
+        const qr = studentQuickReply();
+        await replyMessages(replyToken, [
+          { type: 'text', text: TEXT.UNKNOWN_USER, quickReply: { items: qr } },
+        ]);
+        return;
+      }
+      const records = await getCheckinsByStudent(student.id);
+      const remaining = student.purchasedClasses - student.completedClasses;
+      await replyFlex(replyToken, '上課紀錄', classHistoryCard(student.name, records, remaining));
       return;
     }
 
     case KEYWORD.REMAINING: {
       const student = await getStudentInfo(lineUserId);
       if (!student) {
+        const qr = studentQuickReply();
         await replyMessages(replyToken, [
           { type: 'text', text: TEXT.UNKNOWN_USER, quickReply: { items: qr } },
         ]);
@@ -178,7 +186,7 @@ async function handleCoachMessage(
         ]);
         return;
       }
-      const unchecked = schedule.items.filter((item) => !item.coachChecked && item.studentNotionId);
+      const unchecked = schedule.items.filter((item) => !item.isCheckedIn && item.studentNotionId);
       if (unchecked.length === 0) {
         await replyMessages(replyToken, [
           { type: 'text', text: '今天所有學員都已打卡完成！', quickReply: { items: qr } },

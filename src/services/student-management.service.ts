@@ -127,7 +127,7 @@ export async function handleAddStudentStep(
 
 /** 編輯學員資料（多步驟文字輸入） */
 interface EditStudentState {
-  field: 'classes' | 'price';
+  field: 'classes' | 'price' | 'add_classes';
   studentId: string;
   studentName: string;
 }
@@ -138,8 +138,11 @@ export function getEditStudentState(lineUserId: string): EditStudentState | unde
   return editStudentStates.get(lineUserId);
 }
 
-export function startEditStudent(lineUserId: string, field: 'classes' | 'price', studentId: string, studentName: string): string {
+export function startEditStudent(lineUserId: string, field: 'classes' | 'price' | 'add_classes', studentId: string, studentName: string): string {
   editStudentStates.set(lineUserId, { field, studentId, studentName });
+  if (field === 'add_classes') {
+    return `請輸入要為 ${studentName} 加值的堂數（數字）：`;
+  }
   if (field === 'classes') {
     return `請輸入 ${studentName} 的新購買堂數（數字）：`;
   }
@@ -169,6 +172,22 @@ export async function handleEditStudentStep(
   if (!student) {
     editStudentStates.delete(lineUserId);
     return { message: '找不到該學員資料。', done: true };
+  }
+
+  if (state.field === 'add_classes') {
+    const newTotal = student.purchasedClasses + num;
+    await updateStudent(state.studentId, { purchasedClasses: newTotal });
+    editStudentStates.delete(lineUserId);
+    const remaining = newTotal - student.completedClasses;
+    return {
+      message: [
+        `✅ ${state.studentName} 已加值 ${num} 堂！`,
+        '',
+        `📊 購買堂數：${student.purchasedClasses} → ${newTotal} 堂`,
+        `📊 剩餘堂數：${remaining} 堂`,
+      ].join('\n'),
+      done: true,
+    };
   }
 
   if (state.field === 'classes') {
@@ -261,7 +280,7 @@ export async function handleBinding(
       `歡迎 ${student.name}！`,
       `您目前剩餘 ${student.purchasedClasses - student.completedClasses} 堂課程。`,
       '',
-      '輸入「打卡」即可在上課時打卡。',
+      '輸入「上課紀錄」查看過去的上課紀錄。',
       '輸入「選單」查看所有功能。',
     ].join('\n'),
   };

@@ -35,13 +35,10 @@ export interface CheckinRecord {
   id: string;
   studentId: string;
   coachId: string;
+  checkinTime: string;
   classDate: string;
   classTimeSlot: string;
   studentName?: string;
-  studentChecked: boolean;
-  coachChecked: boolean;
-  studentCheckinTime?: string;
-  coachCheckinTime?: string;
 }
 
 export interface UserIdentity {

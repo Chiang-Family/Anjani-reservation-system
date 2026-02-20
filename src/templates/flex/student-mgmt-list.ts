@@ -70,6 +70,18 @@ export function studentMgmtList(students: Student[]): FlexBubble[] {
             type: 'button',
             action: {
               type: 'postback',
+              label: '加值堂數（續約）',
+              data: `${ACTION.ADD_CLASSES}:${student.id}`,
+              displayText: `為 ${student.name} 加值堂數`,
+            },
+            style: 'primary',
+            color: '#27ae60',
+            height: 'sm',
+          },
+          {
+            type: 'button',
+            action: {
+              type: 'postback',
               label: '修改購買堂數',
               data: `${ACTION.EDIT_CLASSES}:${student.id}`,
               displayText: `修改 ${student.name} 的購買堂數`,

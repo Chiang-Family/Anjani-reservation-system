@@ -5,7 +5,7 @@ type QuickReplyItem = messagingApi.QuickReplyItem;
 
 export function studentQuickReply(): QuickReplyItem[] {
   return [
-    quickReplyButton(KEYWORD.CHECKIN),
+    quickReplyButton(KEYWORD.CLASS_HISTORY),
     quickReplyButton(KEYWORD.REMAINING),
     quickReplyButton(KEYWORD.MENU),
   ];
