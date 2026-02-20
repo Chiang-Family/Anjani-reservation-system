@@ -24,7 +24,8 @@ export async function handleMessage(event: MessageEvent): Promise<void> {
   const user = await identifyUser(lineUserId);
 
   if (!user) {
-    await replyText(event.replyToken, TEXT.UNKNOWN_USER);
+    console.log(`[未識別使用者] LINE User ID: ${lineUserId}`);
+    await replyText(event.replyToken, `${TEXT.UNKNOWN_USER}\n\n您的 LINE User ID:\n${lineUserId}`);
     return;
   }
 
