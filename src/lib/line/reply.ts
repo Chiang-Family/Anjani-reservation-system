@@ -51,7 +51,7 @@ export async function replyFlexCarousel(
         altText,
         contents: {
           type: 'carousel',
-          contents: bubbles,
+          contents: bubbles.slice(0, 12),
         },
       },
     ],

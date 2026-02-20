@@ -1,4 +1,4 @@
-import type { MessageEvent, TextEventMessage } from '@line/bot-sdk';
+import type { MessageEvent, TextEventMessage, messagingApi } from '@line/bot-sdk';
 import { identifyUser, getStudentInfo } from '@/services/student.service';
 import { getCoachScheduleForDate } from '@/services/coach.service';
 import { getCoachMonthlyStats } from '@/services/stats.service';
@@ -245,7 +245,21 @@ async function handleCoachMessage(
       const summaries = await Promise.all(students.map(s => getStudentHoursSummary(s.id)));
       const studentsWithSummary = students.map((s, i) => ({ ...s, summary: summaries[i] }));
       const bubbles = studentMgmtList(studentsWithSummary);
-      await replyFlexCarousel(replyToken, `學員管理（共 ${students.length} 人）`, bubbles);
+      const messages: messagingApi.Message[] = [
+        {
+          type: 'flex',
+          altText: `學員管理（共 ${students.length} 人）`,
+          contents: { type: 'carousel', contents: bubbles.slice(0, 12) },
+        },
+      ];
+      if (students.length > 12) {
+        messages.push({
+          type: 'text',
+          text: `共 ${students.length} 位學員，顯示前 12 位。\n輸入學員姓名可搜尋特定學員。`,
+          quickReply: { items: qr },
+        });
+      }
+      await replyMessages(replyToken, messages);
       return;
     }
 
@@ -267,6 +281,29 @@ async function handleCoachMessage(
     }
 
     default: {
+      // Search students by name
+      const coach = await findCoachByLineId(lineUserId);
+      if (coach) {
+        const allStudents = await getStudentsByCoachId(coach.id);
+        const matched = allStudents.filter(
+          (s) => s.name.includes(text) || text.includes(s.name)
+        );
+        if (matched.length > 0) {
+          const summaries = await Promise.all(matched.map(s => getStudentHoursSummary(s.id)));
+          const withSummary = matched.map((s, i) => ({ ...s, summary: summaries[i] }));
+          const bubbles = studentMgmtList(withSummary);
+          await replyMessages(replyToken, [
+            {
+              type: 'flex',
+              altText: `搜尋結果（${matched.length} 位）`,
+              contents: bubbles.length === 1
+                ? bubbles[0]
+                : { type: 'carousel', contents: bubbles.slice(0, 12) },
+            },
+          ]);
+          return;
+        }
+      }
       await replyFlex(replyToken, 'Anjani 教練管理', coachMenu(name));
     }
   }
