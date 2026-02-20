@@ -184,3 +184,37 @@ export async function updateSlotCurrentCount(
     },
   });
 }
+
+export async function createClassSlot(params: {
+  title: string;
+  coachId: string;
+  startDatetime: string; // ISO 8601
+  endDatetime: string; // ISO 8601
+  maxCapacity: number;
+}): Promise<ClassSlot> {
+  const notion = getNotionClient();
+  const properties = {
+    [CLASS_SLOT_PROPS.TITLE]: {
+      title: [{ text: { content: params.title } }],
+    },
+    [CLASS_SLOT_PROPS.COACH]: {
+      relation: [{ id: params.coachId }],
+    },
+    [CLASS_SLOT_PROPS.DATE]: {
+      date: { start: params.startDatetime, end: params.endDatetime },
+    },
+    [CLASS_SLOT_PROPS.MAX_CAPACITY]: {
+      number: params.maxCapacity,
+    },
+    [CLASS_SLOT_PROPS.CURRENT_COUNT]: {
+      number: 0,
+    },
+  } as Parameters<typeof notion.pages.create>[0]['properties'];
+
+  const page = await notion.pages.create({
+    parent: { database_id: getEnv().NOTION_CLASS_SLOTS_DB_ID },
+    properties,
+  });
+
+  return extractClassSlot(page as unknown as Record<string, unknown>);
+}

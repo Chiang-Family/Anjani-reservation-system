@@ -85,7 +85,7 @@ async function doCheckin(reservation: Reservation): Promise<CheckinResult> {
 
   return {
     success: true,
-    message: `報到成功！\n報到時間：${formatDateTime(now)}`,
+    message: `✅ 報到成功！\n報到時間：${formatDateTime(now)}\n輸入「剩餘堂數」可查看目前堂數。`,
     reservation: { ...reservation, status: RESERVATION_STATUS.CHECKED_IN },
   };
 }

@@ -70,7 +70,7 @@ export async function reserveClass(
 
   return {
     success: true,
-    message: '預約成功！',
+    message: '✅ 預約成功！輸入「我的預約」可查看預約記錄。',
     reservation,
   };
 }
@@ -163,5 +163,5 @@ async function changeReservationStatus(
   }
 
   const actionName = newStatus === RESERVATION_STATUS.CANCELLED ? '取消' : '請假';
-  return { success: true, message: `${actionName}成功！堂數已退還。` };
+  return { success: true, message: `已${actionName}預約。堂數已退還。\n輸入「預約課程」可重新預約。` };
 }

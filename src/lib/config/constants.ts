@@ -19,6 +19,11 @@ export const ACTION = {
   CONFIRM_LEAVE: 'confirm_leave',
   VIEW_STUDENTS: 'view_students',
   COACH_CHECKIN: 'coach_checkin',
+  RECHARGE_SELECT: 'recharge_select',
+  RECHARGE_CONFIRM: 'recharge_confirm',
+  CREATE_SLOT_START: 'create_slot_start',
+  CREATE_SLOT_DURATION: 'create_slot_duration',
+  CREATE_SLOT_CONFIRM: 'create_slot_confirm',
 } as const;
 
 // 關鍵字指令
@@ -29,6 +34,9 @@ export const KEYWORD = {
   REMAINING: '剩餘堂數',
   TODAY_CLASSES: '今日課程',
   UPCOMING_CLASSES: '近期課程',
+  RECHARGE: '充值堂數',
+  CREATE_SLOT: '新增課程',
+  MENU: '選單',
 } as const;
 
 // 角色

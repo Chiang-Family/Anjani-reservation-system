@@ -5,6 +5,7 @@ import { getStudentInfo } from '@/services/student.service';
 import { listAvailableSlots, getMyReservations } from '@/services/reservation.service';
 import { studentCheckin, getTodayReservations } from '@/services/checkin.service';
 import { getCoachTodayClasses, getCoachUpcomingClasses } from '@/services/coach.service';
+import { getAllStudents } from '@/lib/notion/students';
 import { replyText, replyFlex, replyFlexCarousel, replyMessages } from '@/lib/line/reply';
 import { KEYWORD, ROLE, ACTION } from '@/lib/config/constants';
 import { TEXT } from '@/templates/text-messages';
@@ -12,6 +13,9 @@ import { classSlotList } from '@/templates/flex/class-slot-list';
 import { reservationList } from '@/templates/flex/reservation-list';
 import { studentInfoCard } from '@/templates/flex/student-info';
 import { coachScheduleList } from '@/templates/flex/coach-schedule';
+import { rechargeStudentList } from '@/templates/flex/recharge-student-list';
+import { studentMenu, coachMenu } from '@/templates/flex/main-menu';
+import { createSlotStart } from '@/templates/flex/create-slot-start';
 import { studentQuickReply, coachQuickReply } from '@/templates/quick-reply';
 
 export async function handleMessage(event: MessageEvent): Promise<void> {
@@ -31,9 +35,9 @@ export async function handleMessage(event: MessageEvent): Promise<void> {
 
   try {
     if (user.role === ROLE.STUDENT) {
-      await handleStudentMessage(event.replyToken, lineUserId, text);
+      await handleStudentMessage(event.replyToken, lineUserId, text, user.name);
     } else {
-      await handleCoachMessage(event.replyToken, lineUserId, text);
+      await handleCoachMessage(event.replyToken, lineUserId, text, user.name);
     }
   } catch (error) {
     console.error('Message handler error:', error);
@@ -44,13 +48,18 @@ export async function handleMessage(event: MessageEvent): Promise<void> {
 async function handleStudentMessage(
   replyToken: string,
   lineUserId: string,
-  text: string
+  text: string,
+  name: string
 ): Promise<void> {
+  const qr = studentQuickReply();
+
   switch (text) {
     case KEYWORD.RESERVE: {
       const slots = await listAvailableSlots();
       if (slots.length === 0) {
-        await replyText(replyToken, TEXT.NO_AVAILABLE_SLOTS);
+        await replyMessages(replyToken, [
+          { type: 'text', text: TEXT.NO_AVAILABLE_SLOTS, quickReply: { items: qr } },
+        ]);
         return;
       }
       const container = classSlotList(slots);
@@ -61,7 +70,9 @@ async function handleStudentMessage(
     case KEYWORD.MY_RESERVATIONS: {
       const reservations = await getMyReservations(lineUserId);
       if (reservations.length === 0) {
-        await replyText(replyToken, TEXT.NO_RESERVATIONS);
+        await replyMessages(replyToken, [
+          { type: 'text', text: TEXT.NO_RESERVATIONS, quickReply: { items: qr } },
+        ]);
         return;
       }
       const container = reservationList(reservations);
@@ -119,27 +130,31 @@ async function handleStudentMessage(
         await replyFlexCarousel(replyToken, '選擇報到課程', bubbles);
         return;
       }
-      await replyText(replyToken, result.message);
+      await replyMessages(replyToken, [
+        { type: 'text', text: result.message, quickReply: { items: qr } },
+      ]);
       return;
     }
 
     case KEYWORD.REMAINING: {
       const student = await getStudentInfo(lineUserId);
       if (!student) {
-        await replyText(replyToken, TEXT.UNKNOWN_USER);
+        await replyMessages(replyToken, [
+          { type: 'text', text: TEXT.UNKNOWN_USER, quickReply: { items: qr } },
+        ]);
         return;
       }
       await replyFlex(replyToken, '學員資訊', studentInfoCard(student));
       return;
     }
 
+    case KEYWORD.MENU: {
+      await replyFlex(replyToken, 'Anjani 預約系統', studentMenu(name));
+      return;
+    }
+
     default: {
-      const msg: messagingApi.Message = {
-        type: 'text',
-        text: TEXT.UNKNOWN_COMMAND,
-        quickReply: { items: studentQuickReply() },
-      };
-      await replyMessages(replyToken, [msg]);
+      await replyFlex(replyToken, 'Anjani 預約系統', studentMenu(name));
     }
   }
 }
@@ -147,13 +162,18 @@ async function handleStudentMessage(
 async function handleCoachMessage(
   replyToken: string,
   lineUserId: string,
-  text: string
+  text: string,
+  name: string
 ): Promise<void> {
+  const qr = coachQuickReply();
+
   switch (text) {
     case KEYWORD.TODAY_CLASSES: {
       const slots = await getCoachTodayClasses(lineUserId);
       if (slots.length === 0) {
-        await replyText(replyToken, TEXT.NO_TODAY_CLASSES);
+        await replyMessages(replyToken, [
+          { type: 'text', text: TEXT.NO_TODAY_CLASSES, quickReply: { items: qr } },
+        ]);
         return;
       }
       const container = coachScheduleList(slots);
@@ -164,7 +184,9 @@ async function handleCoachMessage(
     case KEYWORD.UPCOMING_CLASSES: {
       const slots = await getCoachUpcomingClasses(lineUserId);
       if (slots.length === 0) {
-        await replyText(replyToken, TEXT.NO_UPCOMING_CLASSES);
+        await replyMessages(replyToken, [
+          { type: 'text', text: TEXT.NO_UPCOMING_CLASSES, quickReply: { items: qr } },
+        ]);
         return;
       }
       const container = coachScheduleList(slots);
@@ -172,13 +194,31 @@ async function handleCoachMessage(
       return;
     }
 
+    case KEYWORD.RECHARGE: {
+      const students = await getAllStudents();
+      if (students.length === 0) {
+        await replyMessages(replyToken, [
+          { type: 'text', text: TEXT.NO_STUDENTS, quickReply: { items: qr } },
+        ]);
+        return;
+      }
+      const bubbles = rechargeStudentList(students);
+      await replyFlexCarousel(replyToken, '選擇充值學員', bubbles);
+      return;
+    }
+
+    case KEYWORD.CREATE_SLOT: {
+      await replyFlex(replyToken, '新增課程', createSlotStart());
+      return;
+    }
+
+    case KEYWORD.MENU: {
+      await replyFlex(replyToken, 'Anjani 教練管理', coachMenu(name));
+      return;
+    }
+
     default: {
-      const msg: messagingApi.Message = {
-        type: 'text',
-        text: TEXT.UNKNOWN_COMMAND,
-        quickReply: { items: coachQuickReply() },
-      };
-      await replyMessages(replyToken, [msg]);
+      await replyFlex(replyToken, 'Anjani 教練管理', coachMenu(name));
     }
   }
 }

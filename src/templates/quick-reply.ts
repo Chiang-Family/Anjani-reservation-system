@@ -9,6 +9,7 @@ export function studentQuickReply(): QuickReplyItem[] {
     quickReplyButton(KEYWORD.MY_RESERVATIONS),
     quickReplyButton(KEYWORD.CHECKIN),
     quickReplyButton(KEYWORD.REMAINING),
+    quickReplyButton(KEYWORD.MENU),
   ];
 }
 
@@ -16,7 +17,14 @@ export function coachQuickReply(): QuickReplyItem[] {
   return [
     quickReplyButton(KEYWORD.TODAY_CLASSES),
     quickReplyButton(KEYWORD.UPCOMING_CLASSES),
+    quickReplyButton(KEYWORD.CREATE_SLOT),
+    quickReplyButton(KEYWORD.RECHARGE),
+    quickReplyButton(KEYWORD.MENU),
   ];
+}
+
+export function menuQuickReply(): QuickReplyItem[] {
+  return [quickReplyButton(KEYWORD.MENU)];
 }
 
 function quickReplyButton(label: string): QuickReplyItem {
