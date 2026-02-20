@@ -4,6 +4,7 @@ export const RESERVATION_STATUS = {
   CHECKED_IN: '已報到',
   CANCELLED: '已取消',
   ON_LEAVE: '已請假',
+  ABSENT: '缺席',
 } as const;
 
 export type ReservationStatus =
@@ -24,6 +25,11 @@ export const ACTION = {
   CREATE_SLOT_START: 'create_slot_start',
   CREATE_SLOT_DURATION: 'create_slot_duration',
   CREATE_SLOT_CONFIRM: 'create_slot_confirm',
+  CONFIRM_RESERVE: 'confirm_reserve',
+  DELETE_SLOT: 'delete_slot',
+  CONFIRM_DELETE_SLOT: 'confirm_delete_slot',
+  EDIT_CAPACITY: 'edit_capacity',
+  EDIT_CAPACITY_CONFIRM: 'edit_capacity_confirm',
 } as const;
 
 // 關鍵字指令
@@ -37,6 +43,7 @@ export const KEYWORD = {
   RECHARGE: '充值堂數',
   CREATE_SLOT: '新增課程',
   MENU: '選單',
+  HISTORY: '預約紀錄',
 } as const;
 
 // 角色

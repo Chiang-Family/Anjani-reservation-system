@@ -2,7 +2,7 @@ import type { MessageEvent, TextEventMessage } from '@line/bot-sdk';
 import type { messagingApi } from '@line/bot-sdk';
 import { identifyUser } from '@/services/student.service';
 import { getStudentInfo } from '@/services/student.service';
-import { listAvailableSlots, getMyReservations } from '@/services/reservation.service';
+import { listAvailableSlots, getMyReservations, enrichSlotsWithCoachName, getReservationHistory } from '@/services/reservation.service';
 import { studentCheckin, getTodayReservations } from '@/services/checkin.service';
 import { getCoachTodayClasses, getCoachUpcomingClasses } from '@/services/coach.service';
 import { getAllStudents } from '@/lib/notion/students';
@@ -17,6 +17,7 @@ import { rechargeStudentList } from '@/templates/flex/recharge-student-list';
 import { studentMenu, coachMenu } from '@/templates/flex/main-menu';
 import { createSlotStart } from '@/templates/flex/create-slot-start';
 import { studentQuickReply, coachQuickReply } from '@/templates/quick-reply';
+import { emptyStateBubble } from '@/templates/flex/empty-state';
 
 export async function handleMessage(event: MessageEvent): Promise<void> {
   if (event.message.type !== 'text') return;
@@ -55,28 +56,33 @@ async function handleStudentMessage(
 
   switch (text) {
     case KEYWORD.RESERVE: {
-      const slots = await listAvailableSlots();
-      if (slots.length === 0) {
-        await replyMessages(replyToken, [
-          { type: 'text', text: TEXT.NO_AVAILABLE_SLOTS, quickReply: { items: qr } },
-        ]);
+      const rawSlots = await listAvailableSlots();
+      if (rawSlots.length === 0) {
+        await replyFlex(replyToken, '目前沒有可預約的課程', emptyStateBubble(
+          '目前沒有可預約的課程',
+          '教練新增課程後會出現在這裡。',
+          { label: '回到選單', text: KEYWORD.MENU }
+        ));
         return;
       }
+      const slots = await enrichSlotsWithCoachName(rawSlots);
       const container = classSlotList(slots);
-      await replyFlex(replyToken, '可預約課程', container);
+      await replyFlex(replyToken, `可預約課程（共 ${slots.length} 堂）`, container);
       return;
     }
 
     case KEYWORD.MY_RESERVATIONS: {
       const reservations = await getMyReservations(lineUserId);
       if (reservations.length === 0) {
-        await replyMessages(replyToken, [
-          { type: 'text', text: TEXT.NO_RESERVATIONS, quickReply: { items: qr } },
-        ]);
+        await replyFlex(replyToken, '您目前沒有預約', emptyStateBubble(
+          '您目前沒有預約',
+          '輸入「預約課程」可查看可預約時段。',
+          { label: '預約課程', text: KEYWORD.RESERVE }
+        ));
         return;
       }
       const container = reservationList(reservations);
-      await replyFlex(replyToken, '我的預約', container);
+      await replyFlex(replyToken, `我的預約（共 ${reservations.length} 筆）`, container);
       return;
     }
 
@@ -144,7 +150,22 @@ async function handleStudentMessage(
         ]);
         return;
       }
-      await replyFlex(replyToken, '學員資訊', studentInfoCard(student));
+      await replyFlex(replyToken, `${student.name} 學員資訊`, studentInfoCard(student));
+      return;
+    }
+
+    case KEYWORD.HISTORY: {
+      const history = await getReservationHistory(lineUserId);
+      if (history.length === 0) {
+        await replyFlex(replyToken, '您沒有預約紀錄', emptyStateBubble(
+          '您沒有預約紀錄',
+          '預約課程後，紀錄會出現在這裡。',
+          { label: '預約課程', text: KEYWORD.RESERVE }
+        ));
+        return;
+      }
+      const container = reservationList(history);
+      await replyFlex(replyToken, `預約紀錄（共 ${history.length} 筆）`, container);
       return;
     }
 
@@ -171,26 +192,30 @@ async function handleCoachMessage(
     case KEYWORD.TODAY_CLASSES: {
       const slots = await getCoachTodayClasses(lineUserId);
       if (slots.length === 0) {
-        await replyMessages(replyToken, [
-          { type: 'text', text: TEXT.NO_TODAY_CLASSES, quickReply: { items: qr } },
-        ]);
+        await replyFlex(replyToken, '今日沒有排定的課程', emptyStateBubble(
+          '今日沒有排定的課程',
+          '輸入「新增課程」可建立新時段。',
+          { label: '新增課程', text: KEYWORD.CREATE_SLOT }
+        ));
         return;
       }
       const container = coachScheduleList(slots);
-      await replyFlex(replyToken, '今日課程', container);
+      await replyFlex(replyToken, `今日課程（共 ${slots.length} 堂）`, container);
       return;
     }
 
     case KEYWORD.UPCOMING_CLASSES: {
       const slots = await getCoachUpcomingClasses(lineUserId);
       if (slots.length === 0) {
-        await replyMessages(replyToken, [
-          { type: 'text', text: TEXT.NO_UPCOMING_CLASSES, quickReply: { items: qr } },
-        ]);
+        await replyFlex(replyToken, '近期沒有排定的課程', emptyStateBubble(
+          '近期沒有排定的課程',
+          '輸入「新增課程」可建立新時段。',
+          { label: '新增課程', text: KEYWORD.CREATE_SLOT }
+        ));
         return;
       }
       const container = coachScheduleList(slots);
-      await replyFlex(replyToken, '近期課程', container);
+      await replyFlex(replyToken, `近期課程（共 ${slots.length} 堂）`, container);
       return;
     }
 

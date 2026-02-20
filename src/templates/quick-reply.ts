@@ -9,6 +9,7 @@ export function studentQuickReply(): QuickReplyItem[] {
     quickReplyButton(KEYWORD.MY_RESERVATIONS),
     quickReplyButton(KEYWORD.CHECKIN),
     quickReplyButton(KEYWORD.REMAINING),
+    quickReplyButton(KEYWORD.HISTORY),
     quickReplyButton(KEYWORD.MENU),
   ];
 }

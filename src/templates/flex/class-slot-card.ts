@@ -9,12 +9,25 @@ type FlexComponent = messagingApi.FlexComponent;
 export function classSlotCard(slot: ClassSlot): FlexBubble {
   const remaining = slot.maxCapacity - slot.currentCount;
 
-  const bodyContents: FlexComponent[] = [
+  const bodyContents: FlexComponent[] = [];
+
+  if (slot.coachName) {
+    bodyContents.push({
+      type: 'text',
+      text: `教練：${slot.coachName}`,
+      size: 'sm',
+      color: '#333333',
+      weight: 'bold',
+    });
+  }
+
+  bodyContents.push(
     {
       type: 'text',
       text: formatSlotDisplay(slot.date, slot.startTime, slot.endTime),
       size: 'sm',
       color: '#555555',
+      margin: slot.coachName ? 'sm' : undefined,
     },
     {
       type: 'text',
@@ -22,8 +35,8 @@ export function classSlotCard(slot: ClassSlot): FlexBubble {
       size: 'sm',
       color: remaining <= 2 ? '#ff4444' : '#555555',
       margin: 'sm',
-    },
-  ];
+    }
+  );
 
   return {
     type: 'bubble',
@@ -59,7 +72,7 @@ export function classSlotCard(slot: ClassSlot): FlexBubble {
           action: {
             type: 'postback',
             label: '預約此課程',
-            data: `${ACTION.RESERVE}:${slot.id}`,
+            data: `${ACTION.CONFIRM_RESERVE}:${slot.id}`,
             displayText: `預約 ${slot.title}`,
           },
           style: 'primary',

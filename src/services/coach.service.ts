@@ -1,9 +1,18 @@
 import { findCoachByLineId } from '@/lib/notion/coaches';
-import { getSlotsByCoachAndDateRange, createClassSlot } from '@/lib/notion/class-slots';
-import { getReservationsBySlot } from '@/lib/notion/reservations';
+import {
+  getSlotsByCoachAndDateRange,
+  createClassSlot,
+  getSlotById,
+  archiveClassSlot,
+  updateSlotCurrentCount,
+} from '@/lib/notion/class-slots';
+import { getReservationsBySlot, updateReservationStatus } from '@/lib/notion/reservations';
+import { getStudentById, updateRemainingClasses } from '@/lib/notion/students';
 import { RESERVATION_STATUS } from '@/lib/config/constants';
 import { todayDateString, nowTaipei } from '@/lib/utils/date';
 import { enrichReservationsWithStudentName } from './reservation.service';
+import { notifyCoachStudentsNewSlot } from './notification.service';
+import { pushText } from '@/lib/line/push';
 import { format, addDays } from 'date-fns';
 import type { ClassSlot, Reservation } from '@/types';
 
@@ -57,13 +66,18 @@ export async function createSlotForCoach(
   const startDatetime = `${dateFormatted}T${startFormatted}:00+08:00`;
   const endDatetime = `${dateFormatted}T${endFormatted}:00+08:00`;
 
-  await createClassSlot({
+  const slot = await createClassSlot({
     title,
     coachId: coach.id,
     startDatetime,
     endDatetime,
     maxCapacity: capacity,
   });
+
+  // 非同步通知教練的學員（不阻塞回覆）
+  Promise.allSettled([
+    notifyCoachStudentsNewSlot(coach.id, slot, coach.name),
+  ]).catch((err) => console.error('Failed to notify students:', err));
 
   return {
     success: true,
@@ -76,4 +90,52 @@ export async function createSlotForCoach(
       `📝 標題：${title}`,
     ].join('\n'),
   };
+}
+
+/** 教練刪除課程：取消所有預約 + 退堂數 + 通知學員 */
+export async function deleteSlotForCoach(
+  slotId: string
+): Promise<{ success: boolean; message: string }> {
+  const slot = await getSlotById(slotId);
+  if (!slot) {
+    return { success: false, message: '找不到此課程時段。' };
+  }
+
+  // 查所有已預約的預約
+  const reservations = await getReservationsBySlot(slotId, RESERVATION_STATUS.RESERVED);
+  let cancelledCount = 0;
+
+  for (const reservation of reservations) {
+    // 改狀態為已取消
+    await updateReservationStatus(reservation.id, RESERVATION_STATUS.CANCELLED);
+
+    // 退還 1 堂
+    if (reservation.studentId) {
+      const student = await getStudentById(reservation.studentId);
+      if (student) {
+        await updateRemainingClasses(student.id, student.remainingClasses + 1);
+
+        // Push 通知學員
+        try {
+          await pushText(
+            student.lineUserId,
+            `「${slot.title}」已被教練取消，您的預約已自動取消，堂數已退還。`
+          );
+        } catch (err) {
+          console.error(`Failed to push delete notification to ${student.lineUserId}:`, err);
+        }
+      }
+    }
+
+    cancelledCount++;
+  }
+
+  // Archive slot
+  await archiveClassSlot(slotId);
+
+  const msg = cancelledCount > 0
+    ? `✅ 已刪除課程「${slot.title}」，共取消 ${cancelledCount} 筆預約，堂數已退還。`
+    : `✅ 已刪除課程「${slot.title}」。`;
+
+  return { success: true, message: msg };
 }

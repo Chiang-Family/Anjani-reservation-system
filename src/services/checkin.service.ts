@@ -1,4 +1,4 @@
-import { findStudentByLineId } from '@/lib/notion/students';
+import { findStudentByLineId, getStudentById } from '@/lib/notion/students';
 import {
   getReservationsByStudent,
   updateReservationStatus,
@@ -6,7 +6,7 @@ import {
 } from '@/lib/notion/reservations';
 import { getSlotById } from '@/lib/notion/class-slots';
 import { RESERVATION_STATUS } from '@/lib/config/constants';
-import { todayDateString, formatDateTime, nowTaipei } from '@/lib/utils/date';
+import { todayDateString, formatDateTime, nowTaipei, parseSlotTime } from '@/lib/utils/date';
 import { enrichReservations } from './reservation.service';
 import type { Reservation } from '@/types';
 
@@ -74,9 +74,59 @@ async function doCheckin(reservation: Reservation): Promise<CheckinResult> {
     return { success: false, message: '此預約不是「已預約」狀態，無法報到。' };
   }
 
+  // 取得課程時段資訊進行時間窗口驗證
+  const slot = await getSlotById(reservation.classSlotId);
+  if (!slot) {
+    return { success: false, message: '找不到對應的課程時段。' };
+  }
+
   const now = nowTaipei();
   const checkinTimeStr = now.toISOString();
 
+  // 時間窗口驗證：課前 30 分鐘 ~ 課後 15 分鐘
+  if (slot.date && slot.startTime && slot.endTime) {
+    const slotStart = parseSlotTime(slot.date, slot.startTime);
+    const slotEnd = parseSlotTime(slot.date, slot.endTime);
+    const windowStart = new Date(slotStart.getTime() - 30 * 60 * 1000);
+    const windowEnd = new Date(slotEnd.getTime() + 15 * 60 * 1000);
+
+    if (now < windowStart || now > windowEnd) {
+      const wStartH = windowStart.getHours().toString().padStart(2, '0');
+      const wStartM = windowStart.getMinutes().toString().padStart(2, '0');
+      const wEndH = windowEnd.getHours().toString().padStart(2, '0');
+      const wEndM = windowEnd.getMinutes().toString().padStart(2, '0');
+      return {
+        success: false,
+        message: `目前不在報到時段。\n可報到時間：${wStartH}:${wStartM}–${wEndH}:${wEndM}`,
+      };
+    }
+
+    await updateReservationStatus(
+      reservation.id,
+      RESERVATION_STATUS.CHECKED_IN,
+      checkinTimeStr
+    );
+
+    const isLate = now > slotStart;
+    const lateNote = isLate ? '（遲到報到）' : '';
+
+    // 查詢學員堂數提示
+    let balanceWarning = '';
+    if (reservation.studentId) {
+      const student = await getStudentById(reservation.studentId);
+      if (student && student.remainingClasses <= 2) {
+        balanceWarning = `\n\n⚠️ 剩餘堂數僅剩 ${student.remainingClasses} 堂，請盡早聯繫教練充值。`;
+      }
+    }
+
+    return {
+      success: true,
+      message: `✅ 報到成功！${lateNote}\n報到時間：${formatDateTime(now)}${balanceWarning}`,
+      reservation: { ...reservation, status: RESERVATION_STATUS.CHECKED_IN },
+    };
+  }
+
+  // 如果沒有時間資訊，直接報到（不驗證時間）
   await updateReservationStatus(
     reservation.id,
     RESERVATION_STATUS.CHECKED_IN,
@@ -85,7 +135,7 @@ async function doCheckin(reservation: Reservation): Promise<CheckinResult> {
 
   return {
     success: true,
-    message: `✅ 報到成功！\n報到時間：${formatDateTime(now)}\n輸入「剩餘堂數」可查看目前堂數。`,
+    message: `✅ 報到成功！\n報到時間：${formatDateTime(now)}`,
     reservation: { ...reservation, status: RESERVATION_STATUS.CHECKED_IN },
   };
 }

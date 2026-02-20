@@ -45,6 +45,18 @@ export async function findCoachByLineId(lineUserId: string): Promise<Coach | nul
   return extractCoach(res.results[0] as unknown as Record<string, unknown>);
 }
 
+export async function getAllCoaches(): Promise<Coach[]> {
+  const notion = getNotionClient();
+  const res = await notion.databases.query({
+    database_id: getEnv().NOTION_COACHES_DB_ID,
+    sorts: [{ property: COACH_PROPS.NAME, direction: 'ascending' }],
+  });
+
+  return res.results.map((page) =>
+    extractCoach(page as unknown as Record<string, unknown>)
+  );
+}
+
 export async function getCoachById(coachId: string): Promise<Coach | null> {
   const notion = getNotionClient();
   try {

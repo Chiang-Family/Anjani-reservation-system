@@ -113,6 +113,8 @@ function getStatusColor(status: string): string {
       return '#e74c3c';
     case RESERVATION_STATUS.ON_LEAVE:
       return '#f39c12';
+    case RESERVATION_STATUS.ABSENT:
+      return '#95a5a6';
     default:
       return '#999999';
   }

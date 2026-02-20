@@ -11,6 +11,7 @@ import {
   getSlotById,
   updateSlotCurrentCount,
 } from '@/lib/notion/class-slots';
+import { getCoachById } from '@/lib/notion/coaches';
 import { RESERVATION_STATUS } from '@/lib/config/constants';
 import { todayDateString } from '@/lib/utils/date';
 import type { ClassSlot, Reservation } from '@/types';
@@ -23,6 +24,26 @@ export interface ReserveResult {
 
 export async function listAvailableSlots(): Promise<ClassSlot[]> {
   return getAvailableSlots(todayDateString());
+}
+
+/** 為課程時段填入教練名稱 */
+export async function enrichSlotsWithCoachName(slots: ClassSlot[]): Promise<ClassSlot[]> {
+  const coachCache = new Map<string, string>();
+
+  return Promise.all(
+    slots.map(async (slot) => {
+      if (!slot.coachId) return slot;
+
+      let coachName = coachCache.get(slot.coachId);
+      if (!coachName) {
+        const coach = await getCoachById(slot.coachId);
+        coachName = coach?.name ?? '';
+        coachCache.set(slot.coachId, coachName);
+      }
+
+      return { ...slot, coachName };
+    })
+  );
 }
 
 export async function reserveClass(
@@ -63,25 +84,50 @@ export async function reserveClass(
   });
 
   // Deduct remaining classes
-  await updateRemainingClasses(student.id, student.remainingClasses - 1);
+  const newRemaining = student.remainingClasses - 1;
+  await updateRemainingClasses(student.id, newRemaining);
 
   // Update slot count
   await updateSlotCurrentCount(slot.id, slot.currentCount + 1);
 
+  let message = '✅ 預約成功！輸入「我的預約」可查看預約記錄。';
+  if (newRemaining <= 2) {
+    message += `\n\n⚠️ 剩餘堂數僅剩 ${newRemaining} 堂，請盡早聯繫教練充值。`;
+  }
+
   return {
     success: true,
-    message: '✅ 預約成功！輸入「我的預約」可查看預約記錄。',
+    message,
     reservation,
   };
 }
 
-/** 取得學員的已預約紀錄，並填入課程時段資訊 */
+/** 取得學員的已預約紀錄，並填入課程時段資訊（按日期排序） */
 export async function getMyReservations(lineUserId: string): Promise<Reservation[]> {
   const student = await findStudentByLineId(lineUserId);
   if (!student) return [];
 
   const reservations = await getReservationsByStudent(student.id, RESERVATION_STATUS.RESERVED);
-  return enrichReservations(reservations);
+  const enriched = await enrichReservations(reservations);
+  return sortReservationsByDate(enriched);
+}
+
+/** 取得學員的所有預約歷史（含所有狀態） */
+export async function getReservationHistory(lineUserId: string): Promise<Reservation[]> {
+  const student = await findStudentByLineId(lineUserId);
+  if (!student) return [];
+
+  const reservations = await getReservationsByStudent(student.id);
+  const enriched = await enrichReservations(reservations);
+  return sortReservationsByDate(enriched);
+}
+
+function sortReservationsByDate(reservations: Reservation[]): Reservation[] {
+  return reservations.sort((a, b) => {
+    const dateCompare = (a.date ?? '').localeCompare(b.date ?? '');
+    if (dateCompare !== 0) return dateCompare;
+    return (a.startTime ?? '').localeCompare(b.startTime ?? '');
+  });
 }
 
 /** 填入關聯的課程時段資訊 */

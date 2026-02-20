@@ -51,20 +51,33 @@ export function coachScheduleCard(slot: ClassSlot): FlexBubble {
     },
     footer: {
       type: 'box',
-      layout: 'vertical',
+      layout: 'horizontal',
       contents: [
         {
           type: 'button',
           action: {
             type: 'postback',
-            label: '查看學員名單',
+            label: '查看學員',
             data: `${ACTION.VIEW_STUDENTS}:${slot.id}`,
             displayText: `查看 ${slot.title} 學員`,
           },
           style: 'primary',
           color: '#4a90d9',
+          flex: 1,
         },
-      ],
+        {
+          type: 'button',
+          action: {
+            type: 'postback',
+            label: '刪除課程',
+            data: `${ACTION.CONFIRM_DELETE_SLOT}:${slot.id}`,
+            displayText: `刪除 ${slot.title}`,
+          },
+          style: 'secondary',
+          flex: 1,
+        },
+      ] as FlexComponent[],
+      spacing: 'sm',
       paddingAll: '16px',
     },
   };

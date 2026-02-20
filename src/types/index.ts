@@ -7,6 +7,7 @@ export interface Student {
   remainingClasses: number;
   phone?: string;
   status?: string;
+  coachId?: string;
 }
 
 export interface Coach {
@@ -26,6 +27,7 @@ export interface ClassSlot {
   maxCapacity: number;
   currentCount: number;
   status?: string;
+  coachName?: string;
 }
 
 export interface Reservation {

@@ -1,9 +1,9 @@
 import type { PostbackEvent } from '@line/bot-sdk';
-import { reserveClass, cancelReservation, leaveReservation } from '@/services/reservation.service';
+import { reserveClass, cancelReservation, leaveReservation, enrichSlotsWithCoachName } from '@/services/reservation.service';
 import { checkinByReservationId, coachCheckinStudent } from '@/services/checkin.service';
 import { rechargeStudent } from '@/services/student.service';
-import { getSlotStudents, createSlotForCoach } from '@/services/coach.service';
-import { getSlotById } from '@/lib/notion/class-slots';
+import { getSlotStudents, createSlotForCoach, deleteSlotForCoach } from '@/services/coach.service';
+import { getSlotById, updateSlotMaxCapacity } from '@/lib/notion/class-slots';
 import { getStudentById } from '@/lib/notion/students';
 import { replyText, replyFlex, replyMessages } from '@/lib/line/reply';
 import { ACTION } from '@/lib/config/constants';
@@ -13,8 +13,11 @@ import { studentListCard } from '@/templates/flex/student-list';
 import { rechargeAmountSelector } from '@/templates/flex/recharge-amount';
 import { createSlotDuration } from '@/templates/flex/create-slot-duration';
 import { createSlotCapacity } from '@/templates/flex/create-slot-capacity';
+import { editCapacityCard } from '@/templates/flex/edit-capacity';
 import { getReservationById } from '@/lib/notion/reservations';
+import { getCoachById } from '@/lib/notion/coaches';
 import { menuQuickReply } from '@/templates/quick-reply';
+import { formatSlotDisplay } from '@/lib/utils/date';
 
 function replyTextWithMenu(replyToken: string, text: string) {
   return replyMessages(replyToken, [
@@ -33,6 +36,32 @@ export async function handlePostback(event: PostbackEvent): Promise<void> {
 
   try {
     switch (action) {
+      case ACTION.CONFIRM_RESERVE: {
+        const slot = await getSlotById(id);
+        if (!slot) {
+          await replyTextWithMenu(event.replyToken, '找不到此課程時段。');
+          return;
+        }
+        let coachLabel = '';
+        if (slot.coachId) {
+          const coach = await getCoachById(slot.coachId);
+          if (coach) coachLabel = `\n教練：${coach.name}`;
+        }
+        const slotDisplay = formatSlotDisplay(slot.date, slot.startTime, slot.endTime);
+        await replyFlex(
+          event.replyToken,
+          '確認預約',
+          confirmDialog(
+            '確認預約課程',
+            `「${slot.title}」\n${slotDisplay}${coachLabel}\n\n預約將扣除 1 堂課程。`,
+            { label: '確認預約', data: `${ACTION.RESERVE}:${id}` },
+            '取消',
+            '#4a90d9'
+          )
+        );
+        return;
+      }
+
       case ACTION.RESERVE: {
         const result = await reserveClass(lineUserId, id);
         await replyTextWithMenu(event.replyToken, result.message);
@@ -112,8 +141,8 @@ export async function handlePostback(event: PostbackEvent): Promise<void> {
         const reservations = await getSlotStudents(id);
         await replyFlex(
           event.replyToken,
-          '學員名單',
-          studentListCard(slot.title, reservations)
+          `${slot.title} 學員名單`,
+          studentListCard(slot.title, reservations, id)
         );
         return;
       }
@@ -222,6 +251,66 @@ export async function handlePostback(event: PostbackEvent): Promise<void> {
           lineUserId, dateStr, startTimeStr, endTimeStr, capacity
         );
         await replyTextWithMenu(event.replyToken, result.message);
+        return;
+      }
+
+      case ACTION.CONFIRM_DELETE_SLOT: {
+        const slot = await getSlotById(id);
+        if (!slot) {
+          await replyTextWithMenu(event.replyToken, '找不到此課程時段。');
+          return;
+        }
+        await replyFlex(
+          event.replyToken,
+          '確認刪除課程',
+          confirmDialog(
+            '確認刪除課程',
+            `確定要刪除「${slot.title}」嗎？\n所有預約將自動取消，堂數將退還給學員。`,
+            { label: '確認刪除', data: `${ACTION.DELETE_SLOT}:${id}` }
+          )
+        );
+        return;
+      }
+
+      case ACTION.DELETE_SLOT: {
+        const result = await deleteSlotForCoach(id);
+        await replyTextWithMenu(event.replyToken, result.message);
+        return;
+      }
+
+      case ACTION.EDIT_CAPACITY: {
+        const slot = await getSlotById(id);
+        if (!slot) {
+          await replyTextWithMenu(event.replyToken, '找不到此課程時段。');
+          return;
+        }
+        await replyFlex(
+          event.replyToken,
+          '編輯人數上限',
+          editCapacityCard(slot)
+        );
+        return;
+      }
+
+      case ACTION.EDIT_CAPACITY_CONFIRM: {
+        // data: edit_capacity_confirm:SLOT_ID:CAPACITY
+        const slotId = parts[1];
+        const newCapacity = parseInt(parts[2], 10);
+        if (!slotId || isNaN(newCapacity) || newCapacity <= 0) {
+          await replyTextWithMenu(event.replyToken, '資料格式有誤，請重新操作。');
+          return;
+        }
+        const slot = await getSlotById(slotId);
+        if (!slot) {
+          await replyTextWithMenu(event.replyToken, '找不到此課程時段。');
+          return;
+        }
+        if (newCapacity < slot.currentCount) {
+          await replyTextWithMenu(event.replyToken, `新容量不能小於已預約人數（${slot.currentCount} 人）。`);
+          return;
+        }
+        await updateSlotMaxCapacity(slotId, newCapacity);
+        await replyTextWithMenu(event.replyToken, `✅ 已更新「${slot.title}」人數上限為 ${newCapacity} 人。`);
         return;
       }
 

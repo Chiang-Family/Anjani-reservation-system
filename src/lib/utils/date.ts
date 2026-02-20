@@ -33,6 +33,12 @@ export function todayDateString(): string {
   return format(nowTaipei(), 'yyyy-MM-dd');
 }
 
+/** 組合 yyyy-MM-dd + HH:mm → Taipei Date */
+export function parseSlotTime(dateStr: string, timeStr: string): Date {
+  const iso = `${dateStr}T${timeStr}:00+08:00`;
+  return toZonedTime(new Date(iso), TZ);
+}
+
 export function formatSlotDisplay(date: string, startTime: string, endTime: string): string {
   const d = toTaipei(date);
   return `${formatDate(d)}（${formatWeekday(d)}）${startTime}–${endTime}`;

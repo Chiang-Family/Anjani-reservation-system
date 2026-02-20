@@ -6,7 +6,8 @@ export function confirmDialog(
   title: string,
   message: string,
   confirmAction: { label: string; data: string },
-  cancelLabel = '取消'
+  cancelLabel = '取消',
+  confirmColor = '#e74c3c'
 ): FlexBubble {
   return {
     type: 'bubble',
@@ -56,7 +57,7 @@ export function confirmDialog(
             displayText: confirmAction.label,
           },
           style: 'primary',
-          color: '#e74c3c',
+          color: confirmColor,
           flex: 1,
         },
       ],

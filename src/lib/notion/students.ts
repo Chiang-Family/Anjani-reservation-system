@@ -28,8 +28,15 @@ function getNumberValue(prop: Record<string, unknown>): number {
   return (prop.number as number) ?? 0;
 }
 
+function getRelationIds(prop: Record<string, unknown>): string[] {
+  if (!prop) return [];
+  const relations = prop.relation as Array<{ id: string }> | undefined;
+  return relations?.map((r) => r.id) ?? [];
+}
+
 function extractStudent(page: Record<string, unknown>): Student {
   const props = (page as { properties: Record<string, unknown> }).properties as Record<string, Record<string, unknown>>;
+  const coachRelation = getRelationIds(props[STUDENT_PROPS.COACH]);
   return {
     id: (page as { id: string }).id,
     name: getRichTextValue(props[STUDENT_PROPS.NAME]),
@@ -37,6 +44,7 @@ function extractStudent(page: Record<string, unknown>): Student {
     remainingClasses: getNumberValue(props[STUDENT_PROPS.REMAINING_CLASSES]),
     phone: getRichTextValue(props[STUDENT_PROPS.PHONE]) || undefined,
     status: getRichTextValue(props[STUDENT_PROPS.STATUS]) || undefined,
+    coachId: coachRelation[0] || undefined,
   };
 }
 
@@ -73,6 +81,21 @@ export async function getAllStudents(): Promise<Student[]> {
   const res = await notion.databases.query({
     database_id: getEnv().NOTION_STUDENTS_DB_ID,
     sorts: [{ property: STUDENT_PROPS.NAME, direction: 'ascending' }],
+  });
+
+  return res.results.map((page) =>
+    extractStudent(page as unknown as Record<string, unknown>)
+  );
+}
+
+export async function getStudentsByCoachId(coachId: string): Promise<Student[]> {
+  const notion = getNotionClient();
+  const res = await notion.databases.query({
+    database_id: getEnv().NOTION_STUDENTS_DB_ID,
+    filter: {
+      property: STUDENT_PROPS.COACH,
+      relation: { contains: coachId },
+    },
   });
 
   return res.results.map((page) =>

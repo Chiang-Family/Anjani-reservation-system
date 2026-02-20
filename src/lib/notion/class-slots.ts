@@ -185,6 +185,27 @@ export async function updateSlotCurrentCount(
   });
 }
 
+export async function archiveClassSlot(slotId: string): Promise<void> {
+  const notion = getNotionClient();
+  await notion.pages.update({
+    page_id: slotId,
+    archived: true,
+  });
+}
+
+export async function updateSlotMaxCapacity(
+  slotId: string,
+  newCapacity: number
+): Promise<void> {
+  const notion = getNotionClient();
+  await notion.pages.update({
+    page_id: slotId,
+    properties: {
+      [CLASS_SLOT_PROPS.MAX_CAPACITY]: { number: newCapacity },
+    },
+  });
+}
+
 export async function createClassSlot(params: {
   title: string;
   coachId: string;

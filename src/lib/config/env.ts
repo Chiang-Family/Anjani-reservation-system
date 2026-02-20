@@ -8,6 +8,9 @@ const envSchema = z.object({
   NOTION_COACHES_DB_ID: z.string().min(1),
   NOTION_CLASS_SLOTS_DB_ID: z.string().min(1),
   NOTION_RESERVATIONS_DB_ID: z.string().min(1),
+  CRON_SECRET: z.string().min(1).optional(),
+  RICH_MENU_STUDENT_ID: z.string().optional(),
+  RICH_MENU_COACH_ID: z.string().optional(),
 });
 
 export type Env = z.infer<typeof envSchema>;

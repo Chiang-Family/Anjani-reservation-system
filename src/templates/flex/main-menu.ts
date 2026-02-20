@@ -64,6 +64,7 @@ export function studentMenu(name: string): FlexBubble {
         menuButton(KEYWORD.MY_RESERVATIONS),
         menuButton(KEYWORD.CHECKIN),
         menuButton(KEYWORD.REMAINING),
+        menuButton(KEYWORD.HISTORY),
       ] as messagingApi.FlexComponent[],
       paddingAll: '16px',
       spacing: 'sm',

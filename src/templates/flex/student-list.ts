@@ -7,7 +7,8 @@ type FlexComponent = messagingApi.FlexComponent;
 
 export function studentListCard(
   slotTitle: string,
-  reservations: Reservation[]
+  reservations: Reservation[],
+  slotId?: string
 ): FlexBubble {
   const checkedIn = reservations.filter((r) => r.status === RESERVATION_STATUS.CHECKED_IN);
 
@@ -55,7 +56,21 @@ export function studentListCard(
       ? studentRows
       : [{ type: 'text', text: '尚無學員預約', size: 'sm', color: '#999999' }];
 
-  return {
+  const footerContents: FlexComponent[] = [];
+  if (slotId) {
+    footerContents.push({
+      type: 'button',
+      action: {
+        type: 'postback',
+        label: '編輯人數',
+        data: `${ACTION.EDIT_CAPACITY}:${slotId}`,
+        displayText: '編輯人數上限',
+      },
+      style: 'secondary',
+    });
+  }
+
+  const bubble: FlexBubble = {
     type: 'bubble',
     size: 'mega',
     header: {
@@ -88,4 +103,15 @@ export function studentListCard(
       spacing: 'md',
     },
   };
+
+  if (footerContents.length > 0) {
+    bubble.footer = {
+      type: 'box',
+      layout: 'vertical',
+      contents: footerContents,
+      paddingAll: '16px',
+    };
+  }
+
+  return bubble;
 }
