@@ -3,6 +3,7 @@ import { findCoachByLineId } from '@/lib/notion/coaches';
 import { createCheckinRecord, findCheckinToday } from '@/lib/notion/checkins';
 import { findStudentEventToday } from './calendar.service';
 import { todayDateString, formatDateTime, nowTaipei } from '@/lib/utils/date';
+import { pushText } from '@/lib/line/push';
 
 export interface CheckinResult {
   success: boolean;
@@ -54,6 +55,19 @@ export async function coachCheckinForStudent(
   const newCompleted = student.completedClasses + 1;
   await updateCompletedClasses(student.id, newCompleted);
   const remaining = student.purchasedClasses - newCompleted;
+
+  // Push notification to student
+  if (student.lineUserId) {
+    const studentMsg = [
+      '✅ 今日課程已完成打卡！',
+      `📅 課程時段：${event.startTime}–${event.endTime}`,
+      `📊 剩餘堂數：${remaining} 堂`,
+      ...(remaining <= 1 ? [`\n⚠️ 剩餘堂數不多，請盡早聯繫教練續約。`] : []),
+    ].join('\n');
+    pushText(student.lineUserId, studentMsg).catch((err) =>
+      console.error('Push notification to student failed:', err)
+    );
+  }
 
   let balanceWarning = '';
   if (remaining <= 2) {
