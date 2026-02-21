@@ -53,13 +53,16 @@ export async function executeAddStudent(
     coachId: coach.id,
   });
 
+  const totalAmount = hours * price;
+
   await createPaymentRecord({
     studentId: student.id,
     studentName: student.name,
     coachId: coach.id,
     purchasedHours: hours,
     pricePerHour: price,
-    status: '未繳費',
+    status: '已繳費',
+    paidAmount: totalAmount,
   });
 
   return [
@@ -68,6 +71,7 @@ export async function executeAddStudent(
     `姓名：${student.name}`,
     `購買時數：${hours} 小時`,
     `每小時單價：${price} 元`,
+    `繳費金額：$${totalAmount.toLocaleString()}`,
     '',
     '學員加入 LINE 好友後，輸入姓名即可完成綁定。',
   ].join('\n');
