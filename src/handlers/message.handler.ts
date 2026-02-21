@@ -11,8 +11,7 @@ import { getPaymentsByStudent } from '@/lib/notion/payments';
 import { paymentPeriodSelector } from '@/templates/flex/class-history';
 import {
   startAddStudent,
-  handleAddStudentStep,
-  getAddStudentState,
+  parseAddStudentInput,
   getCollectAndAddState,
   handleCollectAndAddStep,
   handleBinding,
@@ -34,6 +33,7 @@ import { monthlyStatsCard } from '@/templates/flex/monthly-stats';
 import { studentMgmtList } from '@/templates/flex/student-mgmt-list';
 import { classHistoryCard } from '@/templates/flex/class-history';
 import { studentQuickReply, coachQuickReply } from '@/templates/quick-reply';
+import { addStudentConfirmCard } from '@/templates/flex/add-student-confirm';
 
 export async function handleMessage(event: MessageEvent): Promise<void> {
   if (event.message.type !== 'text') return;
@@ -56,21 +56,6 @@ export async function handleMessage(event: MessageEvent): Promise<void> {
         ]);
       } catch (error) {
         console.error('Collect and add step error:', error);
-        await replyText(event.replyToken, TEXT.ERROR);
-      }
-      return;
-    }
-
-    const addState = getAddStudentState(lineUserId);
-    if (addState) {
-      try {
-        const result = await handleAddStudentStep(lineUserId, text);
-        const qr = coachQuickReply();
-        await replyMessages(event.replyToken, [
-          { type: 'text', text: result.message, quickReply: result.done ? { items: qr } : undefined },
-        ]);
-      } catch (error) {
-        console.error('Add student step error:', error);
         await replyText(event.replyToken, TEXT.ERROR);
       }
       return;
@@ -259,6 +244,19 @@ async function handleCoachMessage(
     }
 
     default: {
+      // Check if input matches "name hours price" pattern for adding student
+      const parsed = parseAddStudentInput(text);
+      if (parsed) {
+        await replyMessages(replyToken, [
+          {
+            type: 'flex',
+            altText: '確認新增學員',
+            contents: addStudentConfirmCard(parsed.name, parsed.hours, parsed.price),
+          },
+        ]);
+        return;
+      }
+
       // Search students by name
       const coach = await findCoachByLineId(lineUserId);
       if (coach) {

@@ -1,7 +1,7 @@
 import type { PostbackEvent } from '@line/bot-sdk';
 import { coachCheckinForStudent } from '@/services/checkin.service';
 import { getCoachScheduleForDate } from '@/services/coach.service';
-import { startCollectAndAdd } from '@/services/student-management.service';
+import { startCollectAndAdd, executeAddStudent } from '@/services/student-management.service';
 import { getStudentById } from '@/lib/notion/students';
 import { getCheckinsByStudent } from '@/lib/notion/checkins';
 import { getStudentHoursSummary } from '@/lib/notion/hours';
@@ -69,6 +69,19 @@ export async function handlePostback(event: PostbackEvent): Promise<void> {
         const unchecked = schedule.items.filter((item) => !item.isCheckedIn && item.studentNotionId);
         const label = formatDateLabel(dateStr);
         await replyFlex(event.replyToken, `${label} 打卡清單`, scheduleList(unchecked, dateStr, 'checkin'));
+        return;
+      }
+
+      case ACTION.ADD_STUDENT_CONFIRM: {
+        // data = add_student_confirm:{name}:{hours}:{price}
+        const studentName = decodeURIComponent(id);
+        const hours = parseFloat(extra);
+        const price = parseInt(parts[3], 10);
+        const msg = await executeAddStudent(lineUserId, studentName, hours, price);
+        const qr = coachQuickReply();
+        await replyMessages(event.replyToken, [
+          { type: 'text', text: msg, quickReply: { items: qr } },
+        ]);
         return;
       }
 

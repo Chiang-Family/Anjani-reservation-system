@@ -5,36 +5,10 @@ import { getStudentHoursSummary } from '@/lib/notion/hours';
 import { formatHours, formatDateTime, nowTaipei } from '@/lib/utils/date';
 import { pushText } from '@/lib/line/push';
 
-/** 對話狀態管理（記憶體暫存） */
-interface AddStudentState {
-  step: 'input' | 'confirm';
-  name?: string;
-  purchasedHours?: number;
-  pricePerHour?: number;
-  coachId: string;
-  coachName: string;
-}
-
-const addStudentStates = new Map<string, AddStudentState>();
-
-export function getAddStudentState(lineUserId: string): AddStudentState | undefined {
-  return addStudentStates.get(lineUserId);
-}
-
-export function clearAddStudentState(lineUserId: string): void {
-  addStudentStates.delete(lineUserId);
-}
-
-/** 開始新增學員流程 */
+/** 開始新增學員流程（無狀態） */
 export async function startAddStudent(coachLineUserId: string): Promise<string> {
   const coach = await findCoachByLineId(coachLineUserId);
   if (!coach) return '找不到教練資料。';
-
-  addStudentStates.set(coachLineUserId, {
-    step: 'input',
-    coachId: coach.id,
-    coachName: coach.name,
-  });
 
   return [
     '請依照以下格式輸入學員資料：',
@@ -43,113 +17,60 @@ export async function startAddStudent(coachLineUserId: string): Promise<string> 
     '',
     '範例：王大明 10 1400',
     '範例：Tom 5 1600',
-    '',
-    '輸入「取消」放棄。',
   ].join('\n');
 }
 
-/** 處理多步驟輸入 */
-export async function handleAddStudentStep(
+/** 解析新增學員輸入格式，回傳解析結果或錯誤訊息 */
+export function parseAddStudentInput(text: string): {
+  name: string; hours: number; price: number;
+} | null {
+  const parts = text.trim().split(/\s+/);
+  if (parts.length < 3) return null;
+
+  const price = parseInt(parts[parts.length - 1], 10);
+  const hours = parseFloat(parts[parts.length - 2]);
+  const name = parts.slice(0, -2).join(' ');
+
+  if (!name || isNaN(hours) || hours <= 0 || isNaN(price) || price <= 0) return null;
+  return { name, hours, price };
+}
+
+/** 執行新增學員（由 postback 觸發） */
+export async function executeAddStudent(
   coachLineUserId: string,
-  input: string
-): Promise<{ message: string; done: boolean }> {
-  const state = addStudentStates.get(coachLineUserId);
-  if (!state) {
-    return { message: '沒有進行中的新增學員流程。', done: true };
-  }
+  name: string,
+  hours: number,
+  price: number
+): Promise<string> {
+  const coach = await findCoachByLineId(coachLineUserId);
+  if (!coach) return '找不到教練資料。';
 
-  if (input.trim() === '取消') {
-    addStudentStates.delete(coachLineUserId);
-    return { message: '已取消新增學員。', done: true };
-  }
+  const existing = await findStudentByName(name);
+  if (existing) return `「${name}」已存在，無法建立。`;
 
-  switch (state.step) {
-    case 'input': {
-      // 解析格式：姓名 時數 單價
-      const parts = input.trim().split(/\s+/);
-      if (parts.length < 3) {
-        return {
-          message: '格式不正確，請輸入：姓名 購買時數 每小時單價\n例如：王大明 10 1400',
-          done: false,
-        };
-      }
+  const student = await createStudent({
+    name,
+    coachId: coach.id,
+  });
 
-      const price = parseInt(parts[parts.length - 1], 10);
-      const hours = parseFloat(parts[parts.length - 2]);
-      const name = parts.slice(0, -2).join(' ');
+  await createPaymentRecord({
+    studentId: student.id,
+    studentName: student.name,
+    coachId: coach.id,
+    purchasedHours: hours,
+    pricePerHour: price,
+    status: '未繳費',
+  });
 
-      if (!name) {
-        return { message: '請輸入學員姓名。', done: false };
-      }
-      if (isNaN(hours) || hours <= 0) {
-        return { message: '購買時數請輸入有效的正數。', done: false };
-      }
-      if (isNaN(price) || price <= 0) {
-        return { message: '每小時單價請輸入有效的正整數。', done: false };
-      }
-
-      const existing = await findStudentByName(name);
-      if (existing) {
-        return { message: `「${name}」已存在，請輸入其他姓名。`, done: false };
-      }
-
-      state.name = name;
-      state.purchasedHours = hours;
-      state.pricePerHour = price;
-      state.step = 'confirm';
-
-      const total = hours * price;
-      return {
-        message: [
-          '請確認學員資料：',
-          '',
-          `姓名：${name}`,
-          `教練：${state.coachName}`,
-          `購買時數：${hours} 小時`,
-          `每小時單價：${price} 元`,
-          `合計金額：${total} 元`,
-          '',
-          '輸入「確認」建立學員，或輸入「取消」放棄。',
-        ].join('\n'),
-        done: false,
-      };
-    }
-
-    case 'confirm': {
-      if (input.trim() !== '確認') {
-        return { message: '請輸入「確認」或「取消」。', done: false };
-      }
-
-      const student = await createStudent({
-        name: state.name!,
-        coachId: state.coachId,
-      });
-
-      await createPaymentRecord({
-        studentId: student.id,
-        studentName: student.name,
-        coachId: state.coachId,
-        purchasedHours: state.purchasedHours!,
-        pricePerHour: state.pricePerHour!,
-        status: '未繳費',
-      });
-
-      addStudentStates.delete(coachLineUserId);
-
-      return {
-        message: [
-          '學員建立成功！',
-          '',
-          `姓名：${student.name}`,
-          `購買時數：${state.purchasedHours} 小時`,
-          `每小時單價：${state.pricePerHour} 元`,
-          '',
-          '學員加入 LINE 好友後，輸入姓名即可完成綁定。',
-        ].join('\n'),
-        done: true,
-      };
-    }
-  }
+  return [
+    '學員建立成功！',
+    '',
+    `姓名：${student.name}`,
+    `購買時數：${hours} 小時`,
+    `每小時單價：${price} 元`,
+    '',
+    '學員加入 LINE 好友後，輸入姓名即可完成綁定。',
+  ].join('\n');
 }
 
 /** 收款/加值合併流程（多步驟） */
