@@ -23,8 +23,17 @@ export async function getStudentHoursSummary(studentId: string): Promise<Student
     getCheckinsByStudent(studentId),
   ]);
 
-  const purchasedHours = payments.reduce((sum, p) => sum + p.purchasedHours, 0);
-  const completedMinutes = checkins.reduce((sum, c) => sum + c.durationMinutes, 0);
+  // 只計算當期（最新繳費日之後）的資料
+  const latestPayDate = payments.length > 0 ? payments[0].createdAt : null;
+  const currentPeriodPayments = latestPayDate
+    ? payments.filter((p) => p.createdAt === latestPayDate)
+    : payments;
+  const currentPeriodCheckins = latestPayDate
+    ? checkins.filter((c) => c.classDate >= latestPayDate)
+    : checkins;
+
+  const purchasedHours = currentPeriodPayments.reduce((sum, p) => sum + p.purchasedHours, 0);
+  const completedMinutes = currentPeriodCheckins.reduce((sum, c) => sum + c.durationMinutes, 0);
   const completedHours = Math.round(completedMinutes / 60 * 10) / 10;
   const remainingHours = Math.round((purchasedHours - completedMinutes / 60) * 10) / 10;
 
