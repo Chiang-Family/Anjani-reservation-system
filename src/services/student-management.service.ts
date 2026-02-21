@@ -7,7 +7,7 @@ import { pushText } from '@/lib/line/push';
 
 /** 對話狀態管理（記憶體暫存） */
 interface AddStudentState {
-  step: 'name' | 'hours' | 'price' | 'confirm';
+  step: 'input' | 'confirm';
   name?: string;
   purchasedHours?: number;
   pricePerHour?: number;
@@ -31,12 +31,21 @@ export async function startAddStudent(coachLineUserId: string): Promise<string> 
   if (!coach) return '找不到教練資料。';
 
   addStudentStates.set(coachLineUserId, {
-    step: 'name',
+    step: 'input',
     coachId: coach.id,
     coachName: coach.name,
   });
 
-  return '請輸入學員姓名：';
+  return [
+    '請依照以下格式輸入學員資料：',
+    '',
+    '姓名 購買時數 每小時單價',
+    '',
+    '範例：王大明 10 1400',
+    '範例：Tom 5 1600',
+    '',
+    '輸入「取消」放棄。',
+  ].join('\n');
 }
 
 /** 處理多步驟輸入 */
@@ -49,44 +58,56 @@ export async function handleAddStudentStep(
     return { message: '沒有進行中的新增學員流程。', done: true };
   }
 
+  if (input.trim() === '取消') {
+    addStudentStates.delete(coachLineUserId);
+    return { message: '已取消新增學員。', done: true };
+  }
+
   switch (state.step) {
-    case 'name': {
-      const existing = await findStudentByName(input.trim());
-      if (existing) {
-        return { message: `「${input.trim()}」已存在，請輸入其他姓名：`, done: false };
+    case 'input': {
+      // 解析格式：姓名 時數 單價
+      const parts = input.trim().split(/\s+/);
+      if (parts.length < 3) {
+        return {
+          message: '格式不正確，請輸入：姓名 購買時數 每小時單價\n例如：王大明 10 1400',
+          done: false,
+        };
       }
-      state.name = input.trim();
-      state.step = 'hours';
-      return { message: `學員姓名：${state.name}\n\n請輸入購買時數（數字）：`, done: false };
-    }
 
-    case 'hours': {
-      const num = parseFloat(input.trim());
-      if (isNaN(num) || num <= 0) {
-        return { message: '請輸入有效的正數：', done: false };
+      const price = parseInt(parts[parts.length - 1], 10);
+      const hours = parseFloat(parts[parts.length - 2]);
+      const name = parts.slice(0, -2).join(' ');
+
+      if (!name) {
+        return { message: '請輸入學員姓名。', done: false };
       }
-      state.purchasedHours = num;
-      state.step = 'price';
-      return { message: `購買時數：${num} 小時\n\n請輸入每小時單價（數字）：`, done: false };
-    }
-
-    case 'price': {
-      const price = parseInt(input.trim(), 10);
+      if (isNaN(hours) || hours <= 0) {
+        return { message: '購買時數請輸入有效的正數。', done: false };
+      }
       if (isNaN(price) || price <= 0) {
-        return { message: '請輸入有效的正整數：', done: false };
+        return { message: '每小時單價請輸入有效的正整數。', done: false };
       }
+
+      const existing = await findStudentByName(name);
+      if (existing) {
+        return { message: `「${name}」已存在，請輸入其他姓名。`, done: false };
+      }
+
+      state.name = name;
+      state.purchasedHours = hours;
       state.pricePerHour = price;
       state.step = 'confirm';
-      const total = state.purchasedHours! * price;
+
+      const total = hours * price;
       return {
         message: [
-          '📋 請確認學員資料：',
+          '請確認學員資料：',
           '',
-          `👤 姓名：${state.name}`,
-          `🏋️ 教練：${state.coachName}`,
-          `📊 購買時數：${state.purchasedHours} 小時`,
-          `💰 每小時單價：${price} 元`,
-          `💵 合計金額：${total} 元`,
+          `姓名：${name}`,
+          `教練：${state.coachName}`,
+          `購買時數：${hours} 小時`,
+          `每小時單價：${price} 元`,
+          `合計金額：${total} 元`,
           '',
           '輸入「確認」建立學員，或輸入「取消」放棄。',
         ].join('\n'),
@@ -95,12 +116,8 @@ export async function handleAddStudentStep(
     }
 
     case 'confirm': {
-      if (input.trim() === '取消') {
-        addStudentStates.delete(coachLineUserId);
-        return { message: '已取消新增學員。', done: true };
-      }
       if (input.trim() !== '確認') {
-        return { message: '請輸入「確認」或「取消」：', done: false };
+        return { message: '請輸入「確認」或「取消」。', done: false };
       }
 
       const student = await createStudent({
@@ -108,7 +125,6 @@ export async function handleAddStudentStep(
         coachId: state.coachId,
       });
 
-      // 同時建立第一筆繳費紀錄
       await createPaymentRecord({
         studentId: student.id,
         studentName: student.name,
@@ -122,11 +138,11 @@ export async function handleAddStudentStep(
 
       return {
         message: [
-          '✅ 學員建立成功！',
+          '學員建立成功！',
           '',
-          `👤 姓名：${student.name}`,
-          `📊 購買時數：${state.purchasedHours} 小時`,
-          `💰 每小時單價：${state.pricePerHour} 元`,
+          `姓名：${student.name}`,
+          `購買時數：${state.purchasedHours} 小時`,
+          `每小時單價：${state.pricePerHour} 元`,
           '',
           '學員加入 LINE 好友後，輸入姓名即可完成綁定。',
         ].join('\n'),
