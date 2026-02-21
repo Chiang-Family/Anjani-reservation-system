@@ -27,7 +27,7 @@ export function studentMenu(name: string): FlexBubble {
       contents: [
         {
           type: 'text',
-          text: 'Anjani 健身管理',
+          text: '安傑力課程管理系統',
           weight: 'bold',
           size: 'lg',
           color: '#FFFFFF',

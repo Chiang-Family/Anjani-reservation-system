@@ -84,7 +84,7 @@ export async function handleMessage(event: MessageEvent): Promise<void> {
         if (result.success) {
           const student = await getStudentInfo(lineUserId);
           if (student) {
-            await replyFlex(event.replyToken, 'Anjani 健身管理', studentMenu(student.name));
+            await replyFlex(event.replyToken, '安傑力課程管理系統', studentMenu(student.name));
             return;
           }
           const coach = await findCoachByLineId(lineUserId);
@@ -171,12 +171,12 @@ async function handleStudentMessage(
     }
 
     case KEYWORD.MENU: {
-      await replyFlex(replyToken, 'Anjani 健身管理', studentMenu(name));
+      await replyFlex(replyToken, '安傑力課程管理系統', studentMenu(name));
       return;
     }
 
     default: {
-      await replyFlex(replyToken, 'Anjani 健身管理', studentMenu(name));
+      await replyFlex(replyToken, '安傑力課程管理系統', studentMenu(name));
     }
   }
 }

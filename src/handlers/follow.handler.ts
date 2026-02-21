@@ -31,7 +31,7 @@ export async function handleFollow(event: FollowEvent): Promise<void> {
         console.error('Failed to link student rich menu:', err);
       }
     }
-    await replyFlex(event.replyToken, 'Anjani 健身管理', studentMenu(user.name));
+    await replyFlex(event.replyToken, '安傑力課程管理系統', studentMenu(user.name));
   } else {
     if (env.RICH_MENU_COACH_ID) {
       try {
