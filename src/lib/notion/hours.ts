@@ -11,7 +11,7 @@ const summaryCache = new Map<string, CacheEntry>();
 const CACHE_TTL_MS = 60 * 1000; // 1 minute cache
 
 /** FIFO 分配上課紀錄到各繳費期（先消耗最早的繳費時數） */
-function assignCheckinsToBuckets(
+export function assignCheckinsToBuckets(
   payments: PaymentRecord[],
   checkins: CheckinRecord[]
 ): {
@@ -52,7 +52,7 @@ function assignCheckinsToBuckets(
 }
 
 /** 從 FIFO 分桶結果計算 summary */
-function computeSummaryFromBuckets(
+export function computeSummaryFromBuckets(
   buckets: { purchasedHours: number; consumedMinutes: number }[],
   overflowCheckins: CheckinRecord[]
 ): StudentHoursSummary {

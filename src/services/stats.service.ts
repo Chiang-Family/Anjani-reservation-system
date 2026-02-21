@@ -1,14 +1,12 @@
 import { findCoachByLineId } from '@/lib/notion/coaches';
 import { getStudentsByCoachId } from '@/lib/notion/students';
-import { getPaymentsByCoachStudents, getLatestPaymentByStudent } from '@/lib/notion/payments';
-import { getStudentHoursSummary } from '@/lib/notion/hours';
-import { getCheckinsByDateRange } from '@/lib/notion/checkins';
-import { getCheckinsByStudent } from '@/lib/notion/checkins';
-import { pMap } from '@/lib/utils/concurrency';
-import { getMonthEventsForCoach, getFutureEventsForCoach } from './calendar.service';
+import { getPaymentsByCoachStudents } from '@/lib/notion/payments';
+import { assignCheckinsToBuckets, computeSummaryFromBuckets } from '@/lib/notion/hours';
+import { getCheckinsByDateRange, getCheckinsByCoach } from '@/lib/notion/checkins';
+import { getMonthEvents, getEventsForDateRange } from '@/lib/google/calendar';
 import { nowTaipei, computeDurationMinutes, todayDateString } from '@/lib/utils/date';
 import { format, addMonths } from 'date-fns';
-import type { CalendarEvent } from '@/types';
+import type { CalendarEvent, CheckinRecord, PaymentRecord } from '@/types';
 
 export interface RenewalStudent {
   name: string;
@@ -39,6 +37,21 @@ export interface CoachMonthlyStats {
   collectedAmount: number;
   pendingAmount: number;
   renewalForecast: RenewalForecast;
+}
+
+/**
+ * Filter calendar events by student names (in-memory, no Notion call)
+ */
+function filterEventsByStudentNames(events: CalendarEvent[], studentNames: Set<string>): CalendarEvent[] {
+  return events.filter((event) => {
+    const summary = event.summary.trim();
+    for (const name of studentNames) {
+      if (summary === name || summary.includes(name) || name.includes(summary)) {
+        return true;
+      }
+    }
+    return false;
+  });
 }
 
 /**
@@ -127,16 +140,16 @@ function estimateRenewalDate(
 
 /**
  * Fallback estimation using past checkin intervals when calendar is sparse.
+ * Uses pre-fetched checkins instead of querying per student.
  */
-async function estimateFromCheckins(
-  studentId: string,
+function estimateFromCheckins(
+  studentCheckins: CheckinRecord[],
   remainingHours: number,
-): Promise<{ expiryDate: string; renewalDate: string; isEstimated: boolean } | null> {
-  const checkins = await getCheckinsByStudent(studentId);
-  if (checkins.length < 2) return null;
+): { expiryDate: string; renewalDate: string; isEstimated: boolean } | null {
+  if (studentCheckins.length < 2) return null;
 
-  // checkins sorted desc by classDate; take most recent ones
-  const sorted = [...checkins].sort((a, b) => a.classDate.localeCompare(b.classDate));
+  // Sort asc by classDate
+  const sorted = [...studentCheckins].sort((a, b) => a.classDate.localeCompare(b.classDate));
   const recent = sorted.slice(-10); // last 10 checkins
 
   // Average duration
@@ -179,16 +192,47 @@ export async function getCoachMonthlyStats(
   const today = todayDateString();
   const futureEnd = format(addMonths(now, 4), 'yyyy-MM-dd');
 
-  // Query calendar, payments, students, checkins, future events in parallel
-  const [events, payments, students, allMonthCheckins, futureEvents] = await Promise.all([
-    getMonthEventsForCoach(coach.id, year, month),
-    getPaymentsByCoachStudents(coach.id),
-    getStudentsByCoachId(coach.id),
-    getCheckinsByDateRange(monthStart, monthEnd),
-    getFutureEventsForCoach(coach.id, today, futureEnd),
+  // ====== Batch load ALL data in parallel (fixed number of API calls) ======
+  const [allMonthEvents, allFutureEvents, payments, students, allMonthCheckins, allCoachCheckins] = await Promise.all([
+    getMonthEvents(year, month),                    // 1 Google Calendar call
+    getEventsForDateRange(today, futureEnd),         // 1 Google Calendar call
+    getPaymentsByCoachStudents(coach.id),            // 1 Notion call
+    getStudentsByCoachId(coach.id),                  // 1 Notion call
+    getCheckinsByDateRange(monthStart, monthEnd),    // 1 Notion call
+    getCheckinsByCoach(coach.id),                    // 1 Notion call (replaces N per-student calls)
   ]);
 
+  // ====== In-memory filtering (replaces filterEventsByCoach's Notion calls) ======
+  const studentNames = new Set(students.map(s => s.name));
+  const events = filterEventsByStudentNames(allMonthEvents, studentNames);
+  const futureEvents = filterEventsByStudentNames(allFutureEvents, studentNames);
   const monthCheckins = allMonthCheckins.filter(c => c.coachId === coach.id);
+
+  // ====== Group checkins by studentId (replaces per-student getCheckinsByStudent) ======
+  const checkinsByStudentId = new Map<string, CheckinRecord[]>();
+  for (const c of allCoachCheckins) {
+    if (!checkinsByStudentId.has(c.studentId)) {
+      checkinsByStudentId.set(c.studentId, []);
+    }
+    checkinsByStudentId.get(c.studentId)!.push(c);
+  }
+
+  // ====== Group payments by studentId (replaces per-student getPaymentsByStudent) ======
+  const paymentsByStudentId = new Map<string, PaymentRecord[]>();
+  for (const p of payments) {
+    if (!paymentsByStudentId.has(p.studentId)) {
+      paymentsByStudentId.set(p.studentId, []);
+    }
+    paymentsByStudentId.get(p.studentId)!.push(p);
+  }
+
+  // ====== Compute hours summary per student in-memory (replaces pMap + getStudentHoursSummary) ======
+  const summaries = students.map(s => {
+    const studentPayments = paymentsByStudentId.get(s.id) ?? [];
+    const studentCheckins = checkinsByStudentId.get(s.id) ?? [];
+    const { buckets, overflowCheckins } = assignCheckinsToBuckets(studentPayments, studentCheckins);
+    return computeSummaryFromBuckets(buckets, overflowCheckins);
+  });
 
   // --- 堂數 ---
   const scheduledClasses = events.length;
@@ -244,10 +288,7 @@ export async function getCoachMonthlyStats(
     futureEventsByStudent.get(name)!.push(event);
   }
 
-  // Get hours summaries for all students
-  const summaries = await pMap(students, s => getStudentHoursSummary(s.id));
-
-  // Predict renewal for each student
+  // Predict renewal for each student (all in-memory, no API calls)
   type RenewalCandidate = {
     student: typeof students[0];
     summary: typeof summaries[0];
@@ -264,10 +305,10 @@ export async function getCoachMonthlyStats(
 
     let prediction = predictRenewalDate(summary.remainingHours, studentFutureEvents);
 
-    // Fallback: if calendar events insufficient and prediction is estimated or null,
-    // try using past checkin data
+    // Fallback: if calendar events insufficient, use past checkins (already loaded)
     if (!prediction && studentFutureEvents.length <= 1 && summary.remainingHours > 0) {
-      prediction = await estimateFromCheckins(student.id, summary.remainingHours);
+      const studentCheckins = checkinsByStudentId.get(student.id) ?? [];
+      prediction = estimateFromCheckins(studentCheckins, summary.remainingHours);
     }
 
     if (prediction) {
@@ -286,14 +327,17 @@ export async function getCoachMonthlyStats(
     c.renewalDate.startsWith(monthPrefix)
   );
 
-  // Get latest payment for this-month candidates
-  const latestPayments = await pMap(
-    thisMonthCandidates,
-    c => getLatestPaymentByStudent(c.student.id)
-  );
+  // Get latest payment per student from already-loaded payments (replaces pMap + getLatestPaymentByStudent)
+  const latestPaymentByStudentId = new Map<string, PaymentRecord>();
+  for (const p of payments) {
+    const existing = latestPaymentByStudentId.get(p.studentId);
+    if (!existing || p.createdAt > existing.createdAt) {
+      latestPaymentByStudentId.set(p.studentId, p);
+    }
+  }
 
-  const renewalStudents: RenewalStudent[] = thisMonthCandidates.map((c, i) => {
-    const latestPayment = latestPayments[i];
+  const renewalStudents: RenewalStudent[] = thisMonthCandidates.map((c) => {
+    const latestPayment = latestPaymentByStudentId.get(c.student.id);
     const expectedHours = latestPayment?.purchasedHours || c.summary.purchasedHours;
     const expectedPrice = latestPayment?.pricePerHour || 0;
     const expectedAmount = Math.round(expectedHours * expectedPrice);
@@ -318,9 +362,9 @@ export async function getCoachMonthlyStats(
     summaryByName.set(students[i].name, summaries[i]);
   }
 
-  // Find last checkin date per student (for already-renewed expiry date)
+  // Find last checkin date per student from all coach checkins (no extra API call)
   const lastCheckinByStudent = new Map<string, string>();
-  for (const c of monthCheckins) {
+  for (const c of allCoachCheckins) {
     if (c.studentName) {
       const prev = lastCheckinByStudent.get(c.studentName);
       if (!prev || c.classDate > prev) {
@@ -329,28 +373,7 @@ export async function getCoachMonthlyStats(
     }
   }
 
-  // For students needing full checkin history, query in parallel
   const alreadyRenewedNames = [...monthPaymentsByStudent.keys()].filter(n => !predictedNames.has(n));
-  const needCheckinQuery = alreadyRenewedNames.filter(n => !lastCheckinByStudent.has(n));
-  const studentIdByName = new Map<string, string>();
-  for (const s of students) {
-    studentIdByName.set(s.name, s.id);
-  }
-  const fallbackCheckins = await pMap(
-    needCheckinQuery,
-    async (name) => {
-      const sid = studentIdByName.get(name);
-      if (!sid) return null;
-      const checkins = await getCheckinsByStudent(sid);
-      return checkins.length > 0 ? checkins[0] : null; // sorted desc
-    }
-  );
-  for (let i = 0; i < needCheckinQuery.length; i++) {
-    const checkin = fallbackCheckins[i];
-    if (checkin) {
-      lastCheckinByStudent.set(needCheckinQuery[i], checkin.classDate);
-    }
-  }
 
   for (const name of alreadyRenewedNames) {
     const info = monthPaymentsByStudent.get(name)!;

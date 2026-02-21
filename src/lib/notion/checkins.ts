@@ -164,6 +164,24 @@ export async function getCheckinsByStudent(studentId: string): Promise<CheckinRe
   );
 }
 
+export async function getCheckinsByCoach(coachId: string): Promise<CheckinRecord[]> {
+  const notion = getNotionClient();
+  const res = await notion.databases.query({
+    database_id: getEnv().NOTION_CHECKIN_DB_ID,
+    filter: {
+      property: CHECKIN_PROPS.COACH,
+      relation: { contains: coachId },
+    },
+    sorts: [
+      { property: CHECKIN_PROPS.CLASS_TIME_SLOT, direction: 'descending' },
+    ],
+  });
+
+  return res.results.map((page) =>
+    extractCheckin(page as unknown as Record<string, unknown>)
+  );
+}
+
 export async function getCheckinsByDateRange(
   from: string,
   to: string
