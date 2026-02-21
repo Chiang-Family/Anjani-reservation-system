@@ -140,7 +140,7 @@ export async function getCheckinsByStudent(studentId: string): Promise<CheckinRe
       relation: { contains: studentId },
     },
     sorts: [
-      { property: CHECKIN_PROPS.CHECKIN_TIME, direction: 'descending' },
+      { property: CHECKIN_PROPS.CLASS_TIME_SLOT, direction: 'descending' },
     ],
   });
 
