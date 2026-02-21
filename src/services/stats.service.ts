@@ -3,16 +3,20 @@ import { getStudentsByCoachId } from '@/lib/notion/students';
 import { getPaymentsByCoachStudents, getLatestPaymentByStudent } from '@/lib/notion/payments';
 import { getStudentHoursSummary } from '@/lib/notion/hours';
 import { getCheckinsByDateRange } from '@/lib/notion/checkins';
+import { getCheckinsByStudent } from '@/lib/notion/checkins';
 import { pMap } from '@/lib/utils/concurrency';
-import { getMonthEventsForCoach } from './calendar.service';
-import { nowTaipei } from '@/lib/utils/date';
-import { endOfMonth, differenceInCalendarWeeks } from 'date-fns';
+import { getMonthEventsForCoach, getFutureEventsForCoach } from './calendar.service';
+import { nowTaipei, computeDurationMinutes, todayDateString } from '@/lib/utils/date';
+import { format, addMonths } from 'date-fns';
+import type { CalendarEvent } from '@/types';
 
 export interface RenewalStudent {
   name: string;
   remainingHours: number;
   expectedRenewalHours: number;
   expectedRenewalAmount: number;
+  predictedRenewalDate: string; // yyyy-MM-dd
+  isEstimated: boolean;
 }
 
 export interface RenewalForecast {
@@ -34,6 +38,125 @@ export interface CoachMonthlyStats {
   renewalForecast: RenewalForecast;
 }
 
+/**
+ * Predict when a student's remaining hours will be exhausted
+ * based on future calendar events.
+ */
+function predictRenewalDate(
+  remainingHours: number,
+  futureEvents: CalendarEvent[],
+): { renewalDate: string; isEstimated: boolean } | null {
+  // No future events → skip student
+  if (futureEvents.length === 0) return null;
+
+  // Already exhausted → renewal is next future event
+  if (remainingHours <= 0) {
+    return { renewalDate: futureEvents[0].date, isEstimated: false };
+  }
+
+  // Accumulate event durations chronologically
+  let hoursLeft = remainingHours;
+  for (let i = 0; i < futureEvents.length; i++) {
+    const event = futureEvents[i];
+    const duration = computeDurationMinutes(event.startTime, event.endTime) / 60;
+    hoursLeft -= duration;
+
+    if (hoursLeft <= 0) {
+      // Renewal date = next event's date, or this event's date if it's the last
+      const renewalDate = i + 1 < futureEvents.length
+        ? futureEvents[i + 1].date
+        : event.date;
+      return { renewalDate, isEstimated: false };
+    }
+  }
+
+  // Not enough calendar events to exhaust hours → estimate
+  return estimateRenewalDate(hoursLeft, futureEvents);
+}
+
+/**
+ * Estimate renewal date when calendar events don't cover all remaining hours.
+ * Uses average interval and duration from available events to extrapolate.
+ */
+function estimateRenewalDate(
+  hoursLeft: number,
+  events: CalendarEvent[],
+): { renewalDate: string; isEstimated: boolean } | null {
+  if (events.length < 2) {
+    // Can't compute interval with < 2 events; use single event duration if available
+    if (events.length === 1) {
+      const dur = computeDurationMinutes(events[0].startTime, events[0].endTime) / 60;
+      if (dur <= 0) return null;
+      const eventsNeeded = Math.ceil(hoursLeft / dur);
+      // Assume weekly interval as fallback
+      const daysToAdd = eventsNeeded * 7;
+      const lastDate = new Date(events[0].date + 'T00:00:00+08:00');
+      lastDate.setDate(lastDate.getDate() + daysToAdd);
+      const renewalDate = format(lastDate, 'yyyy-MM-dd');
+      return { renewalDate, isEstimated: true };
+    }
+    return null;
+  }
+
+  // Average event duration
+  let totalDuration = 0;
+  for (const ev of events) {
+    totalDuration += computeDurationMinutes(ev.startTime, ev.endTime) / 60;
+  }
+  const avgDuration = totalDuration / events.length;
+  if (avgDuration <= 0) return null;
+
+  // Average interval between events (in days)
+  const firstDate = new Date(events[0].date + 'T00:00:00+08:00');
+  const lastDate = new Date(events[events.length - 1].date + 'T00:00:00+08:00');
+  const totalDays = (lastDate.getTime() - firstDate.getTime()) / (1000 * 60 * 60 * 24);
+  const avgInterval = totalDays / (events.length - 1);
+
+  // How many more events needed
+  const eventsNeeded = Math.ceil(hoursLeft / avgDuration);
+  const daysToAdd = Math.round(eventsNeeded * avgInterval);
+
+  const estimated = new Date(lastDate);
+  estimated.setDate(estimated.getDate() + daysToAdd);
+  const renewalDate = format(estimated, 'yyyy-MM-dd');
+  return { renewalDate, isEstimated: true };
+}
+
+/**
+ * Fallback estimation using past checkin intervals when calendar is sparse.
+ */
+async function estimateFromCheckins(
+  studentId: string,
+  remainingHours: number,
+): Promise<{ renewalDate: string; isEstimated: boolean } | null> {
+  const checkins = await getCheckinsByStudent(studentId);
+  if (checkins.length < 2) return null;
+
+  // checkins sorted desc by classDate; take most recent ones
+  const sorted = [...checkins].sort((a, b) => a.classDate.localeCompare(b.classDate));
+  const recent = sorted.slice(-10); // last 10 checkins
+
+  // Average duration
+  const avgDuration = recent.reduce((s, c) => s + c.durationMinutes, 0) / recent.length / 60;
+  if (avgDuration <= 0) return null;
+
+  // Average interval
+  let totalDays = 0;
+  for (let i = 1; i < recent.length; i++) {
+    const d1 = new Date(recent[i - 1].classDate + 'T00:00:00+08:00');
+    const d2 = new Date(recent[i].classDate + 'T00:00:00+08:00');
+    totalDays += (d2.getTime() - d1.getTime()) / (1000 * 60 * 60 * 24);
+  }
+  const avgInterval = totalDays / (recent.length - 1);
+
+  const eventsNeeded = Math.ceil(remainingHours / avgDuration);
+  const daysToAdd = Math.round(eventsNeeded * avgInterval);
+
+  const now = new Date(todayDateString() + 'T00:00:00+08:00');
+  now.setDate(now.getDate() + daysToAdd);
+  return { renewalDate: format(now, 'yyyy-MM-dd'), isEstimated: true };
+}
+
 export async function getCoachMonthlyStats(
   lineUserId: string
 ): Promise<CoachMonthlyStats | null> {
@@ -48,12 +171,17 @@ export async function getCoachMonthlyStats(
   const lastDay = new Date(year, month, 0).getDate();
   const monthEnd = `${monthPrefix}-${String(lastDay).padStart(2, '0')}`;
 
-  // Query calendar, payments, students, checkins in parallel
-  const [events, payments, students, allMonthCheckins] = await Promise.all([
+  // Future events range: today → today + 4 months
+  const today = todayDateString();
+  const futureEnd = format(addMonths(now, 4), 'yyyy-MM-dd');
+
+  // Query calendar, payments, students, checkins, future events in parallel
+  const [events, payments, students, allMonthCheckins, futureEvents] = await Promise.all([
     getMonthEventsForCoach(coach.id, year, month),
     getPaymentsByCoachStudents(coach.id),
     getStudentsByCoachId(coach.id),
     getCheckinsByDateRange(monthStart, monthEnd),
+    getFutureEventsForCoach(coach.id, today, futureEnd),
   ]);
 
   const monthCheckins = allMonthCheckins.filter(c => c.coachId === coach.id);
@@ -73,9 +201,7 @@ export async function getCoachMonthlyStats(
   // --- 預計執行收入: all scheduled events × student hourly rate ---
   let estimatedRevenue = 0;
   for (const event of events) {
-    const [startH, startM] = event.startTime.split(':').map(Number);
-    const [endH, endM] = event.endTime.split(':').map(Number);
-    const durationHours = ((endH * 60 + endM) - (startH * 60 + startM)) / 60;
+    const durationHours = computeDurationMinutes(event.startTime, event.endTime) / 60;
     const price = priceMap.get(event.summary.trim()) ?? 0;
     estimatedRevenue += durationHours * price;
   }
@@ -97,54 +223,75 @@ export async function getCoachMonthlyStats(
     }
   }
 
-  // --- 待收款: students who need renewal ---
-  // Build per-student scheduled hours from events
-  const studentScheduledHours = new Map<string, number>();
-  for (const event of events) {
+  // --- 待收款: calendar-based renewal prediction ---
+  // Group future events by student name
+  const futureEventsByStudent = new Map<string, CalendarEvent[]>();
+  for (const event of futureEvents) {
     const name = event.summary.trim();
-    const [startH, startM] = event.startTime.split(':').map(Number);
-    const [endH, endM] = event.endTime.split(':').map(Number);
-    const hours = ((endH * 60 + endM) - (startH * 60 + startM)) / 60;
-    studentScheduledHours.set(name, (studentScheduledHours.get(name) ?? 0) + hours);
-  }
-
-  // Build per-student this month's paid amount
-  const studentMonthPaid = new Map<string, number>();
-  for (const payment of payments) {
-    if (payment.createdAt.startsWith(monthPrefix)) {
-      studentMonthPaid.set(
-        payment.studentName,
-        (studentMonthPaid.get(payment.studentName) ?? 0) + payment.paidAmount,
-      );
+    if (!futureEventsByStudent.has(name)) {
+      futureEventsByStudent.set(name, []);
     }
+    futureEventsByStudent.get(name)!.push(event);
   }
 
+  // Get hours summaries for all students
   const summaries = await pMap(students, s => getStudentHoursSummary(s.id));
 
-  // Find students who need renewal: scheduledHours > remainingHours
-  const needsRenewal: { student: typeof students[0]; summary: typeof summaries[0] }[] = [];
+  // Predict renewal for each student
+  type RenewalCandidate = {
+    student: typeof students[0];
+    summary: typeof summaries[0];
+    renewalDate: string;
+    isEstimated: boolean;
+  };
+  const candidates: RenewalCandidate[] = [];
+
   for (let i = 0; i < students.length; i++) {
-    const scheduled = studentScheduledHours.get(students[i].name) ?? 0;
-    if (scheduled > summaries[i].remainingHours) {
-      needsRenewal.push({ student: students[i], summary: summaries[i] });
+    const student = students[i];
+    const summary = summaries[i];
+    const studentFutureEvents = futureEventsByStudent.get(student.name) ?? [];
+
+    let prediction = predictRenewalDate(summary.remainingHours, studentFutureEvents);
+
+    // Fallback: if calendar events insufficient and prediction is estimated or null,
+    // try using past checkin data
+    if (!prediction && studentFutureEvents.length <= 1 && summary.remainingHours > 0) {
+      prediction = await estimateFromCheckins(student.id, summary.remainingHours);
+    }
+
+    if (prediction) {
+      candidates.push({
+        student,
+        summary,
+        renewalDate: prediction.renewalDate,
+        isEstimated: prediction.isEstimated,
+      });
     }
   }
 
-  const latestPayments = await pMap(needsRenewal, c => getLatestPaymentByStudent(c.student.id));
+  // Filter to students whose renewal falls in current month
+  const thisMonthCandidates = candidates.filter(c =>
+    c.renewalDate.startsWith(monthPrefix)
+  );
 
-  let pendingAmount = 0;
-  const renewalStudents: RenewalStudent[] = needsRenewal.map((c, i) => {
+  // Get latest payment for this-month candidates
+  const latestPayments = await pMap(
+    thisMonthCandidates,
+    c => getLatestPaymentByStudent(c.student.id)
+  );
+
+  const renewalStudents: RenewalStudent[] = thisMonthCandidates.map((c, i) => {
     const latestPayment = latestPayments[i];
     const expectedHours = latestPayment?.purchasedHours || c.summary.purchasedHours;
     const expectedPrice = latestPayment?.pricePerHour || 0;
     const expectedAmount = expectedHours * expectedPrice;
-    const paidThisMonth = studentMonthPaid.get(c.student.name) ?? 0;
-    pendingAmount += Math.max(0, expectedAmount - paidThisMonth);
     return {
       name: c.student.name,
       remainingHours: c.summary.remainingHours,
       expectedRenewalHours: expectedHours,
       expectedRenewalAmount: expectedAmount,
+      predictedRenewalDate: c.renewalDate,
+      isEstimated: c.isEstimated,
     };
   });
 
@@ -153,6 +300,9 @@ export async function getCoachMonthlyStats(
     expectedAmount: renewalStudents.reduce((sum, s) => sum + s.expectedRenewalAmount, 0),
     students: renewalStudents,
   };
+
+  // 待收款 = 預估續約金額 - 實際收款
+  const pendingAmount = Math.max(0, renewalForecast.expectedAmount - collectedAmount);
 
   return {
     coachName: coach.name,

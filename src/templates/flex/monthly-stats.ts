@@ -30,12 +30,16 @@ export function monthlyStatsCard(stats: CoachMonthlyStats): FlexBubble {
     } as FlexComponent);
     bodyContents.push(
       statRow('本月到期學員', `${forecast.studentCount} 人`),
-      statRow('預估續約金額', `$${forecast.expectedAmount.toLocaleString()}`),
+      statRow('本月續約總額', `$${forecast.expectedAmount.toLocaleString()}`),
     );
     for (const s of forecast.students) {
+      const renewalMM = s.predictedRenewalDate.slice(5, 7);
+      const renewalDD = s.predictedRenewalDate.slice(8, 10);
+      const datePart = `${renewalMM}/${renewalDD}`;
+      const warning = s.isEstimated ? ' (⚠️ 行事曆未排滿)' : '';
       bodyContents.push({
         type: 'text',
-        text: `· ${s.name} 剩${s.remainingHours}hr → 續${s.expectedRenewalHours}hr $${s.expectedRenewalAmount.toLocaleString()}`,
+        text: `· ${s.name} 剩${s.remainingHours}hr → ${datePart} 續${s.expectedRenewalHours}hr $${s.expectedRenewalAmount.toLocaleString()}${warning}`,
         size: 'xs',
         color: '#888888',
         margin: 'sm',

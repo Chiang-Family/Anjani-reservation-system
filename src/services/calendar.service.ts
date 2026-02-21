@@ -1,4 +1,4 @@
-import { getTodayEvents, getEventsForDate, getMonthEvents } from '@/lib/google/calendar';
+import { getTodayEvents, getEventsForDate, getMonthEvents, getEventsForDateRange } from '@/lib/google/calendar';
 import { findStudentByName, getStudentsByCoachId } from '@/lib/notion/students';
 import type { CalendarEvent } from '@/types';
 
@@ -33,6 +33,16 @@ export async function getMonthEventsForCoach(
   month: number
 ): Promise<CalendarEvent[]> {
   const events = await getMonthEvents(year, month);
+  return filterEventsByCoach(events, coachNotionId);
+}
+
+/** 取得某教練的未來事件（指定日期範圍） */
+export async function getFutureEventsForCoach(
+  coachNotionId: string,
+  fromDate: string,
+  toDate: string
+): Promise<CalendarEvent[]> {
+  const events = await getEventsForDateRange(fromDate, toDate);
   return filterEventsByCoach(events, coachNotionId);
 }
 
