@@ -172,9 +172,10 @@ export async function handleCollectAndAddStep(
   });
 
   // 直接計算新的剩餘時數，避免 Notion 尚未索引新紀錄的問題
-  // 若前期有溢出（負數），扣除；若有剩餘（正數），新期不繼承
+  // FIFO：新繳費加入佇列，剩餘 = 舊剩餘 + 新時數
   const newRemainingHours = Math.round((hours + oldSummary.remainingHours) * 10) / 10;
-  const summary = { ...oldSummary, remainingHours: newRemainingHours };
+  const newPurchasedHours = Math.round((hours + oldSummary.purchasedHours) * 10) / 10;
+  const summary = { ...oldSummary, remainingHours: newRemainingHours, purchasedHours: newPurchasedHours };
 
   // Push notification to student
   const student = await getStudentById(state.studentId);
