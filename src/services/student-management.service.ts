@@ -158,6 +158,9 @@ export async function handleCollectAndAddStep(
   const pricePerHour = state.pricePerHour!;
   const hours = Math.round((amount / pricePerHour) * 10) / 10;
 
+  // 先取得目前剩餘時數（在 Notion 建立紀錄前）
+  const oldSummary = await getStudentHoursSummary(state.studentId);
+
   await createPaymentRecord({
     studentId: state.studentId,
     studentName: state.studentName,
@@ -168,7 +171,10 @@ export async function handleCollectAndAddStep(
     paidAmount: amount,
   });
 
-  const summary = await getStudentHoursSummary(state.studentId);
+  // 直接計算新的剩餘時數，避免 Notion 尚未索引新紀錄的問題
+  // 若前期有溢出（負數），扣除；若有剩餘（正數），新期不繼承
+  const newRemainingHours = Math.round((hours + oldSummary.remainingHours) * 10) / 10;
+  const summary = { ...oldSummary, remainingHours: newRemainingHours };
 
   // Push notification to student
   const student = await getStudentById(state.studentId);

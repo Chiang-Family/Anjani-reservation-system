@@ -33,10 +33,10 @@ export async function getStudentHoursSummary(studentId: string): Promise<Student
     : checkins;
 
   const purchasedHours = currentPeriodPayments.reduce((sum, p) => sum + p.purchasedHours, 0);
-  const prevOverflowMinutes = computePrevOverflowMinutes(payments, checkins);
+  const prevCarryMinutes = computePrevCarryMinutes(payments, checkins);
   const completedMinutes = currentPeriodCheckins.reduce((sum, c) => sum + c.durationMinutes, 0);
   const completedHours = Math.round(completedMinutes / 60 * 10) / 10;
-  const remainingHours = Math.round((purchasedHours - prevOverflowMinutes / 60 - completedMinutes / 60) * 10) / 10;
+  const remainingHours = Math.round((purchasedHours + prevCarryMinutes / 60 - completedMinutes / 60) * 10) / 10;
 
   const result = { purchasedHours, completedHours, remainingHours };
 
@@ -52,8 +52,8 @@ export function clearStudentHoursCache(studentId: string): void {
   summaryCache.delete(studentId);
 }
 
-/** 計算前一期的溢出分鐘數（用完時數後未繳費繼續上的課） */
-function computePrevOverflowMinutes(
+/** 計算前一期的結轉分鐘數（正數=剩餘結轉，負數=溢出待扣） */
+function computePrevCarryMinutes(
   payments: PaymentRecord[],
   checkins: CheckinRecord[]
 ): number {
@@ -71,7 +71,7 @@ function computePrevOverflowMinutes(
   const prevPurchasedMinutes = prevPeriodPayments.reduce((sum, p) => sum + p.purchasedHours, 0) * 60;
   const prevUsedMinutes = prevPeriodCheckins.reduce((sum, c) => sum + c.durationMinutes, 0);
 
-  return Math.max(0, prevUsedMinutes - prevPurchasedMinutes);
+  return prevPurchasedMinutes - prevUsedMinutes;
 }
 
 /** 計算當期已繳費/未繳費的上課紀錄分界 */
@@ -146,8 +146,8 @@ export async function getStudentOverflowInfo(studentId: string): Promise<{
     : checkins;
 
   const purchasedHours = currentPeriodPayments.reduce((sum, p) => sum + p.purchasedHours, 0);
-  const prevOverflowMinutes = computePrevOverflowMinutes(payments, checkins);
-  const effectivePurchasedHours = purchasedHours - prevOverflowMinutes / 60;
+  const prevCarryMinutes = computePrevCarryMinutes(payments, checkins);
+  const effectivePurchasedHours = purchasedHours + prevCarryMinutes / 60;
   const completedMinutes = currentPeriodCheckins.reduce((sum, c) => sum + c.durationMinutes, 0);
   const completedHours = Math.round(completedMinutes / 60 * 10) / 10;
   const remainingHours = Math.round((effectivePurchasedHours - completedMinutes / 60) * 10) / 10;
