@@ -2,7 +2,7 @@ import { createStudent, findStudentByName, bindStudentLineId, getStudentById } f
 import { findCoachByLineId, findCoachByName, bindCoachLineId } from '@/lib/notion/coaches';
 import { createPaymentRecord, getLatestPaymentByStudent } from '@/lib/notion/payments';
 import { getStudentHoursSummary } from '@/lib/notion/hours';
-import { formatHours } from '@/lib/utils/date';
+import { formatHours, formatDateTime, nowTaipei } from '@/lib/utils/date';
 import { pushText } from '@/lib/line/push';
 
 /** 對話狀態管理（記憶體暫存） */
@@ -234,6 +234,8 @@ export async function handleCollectAndAddStep(
   if (student?.lineUserId) {
     const studentMsg = [
       `💰 已收到繳費通知！`,
+      `🕐 收款時間：${formatDateTime(nowTaipei())}`,
+      `💵 收款金額：$${amount.toLocaleString()}`,
       `📊 加值時數：${hours} 小時`,
       `📊 剩餘時數：${formatHours(summary.remainingHours)}`,
     ].join('\n');
