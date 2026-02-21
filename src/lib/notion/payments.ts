@@ -4,6 +4,7 @@ import { PAYMENT_PROPS } from './types';
 import type { PaymentRecord } from '@/types';
 import { format } from 'date-fns';
 import { nowTaipei } from '@/lib/utils/date';
+import { clearStudentHoursCache } from './hours';
 
 type NotionFilter = Parameters<ReturnType<typeof getNotionClient>['databases']['query']>[0] extends { filter?: infer F } ? F : never;
 
@@ -124,6 +125,8 @@ export async function createPaymentRecord(params: {
     parent: { database_id: getEnv().NOTION_PAYMENTS_DB_ID },
     properties,
   });
+
+  clearStudentHoursCache(params.studentId); // Added this line
 
   return extractPayment(page as unknown as Record<string, unknown>);
 }

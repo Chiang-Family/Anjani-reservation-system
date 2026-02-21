@@ -3,6 +3,7 @@ import { getEnv } from '@/lib/config/env';
 import { CHECKIN_PROPS } from './types';
 import { computeDurationMinutes } from '@/lib/utils/date';
 import type { CheckinRecord } from '@/types';
+import { clearStudentHoursCache } from './hours';
 
 type NotionFilter = Parameters<InstanceType<typeof import('@notionhq/client').Client>['databases']['query']>[0]['filter'];
 
@@ -95,6 +96,8 @@ export async function createCheckinRecord(params: {
     parent: { database_id: getEnv().NOTION_CHECKIN_DB_ID },
     properties: properties as Parameters<typeof notion.pages.create>[0]['properties'],
   });
+
+  clearStudentHoursCache(params.studentId);
 
   return extractCheckin(page as unknown as Record<string, unknown>);
 }
