@@ -3,6 +3,7 @@ import { findStudentByName } from '@/lib/notion/students';
 import { findCheckinToday } from '@/lib/notion/checkins';
 import { getTodayEventsForCoach, getEventsForDateByCoach } from './calendar.service';
 import { todayDateString } from '@/lib/utils/date';
+import { pMap } from '@/lib/utils/concurrency';
 import type { CalendarEvent } from '@/types';
 
 export interface ScheduleItem {
@@ -24,9 +25,10 @@ export async function getCoachScheduleForDate(
     ? await getEventsForDateByCoach(coach.id, dateStr)
     : await getTodayEventsForCoach(coach.id);
 
-  // Query all students + checkin status in parallel (major speedup)
-  const items = await Promise.all(
-    events.map(async (event) => {
+  // Query all students + checkin status with limited concurrency
+  const items = await pMap(
+    events,
+    async (event) => {
       const studentName = event.summary.trim();
       const student = await findStudentByName(studentName);
       let isCheckedIn = false;
@@ -42,7 +44,7 @@ export async function getCoachScheduleForDate(
         studentNotionId: student?.id,
         isCheckedIn,
       } as ScheduleItem;
-    })
+    }
   );
 
   return { items, coachName: coach.name, date: targetDate };

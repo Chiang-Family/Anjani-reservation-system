@@ -20,6 +20,7 @@ import {
   startBinding,
 } from '@/services/student-management.service';
 import { replyText, replyFlex, replyFlexCarousel, replyMessages } from '@/lib/line/reply';
+import { pMap } from '@/lib/utils/concurrency';
 import { KEYWORD, ROLE } from '@/lib/config/constants';
 import { TEXT } from '@/templates/text-messages';
 import { studentInfoCard } from '@/templates/flex/student-info';
@@ -242,7 +243,7 @@ async function handleCoachMessage(
         ));
         return;
       }
-      const summaries = await Promise.all(students.map(s => getStudentHoursSummary(s.id)));
+      const summaries = await pMap(students, s => getStudentHoursSummary(s.id));
       const studentsWithSummary = students.map((s, i) => ({ ...s, summary: summaries[i] }));
       const bubbles = studentMgmtList(studentsWithSummary);
       const messages: messagingApi.Message[] = [
@@ -289,7 +290,7 @@ async function handleCoachMessage(
           (s) => s.name.includes(text) || text.includes(s.name)
         );
         if (matched.length > 0) {
-          const summaries = await Promise.all(matched.map(s => getStudentHoursSummary(s.id)));
+          const summaries = await pMap(matched, s => getStudentHoursSummary(s.id));
           const withSummary = matched.map((s, i) => ({ ...s, summary: summaries[i] }));
           const bubbles = studentMgmtList(withSummary);
           await replyMessages(replyToken, [

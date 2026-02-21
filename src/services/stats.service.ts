@@ -2,6 +2,7 @@ import { findCoachByLineId } from '@/lib/notion/coaches';
 import { getStudentsByCoachId } from '@/lib/notion/students';
 import { getPaymentsByCoachStudents, getLatestPaymentByStudent } from '@/lib/notion/payments';
 import { getStudentHoursSummary } from '@/lib/notion/hours';
+import { pMap } from '@/lib/utils/concurrency';
 import { getMonthEventsForCoach } from './calendar.service';
 import { nowTaipei } from '@/lib/utils/date';
 import { endOfMonth, differenceInCalendarWeeks } from 'date-fns';
@@ -66,9 +67,7 @@ export async function getCoachMonthlyStats(
   const monthEnd = endOfMonth(now);
   const remainingWeeks = differenceInCalendarWeeks(monthEnd, now, { weekStartsOn: 1 }) + 1;
 
-  const summaries = await Promise.all(
-    students.map(s => getStudentHoursSummary(s.id))
-  );
+  const summaries = await pMap(students, s => getStudentHoursSummary(s.id));
 
   // Find candidates needing renewal, then fetch their latest payments in parallel
   const renewalCandidates: { student: typeof students[0]; summary: typeof summaries[0] }[] = [];
@@ -79,9 +78,7 @@ export async function getCoachMonthlyStats(
     }
   }
 
-  const latestPayments = await Promise.all(
-    renewalCandidates.map(c => getLatestPaymentByStudent(c.student.id))
-  );
+  const latestPayments = await pMap(renewalCandidates, c => getLatestPaymentByStudent(c.student.id));
 
   const renewalStudents: RenewalStudent[] = renewalCandidates.map((c, i) => {
     const latestPayment = latestPayments[i];
