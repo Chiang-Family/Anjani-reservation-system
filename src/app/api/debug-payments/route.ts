@@ -7,8 +7,7 @@ export async function GET(request: Request) {
   const url = new URL(request.url);
   const name = url.searchParams.get('student') || '林香吟';
   const deleteIds = url.searchParams.get('delete');
-  const fixDateId = url.searchParams.get('fixDateId');
-  const fixDateVal = url.searchParams.get('fixDateVal');
+  const action = url.searchParams.get('action');
 
   try {
     const notion = getNotionClient();
@@ -24,12 +23,17 @@ export async function GET(request: Request) {
       return NextResponse.json({ success: true, deleted: results });
     }
 
-    if (fixDateId && fixDateVal) {
+    // action=fixTitle 把 $500 紀錄的標題日期改為 2025-12-16
+    if (action === 'fixTitle') {
+      const pageId = '30e39a35-8049-81b2-b3f2-cfd21421cdfd';
+      const newTitle = '林香吟 - 2025-12-16';
       await notion.pages.update({
-        page_id: fixDateId,
-        properties: { '標題': { title: [{ text: { content: fixDateVal } }] } },
+        page_id: pageId,
+        properties: {
+          '標題': { title: [{ type: 'text' as const, text: { content: newTitle } }] },
+        },
       });
-      return NextResponse.json({ success: true, updated: { id: fixDateId, newTitle: fixDateVal } });
+      return NextResponse.json({ success: true, updated: { id: pageId, newTitle } });
     }
 
     const student = await findStudentByName(name);
