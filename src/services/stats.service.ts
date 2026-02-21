@@ -312,19 +312,54 @@ export async function getCoachMonthlyStats(
   for (let i = 0; i < students.length; i++) {
     summaryByName.set(students[i].name, summaries[i]);
   }
-  for (const [name, info] of monthPaymentsByStudent) {
-    if (!predictedNames.has(name)) {
-      renewalStudents.push({
-        name,
-        remainingHours: summaryByName.get(name)?.remainingHours ?? 0,
-        expectedRenewalHours: info.hours,
-        expectedRenewalAmount: Math.round(info.total),
-        paidAmount: Math.round(info.paid),
-        predictedRenewalDate: info.date,
-        renewedDate: info.date,
-        isEstimated: false,
-      });
+
+  // Find last checkin date per student (for already-renewed expiry date)
+  const lastCheckinByStudent = new Map<string, string>();
+  for (const c of monthCheckins) {
+    if (c.studentName) {
+      const prev = lastCheckinByStudent.get(c.studentName);
+      if (!prev || c.classDate > prev) {
+        lastCheckinByStudent.set(c.studentName, c.classDate);
+      }
     }
+  }
+
+  // For students needing full checkin history, query in parallel
+  const alreadyRenewedNames = [...monthPaymentsByStudent.keys()].filter(n => !predictedNames.has(n));
+  const needCheckinQuery = alreadyRenewedNames.filter(n => !lastCheckinByStudent.has(n));
+  const studentIdByName = new Map<string, string>();
+  for (const s of students) {
+    studentIdByName.set(s.name, s.id);
+  }
+  const fallbackCheckins = await pMap(
+    needCheckinQuery,
+    async (name) => {
+      const sid = studentIdByName.get(name);
+      if (!sid) return null;
+      const checkins = await getCheckinsByStudent(sid);
+      return checkins.length > 0 ? checkins[0] : null; // sorted desc
+    }
+  );
+  for (let i = 0; i < needCheckinQuery.length; i++) {
+    const checkin = fallbackCheckins[i];
+    if (checkin) {
+      lastCheckinByStudent.set(needCheckinQuery[i], checkin.classDate);
+    }
+  }
+
+  for (const name of alreadyRenewedNames) {
+    const info = monthPaymentsByStudent.get(name)!;
+    const expiryDate = lastCheckinByStudent.get(name) ?? info.date;
+    renewalStudents.push({
+      name,
+      remainingHours: summaryByName.get(name)?.remainingHours ?? 0,
+      expectedRenewalHours: info.hours,
+      expectedRenewalAmount: Math.round(info.total),
+      paidAmount: Math.round(info.paid),
+      predictedRenewalDate: expiryDate,
+      renewedDate: info.date,
+      isEstimated: false,
+    });
   }
 
   // Sort: unpaid first, then partial, then fully paid
