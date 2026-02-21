@@ -218,7 +218,7 @@ export async function getCoachMonthlyStats(
   // --- 實際收款: this month's payments only ---
   let collectedAmount = 0;
   for (const payment of payments) {
-    if (payment.createdAt.startsWith(monthPrefix)) {
+    if (payment.actualDate.startsWith(monthPrefix)) {
       collectedAmount += payment.paidAmount;
     }
   }

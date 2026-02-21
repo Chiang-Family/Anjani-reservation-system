@@ -19,6 +19,7 @@ export interface PaymentRecord {
   paidAmount: number;
   status: '已繳費' | '部分繳費' | '未繳費';
   createdAt: string;
+  actualDate: string;
 }
 
 export interface Coach {
