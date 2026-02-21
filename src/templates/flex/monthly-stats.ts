@@ -33,15 +33,20 @@ export function monthlyStatsCard(stats: CoachMonthlyStats): FlexBubble {
       statRow('本月續約總額', `$${forecast.expectedAmount.toLocaleString()}`),
     );
     for (const s of forecast.students) {
-      const renewalMM = s.predictedRenewalDate.slice(5, 7);
-      const renewalDD = s.predictedRenewalDate.slice(8, 10);
-      const datePart = `${renewalMM}/${renewalDD}`;
-      const warning = s.isEstimated ? ' (⚠️ 行事曆未排滿)' : '';
+      const isPaid = s.paidAmount >= s.expectedRenewalAmount;
+      const isPartial = s.paidAmount > 0 && !isPaid;
+      const icon = isPaid ? '✅' : '❌';
+      const paidInfo = isPartial ? ` (已付$${s.paidAmount.toLocaleString()})` : '';
+      const warning = !isPaid && s.isEstimated ? ' ⚠️行事曆未排滿' : '';
+      const datePart = `${s.predictedRenewalDate.slice(5, 7)}/${s.predictedRenewalDate.slice(8, 10)}`;
+      const detail = isPaid
+        ? `${icon} ${s.name} 續${s.expectedRenewalHours}hr $${s.expectedRenewalAmount.toLocaleString()}`
+        : `${icon} ${s.name} 剩${s.remainingHours}hr → ${datePart} 續${s.expectedRenewalHours}hr $${s.expectedRenewalAmount.toLocaleString()}${paidInfo}${warning}`;
       bodyContents.push({
         type: 'text',
-        text: `· ${s.name} 剩${s.remainingHours}hr → ${datePart} 續${s.expectedRenewalHours}hr $${s.expectedRenewalAmount.toLocaleString()}${warning}`,
+        text: detail,
         size: 'xs',
-        color: '#888888',
+        color: isPaid ? '#2ecc71' : '#888888',
         margin: 'sm',
         wrap: true,
       } as FlexComponent);

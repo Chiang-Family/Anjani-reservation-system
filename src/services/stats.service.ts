@@ -15,6 +15,7 @@ export interface RenewalStudent {
   remainingHours: number;
   expectedRenewalHours: number;
   expectedRenewalAmount: number;
+  paidAmount: number;
   predictedRenewalDate: string; // yyyy-MM-dd
   isEstimated: boolean;
 }
@@ -291,11 +292,13 @@ export async function getCoachMonthlyStats(
     const expectedHours = latestPayment?.purchasedHours || c.summary.purchasedHours;
     const expectedPrice = latestPayment?.pricePerHour || 0;
     const expectedAmount = Math.round(expectedHours * expectedPrice);
+    const paid = monthPaymentsByStudent.get(c.student.name)?.paid ?? 0;
     return {
       name: c.student.name,
       remainingHours: c.summary.remainingHours,
       expectedRenewalHours: expectedHours,
       expectedRenewalAmount: expectedAmount,
+      paidAmount: Math.round(paid),
       predictedRenewalDate: c.renewalDate,
       isEstimated: c.isEstimated,
     };
@@ -314,11 +317,19 @@ export async function getCoachMonthlyStats(
         remainingHours: summaryByName.get(name)?.remainingHours ?? 0,
         expectedRenewalHours: info.hours,
         expectedRenewalAmount: Math.round(info.total),
+        paidAmount: Math.round(info.paid),
         predictedRenewalDate: info.date,
         isEstimated: false,
       });
     }
   }
+
+  // Sort: unpaid first, then partial, then fully paid
+  renewalStudents.sort((a, b) => {
+    const ratioA = a.paidAmount / (a.expectedRenewalAmount || 1);
+    const ratioB = b.paidAmount / (b.expectedRenewalAmount || 1);
+    return ratioA - ratioB;
+  });
 
   const renewalForecast: RenewalForecast = {
     studentCount: renewalStudents.length,
