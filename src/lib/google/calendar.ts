@@ -108,19 +108,27 @@ export async function getMonthEvents(year: number, month: number): Promise<Calen
   const timeMin = `${startDay}T00:00:00+08:00`;
   const timeMax = `${endDay}T23:59:59+08:00`;
 
-  const res = await calendar.events.list({
-    calendarId: env.GOOGLE_CALENDAR_ID,
-    timeMin,
-    timeMax,
-    singleEvents: true,
-    orderBy: 'startTime',
-  });
-
   const events: CalendarEvent[] = [];
-  for (const item of res.data.items || []) {
-    const ev = toCalendarEvent(item);
-    if (ev) events.push(ev);
-  }
+  let pageToken: string | undefined;
+
+  do {
+    const res = await calendar.events.list({
+      calendarId: env.GOOGLE_CALENDAR_ID,
+      timeMin,
+      timeMax,
+      singleEvents: true,
+      orderBy: 'startTime',
+      maxResults: 2500,
+      pageToken,
+    });
+
+    for (const item of res.data.items || []) {
+      const ev = toCalendarEvent(item);
+      if (ev) events.push(ev);
+    }
+    pageToken = res.data.nextPageToken ?? undefined;
+  } while (pageToken);
+
   return events;
 }
 
@@ -131,19 +139,27 @@ export async function getEventsForDateRange(fromDate: string, toDate: string): P
   const timeMin = `${fromDate}T00:00:00+08:00`;
   const timeMax = `${toDate}T23:59:59+08:00`;
 
-  const res = await calendar.events.list({
-    calendarId: env.GOOGLE_CALENDAR_ID,
-    timeMin,
-    timeMax,
-    singleEvents: true,
-    orderBy: 'startTime',
-  });
-
   const events: CalendarEvent[] = [];
-  for (const item of res.data.items || []) {
-    const ev = toCalendarEvent(item);
-    if (ev) events.push(ev);
-  }
+  let pageToken: string | undefined;
+
+  do {
+    const res = await calendar.events.list({
+      calendarId: env.GOOGLE_CALENDAR_ID,
+      timeMin,
+      timeMax,
+      singleEvents: true,
+      orderBy: 'startTime',
+      maxResults: 2500,
+      pageToken,
+    });
+
+    for (const item of res.data.items || []) {
+      const ev = toCalendarEvent(item);
+      if (ev) events.push(ev);
+    }
+    pageToken = res.data.nextPageToken ?? undefined;
+  } while (pageToken);
+
   return events;
 }
 
