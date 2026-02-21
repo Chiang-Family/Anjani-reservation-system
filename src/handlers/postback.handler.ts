@@ -43,8 +43,9 @@ export async function handlePostback(event: PostbackEvent): Promise<void> {
       }
 
       case ACTION.VIEW_SCHEDULE: {
-        // data = view_schedule:{date}
-        const dateStr = id;
+        // data = view_schedule (date from datetimepicker params)
+        const params = event.postback.params;
+        const dateStr = (params && 'date' in params ? params.date : undefined) ?? id;
         const schedule = await getCoachScheduleForDate(lineUserId, dateStr);
         if (!schedule) {
           await replyTextWithMenu(event.replyToken, '找不到教練資料。');
@@ -56,8 +57,9 @@ export async function handlePostback(event: PostbackEvent): Promise<void> {
       }
 
       case ACTION.CHECKIN_SCHEDULE: {
-        // data = checkin_schedule:{date}
-        const dateStr = id || todayDateString();
+        // data = checkin_schedule (date from datetimepicker params)
+        const params = event.postback.params;
+        const dateStr = (params && 'date' in params ? params.date : undefined) ?? id ?? todayDateString();
         const schedule = await getCoachScheduleForDate(lineUserId, dateStr);
         if (!schedule) {
           await replyTextWithMenu(event.replyToken, '找不到教練資料。');

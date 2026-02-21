@@ -98,47 +98,9 @@ export function scheduleList(items: ScheduleItem[], dateStr: string, mode: Sched
       } as FlexComponent,
     ];
 
-  // Navigation buttons (±7 days from today)
-  const prevDate = addDays(dateStr, -1);
-  const nextDate = addDays(dateStr, 1);
+  // Date picker (±7 days from today)
   const minDate = addDays(today, -7);
   const maxDate = addDays(today, 7);
-
-  const navButtons: FlexComponent[] = [];
-
-  if (prevDate >= minDate) {
-    navButtons.push({
-      type: 'button',
-      action: {
-        type: 'postback',
-        label: `← ${formatDateLabel(prevDate)}`,
-        data: `${navAction}:${prevDate}`,
-        displayText: `查看 ${formatDateLabel(prevDate)}`,
-      },
-      style: 'link',
-      height: 'sm',
-      flex: 1,
-    } as FlexComponent);
-  } else {
-    navButtons.push({ type: 'filler' } as FlexComponent);
-  }
-
-  if (nextDate <= maxDate) {
-    navButtons.push({
-      type: 'button',
-      action: {
-        type: 'postback',
-        label: `${formatDateLabel(nextDate)} →`,
-        data: `${navAction}:${nextDate}`,
-        displayText: `查看 ${formatDateLabel(nextDate)}`,
-      },
-      style: 'link',
-      height: 'sm',
-      flex: 1,
-    } as FlexComponent);
-  } else {
-    navButtons.push({ type: 'filler' } as FlexComponent);
-  }
 
   return {
     type: 'bubble',
@@ -175,7 +137,22 @@ export function scheduleList(items: ScheduleItem[], dateStr: string, mode: Sched
     footer: {
       type: 'box',
       layout: 'horizontal',
-      contents: navButtons,
+      contents: [
+        {
+          type: 'button',
+          action: {
+            type: 'datetimepicker',
+            label: '選擇日期',
+            data: navAction,
+            mode: 'date',
+            initial: dateStr,
+            min: minDate,
+            max: maxDate,
+          },
+          style: 'link',
+          height: 'sm',
+        } as FlexComponent,
+      ],
       paddingAll: '8px',
       spacing: 'sm',
     },
