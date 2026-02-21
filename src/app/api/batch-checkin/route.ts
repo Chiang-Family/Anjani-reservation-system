@@ -37,7 +37,13 @@ export async function GET(request: Request) {
       checkins: Array<{ date: string; time: string; status: string }>;
     }> = [];
 
+    const excludeNames = ['蔡惠珍', '鍾旻'];
+
     for (const student of students) {
+      if (excludeNames.includes(student.name)) {
+        allResults.push({ studentName: student.name, paymentDate: null, eventsFound: 0, checkins: [{ date: '', time: '', status: 'SKIPPED' }] });
+        continue;
+      }
       // Get latest payment date
       const latestPayment = await getLatestPaymentByStudent(student.id);
       if (!latestPayment) {
