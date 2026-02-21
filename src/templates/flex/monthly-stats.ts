@@ -33,7 +33,7 @@ export function monthlyStatsCard(stats: CoachMonthlyStats): FlexBubble {
       statRow('本月續約總額', `$${forecast.expectedAmount.toLocaleString()}`),
     );
     for (const s of forecast.students) {
-      const isPaid = s.paidAmount >= s.expectedRenewalAmount;
+      const isPaid = s.renewedDate !== null && s.paidAmount >= s.expectedRenewalAmount;
       const icon = isPaid ? '✅' : '❌';
       const fmtDate = (d: string) => `${d.slice(5, 7)}/${d.slice(8, 10)}`;
       const expiryDate = fmtDate(s.predictedRenewalDate);
