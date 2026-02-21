@@ -7,6 +7,7 @@ import { findCoachByLineId } from '@/lib/notion/coaches';
 import { findStudentByLineId } from '@/lib/notion/students';
 import { getCheckinsByStudent } from '@/lib/notion/checkins';
 import { getStudentHoursSummary } from '@/lib/notion/hours';
+import { getPaymentsByStudent } from '@/lib/notion/payments';
 import {
   startAddStudent,
   handleAddStudentStep,
@@ -22,6 +23,7 @@ import { pMap } from '@/lib/utils/concurrency';
 import { KEYWORD, ROLE } from '@/lib/config/constants';
 import { TEXT } from '@/templates/text-messages';
 import { studentInfoCard } from '@/templates/flex/student-info';
+import { paymentHistoryCard } from '@/templates/flex/payment-history';
 import { studentMenu, coachMenu } from '@/templates/flex/main-menu';
 import { scheduleList } from '@/templates/flex/today-schedule';
 import { todayDateString } from '@/lib/utils/date';
@@ -84,6 +86,11 @@ export async function handleMessage(event: MessageEvent): Promise<void> {
             await replyFlex(event.replyToken, 'Anjani 健身管理', studentMenu(student.name));
             return;
           }
+          const coach = await findCoachByLineId(lineUserId);
+          if (coach) {
+            await replyFlex(event.replyToken, 'Anjani 教練管理', coachMenu(coach.name));
+            return;
+          }
         }
         await replyText(event.replyToken, result.message);
       } catch (error) {
@@ -135,8 +142,8 @@ async function handleStudentMessage(
       return;
     }
 
-    case KEYWORD.REMAINING: {
-      const student = await getStudentInfo(lineUserId);
+    case KEYWORD.PAYMENT_HISTORY: {
+      const student = await findStudentByLineId(lineUserId);
       if (!student) {
         const qr = studentQuickReply();
         await replyMessages(replyToken, [
@@ -144,8 +151,11 @@ async function handleStudentMessage(
         ]);
         return;
       }
-      const summary = await getStudentHoursSummary(student.id);
-      await replyFlex(replyToken, `${student.name} 學員資訊`, studentInfoCard(student, summary));
+      const [payments, summary] = await Promise.all([
+        getPaymentsByStudent(student.id),
+        getStudentHoursSummary(student.id),
+      ]);
+      await replyFlex(replyToken, '繳費紀錄', paymentHistoryCard(student.name, payments, summary));
       return;
     }
 

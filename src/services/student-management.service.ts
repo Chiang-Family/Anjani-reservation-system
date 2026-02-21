@@ -1,5 +1,5 @@
 import { createStudent, findStudentByName, bindStudentLineId, getStudentById } from '@/lib/notion/students';
-import { findCoachByLineId } from '@/lib/notion/coaches';
+import { findCoachByLineId, findCoachByName, bindCoachLineId } from '@/lib/notion/coaches';
 import { createPaymentRecord, getLatestPaymentByStudent } from '@/lib/notion/payments';
 import { getStudentHoursSummary } from '@/lib/notion/hours';
 import { formatHours } from '@/lib/utils/date';
@@ -264,6 +264,44 @@ export async function handleBinding(
   lineUserId: string,
   name: string
 ): Promise<{ success: boolean; message: string }> {
+  // Check if input is meant for a coach
+  const coachMatch = name.trim().match(/^教練[+＋\s]*(.*)/);
+  if (coachMatch) {
+    const coachName = coachMatch[1].trim();
+    if (!coachName) {
+      return {
+        success: false,
+        message: '請輸入教練的姓名。例如：「教練 王大明」或「教練+王大明」',
+      };
+    }
+    const coach = await findCoachByName(coachName);
+    if (!coach) {
+      return {
+        success: false,
+        message: `找不到名為「${coachName}」的教練資料。\n請確認姓名是否正確。`,
+      };
+    }
+    if (coach.lineUserId) {
+      return {
+        success: false,
+        message: '此教練帳號已綁定。',
+      };
+    }
+    await bindCoachLineId(coach.id, lineUserId);
+    bindingStates.delete(lineUserId);
+
+    return {
+      success: true,
+      message: [
+        `✅ 綁定成功！`,
+        '',
+        `歡迎 ${coach.name} 教練！`,
+        '輸入「選單」查看所有功能。',
+      ].join('\n'),
+    };
+  }
+
+  // Otherwise, default to student binding flow
   const student = await findStudentByName(name.trim());
   if (!student) {
     return {
