@@ -15,9 +15,8 @@ export const ACTION = {
   COACH_CHECKIN: 'coach_checkin',
   VIEW_SCHEDULE: 'view_schedule',
   ADD_STUDENT_CONFIRM: 'add_student_confirm',
-  EDIT_HOURS: 'edit_hours',
-  TOGGLE_PAYMENT: 'toggle_payment',
-  ADD_HOURS: 'add_hours',
+  COLLECT_AND_ADD: 'collect_add',
+  VIEW_STUDENT_HISTORY: 'view_history',
 } as const;
 
 // 角色

@@ -1,12 +1,15 @@
 import type { PostbackEvent } from '@line/bot-sdk';
 import { coachCheckinForStudent } from '@/services/checkin.service';
 import { getCoachScheduleForDate } from '@/services/coach.service';
-import { startEditStudent, startPaymentCollection } from '@/services/student-management.service';
+import { startCollectAndAdd } from '@/services/student-management.service';
 import { getStudentById } from '@/lib/notion/students';
+import { getCheckinsByStudent } from '@/lib/notion/checkins';
+import { getStudentHoursSummary } from '@/lib/notion/hours';
 import { replyText, replyFlex, replyMessages } from '@/lib/line/reply';
 import { ACTION } from '@/lib/config/constants';
 import { TEXT } from '@/templates/text-messages';
 import { scheduleList } from '@/templates/flex/today-schedule';
+import { classHistoryCard } from '@/templates/flex/class-history';
 import { formatDateLabel } from '@/lib/utils/date';
 import { menuQuickReply, coachQuickReply } from '@/templates/quick-reply';
 
@@ -52,31 +55,24 @@ export async function handlePostback(event: PostbackEvent): Promise<void> {
         return;
       }
 
-      case ACTION.ADD_HOURS: {
+      case ACTION.COLLECT_AND_ADD: {
+        const msg = await startCollectAndAdd(id, lineUserId);
+        await replyText(event.replyToken, msg);
+        return;
+      }
+
+      case ACTION.VIEW_STUDENT_HISTORY: {
         const student = await getStudentById(id);
         if (!student) {
           await replyTextWithMenu(event.replyToken, '找不到該學員資料。');
           return;
         }
-        const msg = startEditStudent(lineUserId, 'add_hours', id, student.name);
-        await replyText(event.replyToken, msg);
-        return;
-      }
-
-      case ACTION.EDIT_HOURS: {
-        const student = await getStudentById(id);
-        if (!student) {
-          await replyTextWithMenu(event.replyToken, '找不到該學員資料。');
-          return;
-        }
-        const msg = startEditStudent(lineUserId, 'hours', id, student.name);
-        await replyText(event.replyToken, msg);
-        return;
-      }
-
-      case ACTION.TOGGLE_PAYMENT: {
-        const msg = await startPaymentCollection(id, lineUserId);
-        await replyText(event.replyToken, msg);
+        const [records, summary] = await Promise.all([
+          getCheckinsByStudent(id),
+          getStudentHoursSummary(id),
+        ]);
+        await replyFlex(event.replyToken, `${student.name} 上課紀錄`,
+          classHistoryCard(student.name, records, summary.remainingHours));
         return;
       }
 

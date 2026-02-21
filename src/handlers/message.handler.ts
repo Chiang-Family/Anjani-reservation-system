@@ -1,4 +1,4 @@
-import type { MessageEvent, TextEventMessage, messagingApi } from '@line/bot-sdk';
+import type { MessageEvent, TextEventMessage } from '@line/bot-sdk';
 import { identifyUser, getStudentInfo } from '@/services/student.service';
 import { getCoachScheduleForDate } from '@/services/coach.service';
 import { getCoachMonthlyStats } from '@/services/stats.service';
@@ -11,15 +11,13 @@ import {
   startAddStudent,
   handleAddStudentStep,
   getAddStudentState,
-  getEditStudentState,
-  handleEditStudentStep,
-  getPaymentState,
-  handlePaymentStep,
+  getCollectAndAddState,
+  handleCollectAndAddStep,
   handleBinding,
   getBindingState,
   startBinding,
 } from '@/services/student-management.service';
-import { replyText, replyFlex, replyFlexCarousel, replyMessages } from '@/lib/line/reply';
+import { replyText, replyFlex, replyMessages } from '@/lib/line/reply';
 import { pMap } from '@/lib/utils/concurrency';
 import { KEYWORD, ROLE } from '@/lib/config/constants';
 import { TEXT } from '@/templates/text-messages';
@@ -29,7 +27,6 @@ import { scheduleList } from '@/templates/flex/today-schedule';
 import { todayDateString } from '@/lib/utils/date';
 import { monthlyStatsCard } from '@/templates/flex/monthly-stats';
 import { studentMgmtList } from '@/templates/flex/student-mgmt-list';
-import { emptyStateBubble } from '@/templates/flex/empty-state';
 import { classHistoryCard } from '@/templates/flex/class-history';
 import { studentQuickReply, coachQuickReply } from '@/templates/quick-reply';
 
@@ -42,33 +39,18 @@ export async function handleMessage(event: MessageEvent): Promise<void> {
   const text = (event.message as TextEventMessage).text.trim();
   const user = await identifyUser(lineUserId);
 
-  // Check if coach is in a multi-step flow (add student or edit student)
+  // Check if coach is in a multi-step flow
   if (user?.role === ROLE.COACH) {
-    const editState = getEditStudentState(lineUserId);
-    if (editState) {
+    const collectState = getCollectAndAddState(lineUserId);
+    if (collectState) {
       try {
-        const result = await handleEditStudentStep(lineUserId, text);
+        const result = await handleCollectAndAddStep(lineUserId, text);
         const qr = coachQuickReply();
         await replyMessages(event.replyToken, [
           { type: 'text', text: result.message, quickReply: result.done ? { items: qr } : undefined },
         ]);
       } catch (error) {
-        console.error('Edit student step error:', error);
-        await replyText(event.replyToken, TEXT.ERROR);
-      }
-      return;
-    }
-
-    const pmtState = getPaymentState(lineUserId);
-    if (pmtState) {
-      try {
-        const result = await handlePaymentStep(lineUserId, text);
-        const qr = coachQuickReply();
-        await replyMessages(event.replyToken, [
-          { type: 'text', text: result.message, quickReply: result.done ? { items: qr } : undefined },
-        ]);
-      } catch (error) {
-        console.error('Payment step error:', error);
+        console.error('Collect and add step error:', error);
         await replyText(event.replyToken, TEXT.ERROR);
       }
       return;
@@ -227,40 +209,9 @@ async function handleCoachMessage(
     }
 
     case KEYWORD.STUDENT_MGMT: {
-      const coach = await findCoachByLineId(lineUserId);
-      if (!coach) {
-        await replyMessages(replyToken, [
-          { type: 'text', text: '找不到教練資料。', quickReply: { items: qr } },
-        ]);
-        return;
-      }
-      const students = await getStudentsByCoachId(coach.id);
-      if (students.length === 0) {
-        await replyFlex(replyToken, '沒有學員', emptyStateBubble(
-          '目前沒有學員',
-          '輸入「新增學員」可建立學員資料。',
-          { label: '新增學員', text: KEYWORD.ADD_STUDENT }
-        ));
-        return;
-      }
-      const summaries = await pMap(students, s => getStudentHoursSummary(s.id));
-      const studentsWithSummary = students.map((s, i) => ({ ...s, summary: summaries[i] }));
-      const bubbles = studentMgmtList(studentsWithSummary);
-      const messages: messagingApi.Message[] = [
-        {
-          type: 'flex',
-          altText: `學員管理（共 ${students.length} 人）`,
-          contents: { type: 'carousel', contents: bubbles.slice(0, 12) },
-        },
-      ];
-      if (students.length > 12) {
-        messages.push({
-          type: 'text',
-          text: `共 ${students.length} 位學員，顯示前 12 位。\n輸入學員姓名可搜尋特定學員。`,
-          quickReply: { items: qr },
-        });
-      }
-      await replyMessages(replyToken, messages);
+      await replyMessages(replyToken, [
+        { type: 'text', text: '請輸入學員姓名搜尋：', quickReply: { items: qr } },
+      ]);
       return;
     }
 

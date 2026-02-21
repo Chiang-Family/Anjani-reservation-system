@@ -1,6 +1,6 @@
 import { createStudent, findStudentByName, bindStudentLineId, getStudentById } from '@/lib/notion/students';
 import { findCoachByLineId } from '@/lib/notion/coaches';
-import { createPaymentRecord, getLatestUnpaidPayment, getLatestPaymentByStudent, recordPaymentAmount, updatePaymentHours } from '@/lib/notion/payments';
+import { createPaymentRecord, getLatestPaymentByStudent } from '@/lib/notion/payments';
 import { getStudentHoursSummary } from '@/lib/notion/hours';
 import { formatHours } from '@/lib/utils/date';
 
@@ -135,220 +135,107 @@ export async function handleAddStudentStep(
   }
 }
 
-/** 編輯學員資料（多步驟文字輸入） */
-interface EditStudentState {
-  field: 'hours' | 'add_hours';
+/** 收款/加值合併流程（多步驟） */
+interface CollectAndAddState {
   studentId: string;
   studentName: string;
-  /** add_hours 時需要輸入單價 */
-  step?: 'count' | 'price';
-  addHours?: number;
+  coachId: string;
+  pricePerHour: number | null; // null = 無歷史紀錄，需先問單價
+  step: 'price' | 'amount';
 }
 
-const editStudentStates = new Map<string, EditStudentState>();
+const collectAndAddStates = new Map<string, CollectAndAddState>();
 
-export function getEditStudentState(lineUserId: string): EditStudentState | undefined {
-  return editStudentStates.get(lineUserId);
+export function getCollectAndAddState(lineUserId: string): CollectAndAddState | undefined {
+  return collectAndAddStates.get(lineUserId);
 }
 
-export function startEditStudent(lineUserId: string, field: 'hours' | 'add_hours', studentId: string, studentName: string): string {
-  editStudentStates.set(lineUserId, { field, studentId, studentName, step: 'count' });
-  if (field === 'add_hours') {
-    return `請輸入要為 ${studentName} 加值的時數（數字，可含小數如 7.5）：`;
-  }
-  return `請輸入 ${studentName} 最新繳費紀錄的新購買時數（數字，可含小數）：`;
-}
-
-export async function handleEditStudentStep(
-  lineUserId: string,
-  input: string
-): Promise<{ message: string; done: boolean }> {
-  const state = editStudentStates.get(lineUserId);
-  if (!state) {
-    return { message: '沒有進行中的編輯流程。', done: true };
-  }
-
-  if (input.trim() === '取消') {
-    editStudentStates.delete(lineUserId);
-    return { message: '已取消編輯。', done: true };
-  }
-
-  const num = parseFloat(input.trim());
-  if (isNaN(num) || num <= 0) {
-    return { message: '請輸入有效的正數（或輸入「取消」放棄）：', done: false };
-  }
-
-  const student = await getStudentById(state.studentId);
-  if (!student) {
-    editStudentStates.delete(lineUserId);
-    return { message: '找不到該學員資料。', done: true };
-  }
-
-  if (state.field === 'add_hours') {
-    if (state.step === 'count') {
-      // 第一步：輸入時數，接著問單價
-      state.addHours = num;
-      state.step = 'price';
-      return { message: `加值 ${num} 小時，請輸入每小時單價（數字）：`, done: false };
-    }
-
-    // 第二步：輸入單價，執行加值 + 建立繳費紀錄
-    const addHours = state.addHours!;
-    const pricePerHour = parseInt(input.trim(), 10);
-    if (isNaN(pricePerHour) || pricePerHour <= 0) {
-      return { message: '請輸入有效的正整數（或輸入「取消」放棄）：', done: false };
-    }
-
-    await createPaymentRecord({
-      studentId: state.studentId,
-      studentName: state.studentName,
-      coachId: student.coachId || '',
-      purchasedHours: addHours,
-      pricePerHour,
-      status: '未繳費',
-    });
-
-    const summary = await getStudentHoursSummary(state.studentId);
-    editStudentStates.delete(lineUserId);
-    const total = addHours * pricePerHour;
-    return {
-      message: [
-        `✅ ${state.studentName} 已加值 ${addHours} 小時！`,
-        '',
-        `📊 剩餘時數：${formatHours(summary.remainingHours)}`,
-        `💰 每小時單價：${pricePerHour} 元`,
-        `💵 合計金額：${total} 元（未繳費）`,
-      ].join('\n'),
-      done: true,
-    };
-  }
-
-  // field === 'hours': 修改最新繳費紀錄的購買時數
-  const latestPayment = await getLatestPaymentByStudent(state.studentId);
-  if (!latestPayment) {
-    editStudentStates.delete(lineUserId);
-    return { message: `${state.studentName} 目前沒有繳費紀錄可修改。`, done: true };
-  }
-
-  await updatePaymentHours(latestPayment.id, num);
-  const summary = await getStudentHoursSummary(state.studentId);
-  editStudentStates.delete(lineUserId);
-  return {
-    message: [
-      `✅ ${state.studentName} 最新繳費紀錄已更新！`,
-      '',
-      `📊 購買時數：${latestPayment.purchasedHours} → ${num} 小時`,
-      `📊 剩餘時數：${formatHours(summary.remainingHours)}`,
-    ].join('\n'),
-    done: true,
-  };
-}
-
-/** 收款流程（多步驟） */
-interface PaymentState {
-  paymentId: string;
-  studentName: string;
-  totalAmount: number;
-  currentPaid: number;
-}
-
-const paymentStates = new Map<string, PaymentState>();
-
-export function getPaymentState(lineUserId: string): PaymentState | undefined {
-  return paymentStates.get(lineUserId);
-}
-
-export async function startPaymentCollection(studentId: string, lineUserId: string): Promise<string> {
+export async function startCollectAndAdd(studentId: string, lineUserId: string): Promise<string> {
   const student = await getStudentById(studentId);
   if (!student) return '找不到該學員資料。';
 
-  const unpaid = await getLatestUnpaidPayment(studentId);
-  if (!unpaid) {
-    return `${student.name} 目前沒有未繳費的紀錄。`;
-  }
+  const latestPayment = await getLatestPaymentByStudent(studentId);
+  const pricePerHour = latestPayment?.pricePerHour ?? null;
 
-  paymentStates.set(lineUserId, {
-    paymentId: unpaid.id,
+  collectAndAddStates.set(lineUserId, {
+    studentId,
     studentName: student.name,
-    totalAmount: unpaid.totalAmount,
-    currentPaid: unpaid.paidAmount,
+    coachId: student.coachId || '',
+    pricePerHour,
+    step: pricePerHour ? 'amount' : 'price',
   });
 
-  const remaining = unpaid.totalAmount - unpaid.paidAmount;
-  if (unpaid.paidAmount > 0) {
+  if (pricePerHour) {
+    const summary = await getStudentHoursSummary(studentId);
     return [
-      `${student.name} 已付 $${unpaid.paidAmount.toLocaleString()} / 剩餘 $${remaining.toLocaleString()}`,
+      `${student.name}`,
+      `目前單價：$${pricePerHour.toLocaleString()}/hr`,
+      `剩餘時數：${formatHours(summary.remainingHours)}`,
       '',
-      '請輸入收款金額（或輸入「全額」繳清剩餘）：',
+      '請輸入收款金額（或輸入「取消」放棄）：',
     ].join('\n');
   }
 
   return [
-    `${student.name} 待收 $${unpaid.totalAmount.toLocaleString()}`,
+    `${student.name} 目前沒有繳費紀錄。`,
     '',
-    '請輸入收款金額（或輸入「全額」繳清）：',
+    '請輸入每小時單價（數字）：',
   ].join('\n');
 }
 
-export async function handlePaymentStep(
+export async function handleCollectAndAddStep(
   lineUserId: string,
   input: string
 ): Promise<{ message: string; done: boolean }> {
-  const state = paymentStates.get(lineUserId);
+  const state = collectAndAddStates.get(lineUserId);
   if (!state) {
     return { message: '沒有進行中的收款流程。', done: true };
   }
 
   if (input.trim() === '取消') {
-    paymentStates.delete(lineUserId);
+    collectAndAddStates.delete(lineUserId);
     return { message: '已取消收款。', done: true };
   }
 
-  const remaining = state.totalAmount - state.currentPaid;
-  let amount: number;
-
-  if (input.trim() === '全額') {
-    amount = remaining;
-  } else {
-    amount = parseInt(input.trim(), 10);
-    if (isNaN(amount) || amount <= 0) {
-      return { message: '請輸入有效的正整數金額（或輸入「全額」/「取消」）：', done: false };
+  if (state.step === 'price') {
+    const price = parseInt(input.trim(), 10);
+    if (isNaN(price) || price <= 0) {
+      return { message: '請輸入有效的正整數（或輸入「取消」放棄）：', done: false };
     }
-    if (amount > remaining) {
-      return { message: `金額超過剩餘待收 $${remaining.toLocaleString()}，請重新輸入：`, done: false };
-    }
+    state.pricePerHour = price;
+    state.step = 'amount';
+    return { message: `單價 $${price}/hr，請輸入收款金額：`, done: false };
   }
 
-  const { newPaidAmount, newStatus } = await recordPaymentAmount(
-    state.paymentId,
-    amount,
-    state.currentPaid,
-    state.totalAmount
-  );
-
-  paymentStates.delete(lineUserId);
-
-  if (newStatus === '已繳費') {
-    return {
-      message: [
-        `✅ ${state.studentName} 已繳清！`,
-        '',
-        `💰 收款金額：$${amount.toLocaleString()}`,
-        `💳 總金額：$${state.totalAmount.toLocaleString()}`,
-        `繳費狀態：已繳費`,
-      ].join('\n'),
-      done: true,
-    };
+  // step === 'amount'
+  const amount = parseInt(input.trim(), 10);
+  if (isNaN(amount) || amount <= 0) {
+    return { message: '請輸入有效的正整數金額（或輸入「取消」放棄）：', done: false };
   }
+
+  const pricePerHour = state.pricePerHour!;
+  const hours = Math.round((amount / pricePerHour) * 10) / 10;
+
+  await createPaymentRecord({
+    studentId: state.studentId,
+    studentName: state.studentName,
+    coachId: state.coachId,
+    purchasedHours: hours,
+    pricePerHour,
+    status: '已繳費',
+    paidAmount: amount,
+  });
+
+  const summary = await getStudentHoursSummary(state.studentId);
+  collectAndAddStates.delete(lineUserId);
 
   return {
     message: [
       `✅ ${state.studentName} 收款成功！`,
       '',
-      `💰 本次收款：$${amount.toLocaleString()}`,
-      `💳 已付 $${newPaidAmount.toLocaleString()} / 總額 $${state.totalAmount.toLocaleString()}`,
-      `📋 剩餘待收：$${(state.totalAmount - newPaidAmount).toLocaleString()}`,
-      `繳費狀態：部分繳費`,
+      `💰 收款金額：$${amount.toLocaleString()}`,
+      `📊 加值時數：${hours} 小時（$${pricePerHour}/hr）`,
+      `📊 剩餘時數：${formatHours(summary.remainingHours)}`,
     ].join('\n'),
     done: true,
   };

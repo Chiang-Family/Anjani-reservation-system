@@ -86,6 +86,7 @@ export async function createPaymentRecord(params: {
   purchasedHours: number;
   pricePerHour: number;
   status: '已繳費' | '部分繳費' | '未繳費';
+  paidAmount?: number;
 }): Promise<PaymentRecord> {
   const notion = getNotionClient();
   const now = nowTaipei();
@@ -109,7 +110,7 @@ export async function createPaymentRecord(params: {
       number: params.pricePerHour,
     },
     [PAYMENT_PROPS.PAID_AMOUNT]: {
-      number: 0,
+      number: params.paidAmount ?? 0,
     },
     [PAYMENT_PROPS.STATUS]: {
       select: { name: params.status },
