@@ -6,7 +6,7 @@ export const KEYWORD = {
   ADD_STUDENT: '新增學員',
   STUDENT_MGMT: '學員管理',
   MONTHLY_STATS: '本月統計',
-  COACH_CHECKIN: '幫學員打卡',
+
   MENU: '選單',
 } as const;
 

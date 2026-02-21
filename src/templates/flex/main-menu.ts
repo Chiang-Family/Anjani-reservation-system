@@ -113,7 +113,6 @@ export function coachMenu(name: string): FlexBubble {
       layout: 'vertical',
       contents: [
         menuButton(KEYWORD.TODAY_SCHEDULE),
-        menuButton(KEYWORD.COACH_CHECKIN, '#27ae60'),
         menuButton(KEYWORD.STUDENT_MGMT, '#e67e22'),
         menuButton(KEYWORD.ADD_STUDENT, '#f39c12'),
         menuButton(KEYWORD.MONTHLY_STATS, '#8e44ad'),

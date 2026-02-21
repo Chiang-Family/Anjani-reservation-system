@@ -193,19 +193,6 @@ async function handleCoachMessage(
       return;
     }
 
-    case KEYWORD.COACH_CHECKIN: {
-      const today = todayDateString();
-      const schedule = await getCoachScheduleForDate(lineUserId);
-      if (!schedule) {
-        await replyMessages(replyToken, [
-          { type: 'text', text: '找不到教練資料。', quickReply: { items: qr } },
-        ]);
-        return;
-      }
-      const unchecked = schedule.items.filter((item) => !item.isCheckedIn && item.studentNotionId);
-      await replyFlex(replyToken, '幫學員打卡', scheduleList(unchecked, today, 'checkin'));
-      return;
-    }
 
     case KEYWORD.ADD_STUDENT: {
       const msg = await startAddStudent(lineUserId);
