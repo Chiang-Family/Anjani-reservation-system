@@ -11,7 +11,7 @@ const TZ = 'Asia/Taipei';
 
 /**
  * 一次性回填打卡紀錄 API
- * GET /api/backfill-checkins?from=2026-01-01&to=2026-02-20
+ * GET /api/backfill-checkins?from=2026-01-01&to=2026-02-20&student=姓名
  *
  * 從 Google Calendar 讀取指定日期範圍的所有事件，
  * 比對 Notion 學員姓名，自動建立打卡紀錄。
@@ -20,6 +20,7 @@ export async function GET(request: Request) {
   const url = new URL(request.url);
   const from = url.searchParams.get('from') || '2026-01-01';
   const to = url.searchParams.get('to') || '2026-02-20';
+  const studentFilter = url.searchParams.get('student');
 
   try {
     const env = getEnv();
@@ -92,6 +93,11 @@ export async function GET(request: Request) {
 
     for (const event of events) {
       const summary = event.summary.trim();
+
+      // Skip if student filter is set and doesn't match
+      if (studentFilter && !summary.includes(studentFilter) && !studentFilter.includes(summary)) {
+        continue;
+      }
 
       // Find matching student by name
       const student = students.find(
