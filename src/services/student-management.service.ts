@@ -57,7 +57,7 @@ export async function handleAddStudentStep(
       }
       state.name = input.trim();
       state.step = 'hours';
-      return { message: `學員姓名：${state.name}\n\n請輸入購買時數（數字，可含小數如 7.5）：`, done: false };
+      return { message: `學員姓名：${state.name}\n\n請輸入購買時數（數字）：`, done: false };
     }
 
     case 'hours': {
