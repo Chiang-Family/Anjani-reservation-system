@@ -1,7 +1,7 @@
 import { getStudentById } from '@/lib/notion/students';
 import { findCoachByLineId } from '@/lib/notion/coaches';
 import { createCheckinRecord, findCheckinToday } from '@/lib/notion/checkins';
-import { getStudentHoursSummary } from '@/lib/notion/hours';
+import { getStudentOverflowInfo } from '@/lib/notion/hours';
 import { findStudentEventToday, findStudentEventForDate } from './calendar.service';
 import { todayDateString, formatDateTime, nowTaipei, nowTaipeiISO, computeDurationMinutes, formatHours } from '@/lib/utils/date';
 import { pushText } from '@/lib/line/push';
@@ -47,6 +47,9 @@ export async function coachCheckinForStudent(
   const classStartTime = `${targetDate}T${event.startTime}:00+08:00`;
   const classEndTime = `${targetDate}T${event.endTime}:00+08:00`;
 
+  // 打卡前先取得分桶資訊（避免 Notion 索引延遲）
+  const { summary: oldSummary, buckets } = await getStudentOverflowInfo(student.id);
+
   // Create checkin record with date range
   await createCheckinRecord({
     studentName: student.name,
@@ -58,8 +61,23 @@ export async function coachCheckinForStudent(
     checkinTime,
   });
 
-  // Compute remaining hours from DB
-  const summary = await getStudentHoursSummary(student.id);
+  // 用打卡前的資料 + 本次時長，算出新的剩餘時數
+  const newRemainingHours = Math.round((oldSummary.remainingHours - durationMinutes / 60) * 10) / 10;
+  const summary = { ...oldSummary, remainingHours: newRemainingHours };
+
+  // 檢查本次打卡是否剛好消耗完當前桶（當期最後一堂課）
+  let periodJustEnded = false;
+  const activeIdx = buckets.findIndex(b => {
+    const consumed = b.checkins.reduce((sum, c) => sum + c.durationMinutes, 0);
+    return consumed < b.purchasedHours * 60;
+  });
+  if (activeIdx >= 0) {
+    const bucket = buckets[activeIdx];
+    const consumed = bucket.checkins.reduce((sum, c) => sum + c.durationMinutes, 0);
+    const remainingInBucket = bucket.purchasedHours * 60 - consumed;
+    // 本次打卡用完當期，且沒有下一期預繳
+    periodJustEnded = durationMinutes >= remainingInBucket && activeIdx === buckets.length - 1;
+  }
 
   // Push notification to student
   if (student.lineUserId) {
@@ -70,15 +88,28 @@ export async function coachCheckinForStudent(
       `📅 課程時段：${event.startTime}–${event.endTime}`,
       `⏱️ 課程時長：${durationMinutes} 分鐘`,
       `📊 剩餘時數：${formatHours(summary.remainingHours)}`,
-      ...(summary.remainingHours <= 2 ? [`\n⚠️ 剩餘時數不多，請盡早聯繫教練續約。`] : []),
+      ...(summary.remainingHours <= 1 && !periodJustEnded ? [`\n⚠️ 剩餘時數不多，請盡早聯繫教練續約。`] : []),
     ].join('\n');
     pushText(student.lineUserId, studentMsg).catch((err) =>
-      console.error('Push notification to student failed:', err)
+      console.error('Push checkin notification to student failed:', err)
     );
+
+    // 當期時數用完 → 發送繳費提醒
+    if (periodJustEnded) {
+      const reminderMsg = [
+        `💳 繳費提醒`,
+        ``,
+        `您的當期課程時數已全部使用完畢，`,
+        `請盡早聯繫教練續購下一期課程，以免影響上課權益。`,
+      ].join('\n');
+      pushText(student.lineUserId, reminderMsg).catch((err) =>
+        console.error('Push payment reminder to student failed:', err)
+      );
+    }
   }
 
   let balanceWarning = '';
-  if (summary.remainingHours <= 2) {
+  if (summary.remainingHours <= 1) {
     balanceWarning = `\n⚠️ ${student.name} 剩餘時數僅剩 ${formatHours(summary.remainingHours)}`;
   }
 
