@@ -16,7 +16,8 @@ export interface RenewalStudent {
   expectedRenewalHours: number;
   expectedRenewalAmount: number;
   paidAmount: number;
-  predictedRenewalDate: string; // yyyy-MM-dd (last class date / expiry)
+  expiryDate: string;           // yyyy-MM-dd (date hours run out / last class)
+  dueDate: string;              // yyyy-MM-dd (next class after expiry / when to pay)
   renewedDate: string | null;   // yyyy-MM-dd (payment date, null if not yet)
   isEstimated: boolean;
 }
@@ -47,13 +48,13 @@ export interface CoachMonthlyStats {
 function predictRenewalDate(
   remainingHours: number,
   futureEvents: CalendarEvent[],
-): { renewalDate: string; isEstimated: boolean } | null {
+): { expiryDate: string; renewalDate: string; isEstimated: boolean } | null {
   // No future events → skip student
   if (futureEvents.length === 0) return null;
 
   // Already exhausted → renewal is next future event
   if (remainingHours <= 0) {
-    return { renewalDate: futureEvents[0].date, isEstimated: false };
+    return { expiryDate: futureEvents[0].date, renewalDate: futureEvents[0].date, isEstimated: false };
   }
 
   // Accumulate event durations chronologically
@@ -64,11 +65,11 @@ function predictRenewalDate(
     hoursLeft -= duration;
 
     if (hoursLeft <= 0) {
-      // Renewal date = next event's date, or this event's date if it's the last
+      const expiryDate = event.date;
       const renewalDate = i + 1 < futureEvents.length
         ? futureEvents[i + 1].date
         : event.date;
-      return { renewalDate, isEstimated: false };
+      return { expiryDate, renewalDate, isEstimated: false };
     }
   }
 
@@ -83,7 +84,7 @@ function predictRenewalDate(
 function estimateRenewalDate(
   hoursLeft: number,
   events: CalendarEvent[],
-): { renewalDate: string; isEstimated: boolean } | null {
+): { expiryDate: string; renewalDate: string; isEstimated: boolean } | null {
   if (events.length < 2) {
     // Can't compute interval with < 2 events; use single event duration if available
     if (events.length === 1) {
@@ -95,7 +96,7 @@ function estimateRenewalDate(
       const lastDate = new Date(events[0].date + 'T00:00:00+08:00');
       lastDate.setDate(lastDate.getDate() + daysToAdd);
       const renewalDate = format(lastDate, 'yyyy-MM-dd');
-      return { renewalDate, isEstimated: true };
+      return { expiryDate: renewalDate, renewalDate, isEstimated: true };
     }
     return null;
   }
@@ -121,7 +122,7 @@ function estimateRenewalDate(
   const estimated = new Date(lastDate);
   estimated.setDate(estimated.getDate() + daysToAdd);
   const renewalDate = format(estimated, 'yyyy-MM-dd');
-  return { renewalDate, isEstimated: true };
+  return { expiryDate: renewalDate, renewalDate, isEstimated: true };
 }
 
 /**
@@ -130,7 +131,7 @@ function estimateRenewalDate(
 async function estimateFromCheckins(
   studentId: string,
   remainingHours: number,
-): Promise<{ renewalDate: string; isEstimated: boolean } | null> {
+): Promise<{ expiryDate: string; renewalDate: string; isEstimated: boolean } | null> {
   const checkins = await getCheckinsByStudent(studentId);
   if (checkins.length < 2) return null;
 
@@ -156,7 +157,8 @@ async function estimateFromCheckins(
 
   const now = new Date(todayDateString() + 'T00:00:00+08:00');
   now.setDate(now.getDate() + daysToAdd);
-  return { renewalDate: format(now, 'yyyy-MM-dd'), isEstimated: true };
+  const renewalDate = format(now, 'yyyy-MM-dd');
+  return { expiryDate: renewalDate, renewalDate, isEstimated: true };
 }
 
 export async function getCoachMonthlyStats(
@@ -249,6 +251,7 @@ export async function getCoachMonthlyStats(
   type RenewalCandidate = {
     student: typeof students[0];
     summary: typeof summaries[0];
+    expiryDate: string;
     renewalDate: string;
     isEstimated: boolean;
   };
@@ -271,6 +274,7 @@ export async function getCoachMonthlyStats(
       candidates.push({
         student,
         summary,
+        expiryDate: prediction.expiryDate,
         renewalDate: prediction.renewalDate,
         isEstimated: prediction.isEstimated,
       });
@@ -300,7 +304,8 @@ export async function getCoachMonthlyStats(
       expectedRenewalHours: expectedHours,
       expectedRenewalAmount: expectedAmount,
       paidAmount: Math.round(monthInfo?.paid ?? 0),
-      predictedRenewalDate: c.renewalDate,
+      expiryDate: c.expiryDate,
+      dueDate: c.renewalDate,
       renewedDate: monthInfo?.date ?? null,
       isEstimated: c.isEstimated,
     };
@@ -349,14 +354,15 @@ export async function getCoachMonthlyStats(
 
   for (const name of alreadyRenewedNames) {
     const info = monthPaymentsByStudent.get(name)!;
-    const expiryDate = lastCheckinByStudent.get(name) ?? info.date;
+    const lastClassDate = lastCheckinByStudent.get(name) ?? info.date;
     renewalStudents.push({
       name,
       remainingHours: summaryByName.get(name)?.remainingHours ?? 0,
       expectedRenewalHours: info.hours,
       expectedRenewalAmount: Math.round(info.total),
       paidAmount: Math.round(info.paid),
-      predictedRenewalDate: expiryDate,
+      expiryDate: lastClassDate,
+      dueDate: info.date,
       renewedDate: info.date,
       isEstimated: false,
     });

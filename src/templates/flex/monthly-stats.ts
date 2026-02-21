@@ -134,10 +134,10 @@ export function renewalStudentListCard(
       margin: bodyContents.length > 0 ? 'lg' : 'none',
     } as FlexComponent);
     bodyContents.push(
-      detailRow('到期日', fmtDate(s.predictedRenewalDate)),
+      detailRow('到期日', fmtDate(s.expiryDate)),
       isPaid
         ? detailRow('續約日', fmtDate(s.renewedDate!))
-        : detailRow('應繳日', fmtDate(s.predictedRenewalDate)),
+        : detailRow('應繳日', fmtDate(s.dueDate)),
       detailRow('續約時數', `${s.expectedRenewalHours} hr`),
       detailRow('金額', `$${s.expectedRenewalAmount.toLocaleString()}`),
     );
