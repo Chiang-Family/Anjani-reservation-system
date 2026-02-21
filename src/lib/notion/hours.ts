@@ -76,23 +76,24 @@ export function computeOverflowInfo(
 
   const purchasedMinutes = purchasedHours * 60;
   let cumulativeMinutes = 0;
-  let boundaryIndex = -1;
+  let firstUnpaidIndex = -1;
 
   for (let i = 0; i < sorted.length; i++) {
-    cumulativeMinutes += sorted[i].durationMinutes;
-    if (cumulativeMinutes > purchasedMinutes) {
-      boundaryIndex = i;
+    // 先檢查：開始這堂課之前，時數是否已用完
+    if (cumulativeMinutes >= purchasedMinutes) {
+      firstUnpaidIndex = i;
       break;
     }
+    cumulativeMinutes += sorted[i].durationMinutes;
   }
 
-  // 沒有超過或最後一堂剛好超過 → 沒有 overflow
-  if (boundaryIndex === -1 || boundaryIndex >= sorted.length - 1) {
+  // 沒有超過 → 沒有 overflow
+  if (firstUnpaidIndex === -1) {
     return { hasOverflow: false, overflowBoundaryDate: null, paidCheckins: sorted, unpaidCheckins: [] };
   }
 
-  const paidCheckins = sorted.slice(0, boundaryIndex + 1);
-  const unpaidCheckins = sorted.slice(boundaryIndex + 1);
+  const paidCheckins = sorted.slice(0, firstUnpaidIndex);
+  const unpaidCheckins = sorted.slice(firstUnpaidIndex);
 
   return {
     hasOverflow: true,
