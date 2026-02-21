@@ -27,7 +27,7 @@ export async function GET(request: Request) {
     if (fixDateId && fixDateVal) {
       await notion.pages.update({
         page_id: fixDateId,
-        properties: { 'Title': { title: [{ text: { content: fixDateVal } }] } },
+        properties: { '標題': { title: [{ text: { content: fixDateVal } }] } },
       });
       return NextResponse.json({ success: true, updated: { id: fixDateId, newTitle: fixDateVal } });
     }
