@@ -16,7 +16,8 @@ export interface RenewalStudent {
   expectedRenewalHours: number;
   expectedRenewalAmount: number;
   paidAmount: number;
-  predictedRenewalDate: string; // yyyy-MM-dd
+  predictedRenewalDate: string; // yyyy-MM-dd (last class date / expiry)
+  renewedDate: string | null;   // yyyy-MM-dd (payment date, null if not yet)
   isEstimated: boolean;
 }
 
@@ -292,14 +293,15 @@ export async function getCoachMonthlyStats(
     const expectedHours = latestPayment?.purchasedHours || c.summary.purchasedHours;
     const expectedPrice = latestPayment?.pricePerHour || 0;
     const expectedAmount = Math.round(expectedHours * expectedPrice);
-    const paid = monthPaymentsByStudent.get(c.student.name)?.paid ?? 0;
+    const monthInfo = monthPaymentsByStudent.get(c.student.name);
     return {
       name: c.student.name,
       remainingHours: c.summary.remainingHours,
       expectedRenewalHours: expectedHours,
       expectedRenewalAmount: expectedAmount,
-      paidAmount: Math.round(paid),
+      paidAmount: Math.round(monthInfo?.paid ?? 0),
       predictedRenewalDate: c.renewalDate,
+      renewedDate: monthInfo?.date ?? null,
       isEstimated: c.isEstimated,
     };
   });
@@ -319,6 +321,7 @@ export async function getCoachMonthlyStats(
         expectedRenewalAmount: Math.round(info.total),
         paidAmount: Math.round(info.paid),
         predictedRenewalDate: info.date,
+        renewedDate: info.date,
         isEstimated: false,
       });
     }

@@ -34,14 +34,11 @@ export function monthlyStatsCard(stats: CoachMonthlyStats): FlexBubble {
     );
     for (const s of forecast.students) {
       const isPaid = s.paidAmount >= s.expectedRenewalAmount;
-      const isPartial = s.paidAmount > 0 && !isPaid;
       const icon = isPaid ? '✅' : '❌';
-      const paidInfo = isPartial ? ` (已付$${s.paidAmount.toLocaleString()})` : '';
-      const warning = !isPaid && s.isEstimated ? ' ⚠️行事曆未排滿' : '';
-      const datePart = `${s.predictedRenewalDate.slice(5, 7)}/${s.predictedRenewalDate.slice(8, 10)}`;
-      const detail = isPaid
-        ? `${icon} ${s.name} 續${s.expectedRenewalHours}hr $${s.expectedRenewalAmount.toLocaleString()}`
-        : `${icon} ${s.name} 剩${s.remainingHours}hr → ${datePart} 續${s.expectedRenewalHours}hr $${s.expectedRenewalAmount.toLocaleString()}${paidInfo}${warning}`;
+      const fmtDate = (d: string) => `${d.slice(5, 7)}/${d.slice(8, 10)}`;
+      const expiryDate = fmtDate(s.predictedRenewalDate);
+      const renewDate = s.renewedDate ? fmtDate(s.renewedDate) : '未繳';
+      const detail = `${icon} ${s.name} 到期${expiryDate} 續約${renewDate} ${s.expectedRenewalHours}hr $${s.expectedRenewalAmount.toLocaleString()}`;
       bodyContents.push({
         type: 'text',
         text: detail,
