@@ -10,7 +10,7 @@ import { replyText, replyFlex, replyMessages } from '@/lib/line/reply';
 import { ACTION } from '@/lib/config/constants';
 import { TEXT } from '@/templates/text-messages';
 import { scheduleList } from '@/templates/flex/today-schedule';
-import { classHistoryCard } from '@/templates/flex/class-history';
+import { classHistoryCard, paymentPeriodSelector } from '@/templates/flex/class-history';
 import { formatDateLabel, todayDateString, addDays } from '@/lib/utils/date';
 import { menuQuickReply, coachQuickReply } from '@/templates/quick-reply';
 
@@ -105,17 +105,44 @@ export async function handlePostback(event: PostbackEvent): Promise<void> {
       }
 
       case ACTION.VIEW_STUDENT_HISTORY: {
+        // 顯示最新一期（最近繳費日之後）的上課紀錄
         const student = await getStudentById(id);
         if (!student) {
           await replyTextWithMenu(event.replyToken, '找不到該學員資料。');
           return;
         }
-        const [records, summary] = await Promise.all([
+        const [allCheckins, payments, summary] = await Promise.all([
           getCheckinsByStudent(id),
+          getPaymentsByStudent(id),
           getStudentHoursSummary(id),
         ]);
+        let records = allCheckins;
+        if (payments.length > 0) {
+          const latestPayDate = payments[0].createdAt;
+          records = allCheckins.filter((c) => c.classDate >= latestPayDate);
+        }
         await replyFlex(event.replyToken, `${student.name} 上課紀錄`,
           classHistoryCard(student.name, records, summary.remainingHours));
+        return;
+      }
+
+      case ACTION.VIEW_PAYMENT_HISTORY: {
+        // 顯示繳費期數選單，點選後查看該期上課紀錄
+        const student = await getStudentById(id);
+        if (!student) {
+          await replyTextWithMenu(event.replyToken, '找不到該學員資料。');
+          return;
+        }
+        const [payments, summary] = await Promise.all([
+          getPaymentsByStudent(id),
+          getStudentHoursSummary(id),
+        ]);
+        if (payments.length === 0) {
+          await replyTextWithMenu(event.replyToken, `${student.name} 目前沒有繳費紀錄。`);
+          return;
+        }
+        await replyFlex(event.replyToken, `${student.name} 繳費紀錄`,
+          paymentPeriodSelector(student.name, payments, id, summary.remainingHours));
         return;
       }
 
