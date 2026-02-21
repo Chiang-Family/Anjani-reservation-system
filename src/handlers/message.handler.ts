@@ -48,10 +48,14 @@ export async function handleMessage(event: MessageEvent): Promise<void> {
     if (collectState) {
       try {
         const result = await handleCollectAndAddStep(lineUserId, text);
-        const qr = coachQuickReply();
-        await replyMessages(event.replyToken, [
-          { type: 'text', text: result.message, quickReply: result.done ? { items: qr } : undefined },
-        ]);
+        if (result.flex) {
+          await replyFlex(event.replyToken, result.flex.title, result.flex.content);
+        } else {
+          const qr = coachQuickReply();
+          await replyMessages(event.replyToken, [
+            { type: 'text', text: result.message, quickReply: result.done ? { items: qr } : undefined },
+          ]);
+        }
       } catch (error) {
         console.error('Collect and add step error:', error);
         await replyText(event.replyToken, TEXT.ERROR);

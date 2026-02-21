@@ -88,11 +88,13 @@ export async function createPaymentRecord(params: {
   pricePerHour: number;
   status: '已繳費' | '部分繳費' | '未繳費';
   paidAmount?: number;
+  periodDate?: string;
 }): Promise<PaymentRecord> {
   const notion = getNotionClient();
   const now = nowTaipei();
-  const dateStr = format(now, 'yyyy-MM-dd');
-  const title = `${params.studentName} - ${dateStr}`;
+  const actualDateStr = format(now, 'yyyy-MM-dd');
+  const titleDateStr = params.periodDate ?? actualDateStr;
+  const title = `${params.studentName} - ${titleDateStr}`;
 
   const properties = {
     [PAYMENT_PROPS.TITLE]: {
@@ -117,7 +119,7 @@ export async function createPaymentRecord(params: {
       select: { name: params.status },
     },
     [PAYMENT_PROPS.CREATED_AT]: {
-      date: { start: dateStr },
+      date: { start: actualDateStr },
     },
   } as Parameters<typeof notion.pages.create>[0]['properties'];
 

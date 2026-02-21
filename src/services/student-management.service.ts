@@ -1,9 +1,11 @@
 import { createStudent, findStudentByName, bindStudentLineId, getStudentById } from '@/lib/notion/students';
 import { findCoachByLineId, findCoachByName, bindCoachLineId } from '@/lib/notion/coaches';
-import { createPaymentRecord, getLatestPaymentByStudent } from '@/lib/notion/payments';
+import { createPaymentRecord, getLatestPaymentByStudent, getPaymentsByStudent } from '@/lib/notion/payments';
 import { getStudentHoursSummary } from '@/lib/notion/hours';
 import { formatHours, formatDateTime, nowTaipei } from '@/lib/utils/date';
 import { pushText } from '@/lib/line/push';
+import { paymentPeriodChoiceCard } from '@/templates/flex/payment-confirm';
+import type { messagingApi } from '@line/bot-sdk';
 
 /** 開始新增學員流程（無狀態） */
 export async function startAddStudent(coachLineUserId: string): Promise<string> {
@@ -125,10 +127,16 @@ export async function startCollectAndAdd(studentId: string, lineUserId: string):
   ].join('\n');
 }
 
+export interface CollectStepResult {
+  message: string;
+  done: boolean;
+  flex?: { title: string; content: messagingApi.FlexBubble };
+}
+
 export async function handleCollectAndAddStep(
   lineUserId: string,
   input: string
-): Promise<{ message: string; done: boolean }> {
+): Promise<CollectStepResult> {
   const state = collectAndAddStates.get(lineUserId);
   if (!state) {
     return { message: '沒有進行中的收款流程。', done: true };
@@ -158,17 +166,65 @@ export async function handleCollectAndAddStep(
   const pricePerHour = state.pricePerHour!;
   const hours = Math.round((amount / pricePerHour) * 10) / 10;
 
+  // 查詢學員現有繳費紀錄
+  const existingPayments = await getPaymentsByStudent(state.studentId);
+
+  if (existingPayments.length > 0) {
+    // 有現有繳費紀錄 → 顯示期數選擇卡片
+    const grouped = new Map<string, number>();
+    for (const p of existingPayments) {
+      grouped.set(p.createdAt, (grouped.get(p.createdAt) ?? 0) + p.purchasedHours);
+    }
+    const periodDates = [...grouped.keys()].sort((a, b) => b.localeCompare(a));
+
+    collectAndAddStates.delete(lineUserId);
+
+    return {
+      message: '',
+      done: true,
+      flex: {
+        title: `${state.studentName} 收款確認`,
+        content: paymentPeriodChoiceCard(
+          state.studentName, state.studentId,
+          amount, pricePerHour, hours,
+          periodDates, grouped
+        ),
+      },
+    };
+  }
+
+  // 無繳費紀錄 → 直接建立
+  collectAndAddStates.delete(lineUserId);
+  return executeConfirmPayment(lineUserId, state.studentId, amount, pricePerHour, 'new');
+}
+
+/** 確認收款（由 postback 觸發或直接呼叫） */
+export async function executeConfirmPayment(
+  coachLineUserId: string,
+  studentId: string,
+  amount: number,
+  pricePerHour: number,
+  periodDate: string
+): Promise<{ message: string; done: boolean }> {
+  const student = await getStudentById(studentId);
+  if (!student) return { message: '找不到該學員資料。', done: true };
+
+  const coach = await findCoachByLineId(coachLineUserId);
+  const coachId = coach?.id ?? student.coachId ?? '';
+  const hours = Math.round((amount / pricePerHour) * 10) / 10;
+
   // 先取得目前剩餘時數（在 Notion 建立紀錄前）
-  const oldSummary = await getStudentHoursSummary(state.studentId);
+  const oldSummary = await getStudentHoursSummary(studentId);
 
   await createPaymentRecord({
-    studentId: state.studentId,
-    studentName: state.studentName,
-    coachId: state.coachId,
+    studentId,
+    studentName: student.name,
+    coachId,
     purchasedHours: hours,
     pricePerHour,
     status: '已繳費',
     paidAmount: amount,
+    periodDate: periodDate === 'new' ? undefined : periodDate,
   });
 
   // 直接計算新的剩餘時數，避免 Notion 尚未索引新紀錄的問題
@@ -178,8 +234,7 @@ export async function handleCollectAndAddStep(
   const summary = { ...oldSummary, remainingHours: newRemainingHours, purchasedHours: newPurchasedHours };
 
   // Push notification to student
-  const student = await getStudentById(state.studentId);
-  if (student?.lineUserId) {
+  if (student.lineUserId) {
     const studentMsg = [
       `💰 已收到繳費通知！`,
       `🕐 收款時間：${formatDateTime(nowTaipei())}`,
@@ -192,11 +247,9 @@ export async function handleCollectAndAddStep(
     );
   }
 
-  collectAndAddStates.delete(lineUserId);
-
   return {
     message: [
-      `✅ ${state.studentName} 收款成功！`,
+      `✅ ${student.name} 收款成功！`,
       '',
       `💰 收款金額：$${amount.toLocaleString()}`,
       `📊 加值時數：${hours} 小時（$${pricePerHour}/hr）`,

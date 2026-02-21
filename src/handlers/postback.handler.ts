@@ -1,7 +1,7 @@
 import type { PostbackEvent } from '@line/bot-sdk';
 import { coachCheckinForStudent } from '@/services/checkin.service';
 import { getCoachScheduleForDate } from '@/services/coach.service';
-import { startCollectAndAdd, executeAddStudent } from '@/services/student-management.service';
+import { startCollectAndAdd, executeAddStudent, executeConfirmPayment } from '@/services/student-management.service';
 import { getStudentById } from '@/lib/notion/students';
 import { getStudentOverflowInfo } from '@/lib/notion/hours';
 import { replyText, replyFlex, replyMessages } from '@/lib/line/reply';
@@ -86,6 +86,19 @@ export async function handlePostback(event: PostbackEvent): Promise<void> {
       case ACTION.COLLECT_AND_ADD: {
         const msg = await startCollectAndAdd(id, lineUserId);
         await replyText(event.replyToken, msg);
+        return;
+      }
+
+      case ACTION.CONFIRM_PAYMENT: {
+        // data = confirm_pay:{studentId}:{amount}:{pricePerHour}:{periodDate|new}
+        const amount = parseInt(extra, 10);
+        const pricePerHour = parseInt(parts[3], 10);
+        const periodDate = parts[4] || 'new';
+        const result = await executeConfirmPayment(lineUserId, id, amount, pricePerHour, periodDate);
+        const qr = coachQuickReply();
+        await replyMessages(event.replyToken, [
+          { type: 'text', text: result.message, quickReply: { items: qr } },
+        ]);
         return;
       }
 

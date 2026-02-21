@@ -23,6 +23,7 @@ export const ACTION = {
   VIEW_UNPAID_OVERFLOW: 'view_unpaid',
   VIEW_PAYMENT_HISTORY: 'view_pay_hist',
   VIEW_PAYMENT_DETAIL: 'view_pay_dtl',
+  CONFIRM_PAYMENT: 'confirm_pay',
 } as const;
 
 // 角色
