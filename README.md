@@ -22,11 +22,11 @@ handleEvent() 事件分發
     ┌──────────────────┐
     │   Service Layer   │
     ├──────────────────┤
-    │ checkin.service   │ ← 打卡（含 Calendar 時長計算）
-    │ coach.service     │ ← 教練課表
+    │ checkin.service   │ ← 打卡（含 Calendar 時長計算 + 繳費提醒）
+    │ coach.service     │ ← 教練課表（批次查詢 + 記憶體比對）
     │ calendar.service  │ ← Google Calendar 事件查詢
     │ stats.service     │ ← 月度統計 + 續約預測
-    │ student-mgmt      │ ← 新增學員/編輯/收款/綁定
+    │ student-mgmt      │ ← 新增學員/收款/補繳/綁定
     │ student.service   │ ← 身份識別
     └──────────────────┘
             │
@@ -67,7 +67,7 @@ handleEvent() 事件分發
 | 所屬教練 | relation → 教練 DB | |
 | 狀態 | select | 學員狀態 |
 
-> 購買時數和已上時數**不存在於學員 DB**，而是從繳費紀錄和打卡紀錄即時計算。
+> 購買時數和已上時數**不存在於學員 DB**，而是從繳費紀錄和打卡紀錄透過 FIFO 模型即時計算。
 
 ### 教練 (Coaches)
 
@@ -84,15 +84,17 @@ handleEvent() 事件分發
 
 | 欄位 | 類型 | 說明 |
 |------|------|------|
-| 標題 | title | 自動產生：`學員名 - yyyy-MM-dd` |
+| 標題 | title | 自動產生：`學員名 - yyyy-MM-dd`（日期為期別日期） |
 | 學員 | relation → 學員 DB | |
 | 教練 | relation → 教練 DB | |
 | 購買時數 | number | 此課程包的購買小時數（如 10） |
 | 每小時單價 | number | 單價（如 1500） |
 | 總金額 | **formula** | `購買時數 × 每小時單價`，自動計算 |
-| 已付金額 | number | 累計已收到的金額（預設 0） |
+| 已付金額 | number | 累計已收到的金額 |
 | 繳費狀態 | select | `未繳費` / `部分繳費` / `已繳費` |
-| 建立日期 | date | 紀錄建立時間 |
+| 建立日期 | date | 紀錄實際建立時間 |
+
+> 標題中的日期決定 FIFO 分期。補繳到現有期時，標題日期會設為該期日期（而非當天），讓 FIFO 自動歸入同一 bucket。
 
 ### 打卡紀錄 (Checkins)
 
@@ -104,25 +106,43 @@ handleEvent() 事件分發
 | 學員 | relation → 學員 DB | |
 | 教練 | relation → 教練 DB | |
 | 打卡時間 | date | 打卡動作時間戳，ISO 格式（含 +08:00 時區） |
-| 課程時段 | date (range) | 課程開始/結束時間，如 `2026-02-21T10:00+08:00` ~ `11:00`。時長從 end-start 計算 |
+| 課程時段 | date (range) | 課程開始/結束時間，時長從 end-start 計算 |
 
 ---
 
-## 剩餘時數計算邏輯
+## FIFO 時數消耗模型
 
-學員的剩餘時數由 `getStudentHoursSummary()` 即時計算：
+學員的剩餘時數由 `getStudentHoursSummary()` 即時計算，採用 **FIFO（先進先出）** 分桶模型：
+
+### 演算法
 
 ```
-購買時數 = sum(所有繳費紀錄.購買時數)
-已上時數 = sum(所有打卡紀錄.課程時段時長) ÷ 60    ← 從 date range 的 end-start 計算
-剩餘時數 = 購買時數 - 已上時數
+1. 將繳費按標題日期升序排列，同日期的多筆繳費合併為一個桶 (bucket)
+2. 將上課紀錄按日期升序排列
+3. 逐筆分配上課紀錄到桶：
+   - 若當前桶尚未耗盡 → 分配到此桶
+   - 若當前桶已耗盡 → 移到下一桶
+   - 若所有桶都耗盡 → 歸入 overflow（未繳費）
+4. 計算 summary：
+   - purchasedHours = 當前桶 + 未來桶的購買時數
+   - completedHours = 當前桶已消耗 + overflow 時數
+   - remainingHours = purchasedHours - completedHours
 ```
 
-此函式會平行查詢繳費紀錄和打卡紀錄（`Promise.all`），用於：
-- 學員查看個人資訊
-- 教練打卡後顯示剩餘
-- 學員管理列表
-- 月度統計的續約預測
+### 範例
+
+| 場景 | 購買 | 已上 | 剩餘 |
+|------|------|------|------|
+| 繳費 10hr → 上 7hr | 10 | 7 | 3 |
+| 繳費 10hr → 上 7hr → 再繳 10hr | 20 | 7 | 13 |
+| 上完桶1（10hr）→ 自動切桶2 | 10 | 0 | 10 |
+| 繳費 10hr → 上 12hr（超出） | 0 | 2 | -2 |
+| 再繳 10hr → overflow 抵扣 | 10 | 0 | 8 |
+
+### 快取
+
+- `getStudentHoursSummary` 有 1 分鐘 in-memory cache
+- 打卡和收款時會呼叫 `clearStudentHoursCache` 清除
 
 ---
 
@@ -132,22 +152,40 @@ handleEvent() 事件分發
 
 | 指令 | 功能 |
 |------|------|
-| `上課紀錄` | 查看最近 10 筆上課日期、時段、時長 |
-| `剩餘時數` | 查看購買/已上/剩餘時數 |
+| `當期上課紀錄` | 查看當期最近 10 筆上課紀錄（有 overflow 時顯示未繳費期） |
+| `繳費紀錄` | 依期數查看繳費與上課紀錄 |
+| `下週課程` | 查看下週排課時間 |
 | `選單` | 顯示功能選單 |
-
-學員首次加入 LINE 好友時，系統會要求輸入姓名進行綁定。
 
 ### 教練功能
 
 | 指令 | 功能 |
 |------|------|
-| `今日課表` | 從 Google Calendar 讀取今日排課，支援前後 7 天切換 |
-| `幫學員打卡` | 顯示今日未打卡的學員，點擊即可打卡 |
-| `學員管理` | 查看所有學員（時數/收款），提供加值、修改、收款按鈕 |
-| `新增學員` | 多步驟流程：姓名 → 購買時數 → 每小時單價 → 確認 |
-| `本月統計` | 本月排課數、總時數、已收/待收金額、續約預測 |
+| `每日課表` | 從 Google Calendar 讀取課表，支援日期選擇 |
+| `學員管理` | 查看所有學員的時數/狀態，提供收款/查看按鈕 |
+| `新增學員` | 多步驟流程：`姓名 時數 單價` → 確認 → 建立 |
+| `本月統計` | 本月排課數、已打卡數、營收、續約預測 |
 | `選單` | 顯示功能選單 |
+
+---
+
+## Postback Actions
+
+所有 Postback 資料格式：`ACTION:{param1}:{param2}:...`
+
+| Action | 參數 | 功能 |
+|--------|------|------|
+| `coach_checkin` | `{studentId}:{date?}` | 教練為學員打卡 |
+| `view_schedule` | `{date?}` | 查看指定日期課表 |
+| `checkin_schedule` | `{date?}` | 查看未打卡學員清單 |
+| `add_student_confirm` | `{name}:{hours}:{price}` | 確認新增學員 |
+| `collect_add` | `{studentId}` | 開始收款流程 |
+| `confirm_pay` | `{studentId}:{amount}:{price}:{date\|new}` | 確認收款（新期/補繳） |
+| `view_student_history` | `{studentId}` | 查看學員當期上課紀錄 |
+| `view_pay_hist` | `{studentId}` | 查看繳費期數選單 |
+| `view_class_pay` | `{studentId}:{bucketDate}` | 查看指定期的上課紀錄 |
+| `view_pay_dtl` | `{studentId}:{bucketDate}` | 查看指定期的繳費明細 |
+| `view_unpaid` | `{studentId}` | 查看未繳費期上課紀錄 |
 
 ---
 
@@ -156,10 +194,7 @@ handleEvent() 事件分發
 ### 1. 打卡流程
 
 ```
-教練點擊「打卡」按鈕
-    │
-    ▼
-postback: coach_checkin:{studentId}:{date?}
+教練點擊課表中的「打卡」按鈕
     │
     ▼
 coachCheckinForStudent()
@@ -167,60 +202,79 @@ coachCheckinForStudent()
     ├─ 檢查是否已打卡（同學員同日期不可重複）
     ├─ 從 Google Calendar 找到對應事件
     ├─ 計算課程時長 = endTime - startTime（分鐘）
-    ├─ 建立打卡紀錄（含時長）
-    ├─ 計算剩餘時數
+    ├─ 取得 FIFO 分桶資訊（打卡前）
+    ├─ 建立打卡紀錄
+    ├─ 手動計算新剩餘時數（避免 Notion eventual consistency）
     ├─ 推播通知學員：時段、時長、剩餘時數
-    │   └─ 剩餘 ≤ 2 小時：附加續約提醒
+    │   └─ 剩餘 ≤ 1 小時：附加提醒文字
+    ├─ 檢查當前桶是否剛好用完且無下一桶
+    │   └─ 是 → 額外推播繳費提醒
     └─ 回覆教練：打卡成功 + 剩餘時數
 ```
 
-### 2. 收款流程（支援分次付款）
+> 模糊比對的學員（名稱含包含關係但非完全匹配）不會顯示打卡按鈕，避免誤打卡。
+
+### 2. 收款流程（支援分期補繳）
 
 ```
-教練點擊「收款」按鈕
+教練點擊「收款/加值」按鈕
     │
     ▼
-startPaymentCollection()
-    ├─ 查詢最新一筆未繳清的繳費紀錄
-    ├─ 顯示待收金額（或已付/剩餘）
-    └─ 進入多步驟收款狀態
-
-教練輸入金額（或「全額」）
+startCollectAndAdd()
+    ├─ 有繳費歷史 → 顯示單價 + 剩餘時數，請輸入金額
+    └─ 無繳費歷史 → 請輸入單價 → 再輸入金額
     │
     ▼
-handlePaymentStep()
-    ├─ 驗證金額不超過剩餘待收
-    ├─ 累加已付金額
-    ├─ 自動判斷狀態：
-    │   ├─ 已付 ≥ 總金額 → 已繳費
-    │   └─ 否則 → 部分繳費
-    └─ 回覆確認訊息
-```
-
-### 3. 新增學員流程
-
-```
-教練輸入「新增學員」
+教練輸入金額
     │
     ▼
-startAddStudent()
-    ├─ Step 1: 請輸入學員姓名
-    ├─ Step 2: 請輸入購買時數（支援小數如 7.5）
-    ├─ Step 3: 請輸入每小時單價
-    ├─ Step 4: 確認資料
-    └─ 建立學員 + 第一筆繳費紀錄（未繳費）
+handleCollectAndAddStep()
+    ├─ 學員無繳費紀錄 → 直接建立 payment（今天日期）
+    └─ 學員有繳費紀錄 → 顯示 Flex 期數選擇卡片：
+        ├─ 「新的一期」 → 建立 payment（今天日期）
+        └─ 「補繳到 114-12-16（5hr）」 → 建立 payment（用該期日期）
+            │                              ↑ 已用罄的期數不顯示
+            ▼
+    confirm_pay postback → executeConfirmPayment()
+        ├─ 建立繳費紀錄（補繳時標題日期 = 期別日期）
+        ├─ 手動計算新剩餘時數
+        ├─ 推播繳費通知給學員
+        └─ 回覆教練收款成功
 ```
 
-### 4. 學員綁定流程
+### 3. 繳費紀錄查詢
+
+```
+學員/教練輸入「繳費紀錄」
+    │
+    ▼
+paymentPeriodSelector()
+    ├─ 按日期分組（同日期多筆合併為一期）
+    ├─ 每期一個按鈕：ROC日期 ｜ 合計時數 ｜ 合計金額
+    ├─ 有 overflow → 顯示紅色「未繳費（超出時數）」按鈕
+    │
+    ▼
+點擊某一期
+    ├─ 該期只有 1 筆繳費 → 直接顯示上課紀錄
+    └─ 該期有多筆繳費 → 顯示繳費明細卡片
+        ├─ 列出每筆繳費的時數與金額
+        ├─ 合計行
+        └─ 「查看上課紀錄」按鈕 → 顯示該期的上課紀錄
+```
+
+### 4. 新增學員流程
+
+```
+教練輸入「新增學員」→ 輸入「姓名 時數 單價」→ 確認卡片 → 建立學員 + 繳費紀錄
+```
+
+### 5. 學員綁定流程
 
 ```
 新使用者加入 LINE 好友 / 傳送任意訊息
-    │
-    ▼
-handleFollow() / handleMessage()
     ├─ 無法識別身份 → 啟動綁定流程
-    ├─ 提示輸入姓名
-    └─ 姓名比對成功 → 寫入 LINE User ID → 綁定完成
+    ├─ 輸入「教練 姓名」或「教練+姓名」→ 綁定為教練
+    └─ 輸入學員姓名 → 綁定為學員
 ```
 
 ---
@@ -229,42 +283,52 @@ handleFollow() / handleMessage()
 
 系統以**唯讀**方式讀取 Google Calendar，不會建立或修改事件。
 
-### 教練與 Calendar 的對應
+- **認證**：Service Account JWT，scope `calendar.readonly`
+- **時區**：所有時間使用 `+08:00`（Asia/Taipei）
+- **教練對應**：透過 Notion 的 `日曆顏色ID` 對應 Calendar 的 `colorId`
+- **學員對應**：Calendar 事件 `summary` 與 Notion 學員名稱比對（精確 → 模糊）
+- **課程時長**：從事件的 `startTime` / `endTime` 自動計算，不需手動輸入
+- **分頁處理**：月度查詢使用 `nextPageToken` + `maxResults: 2500` 確保不漏筆
 
-每位教練在 Notion 記錄一個 `日曆顏色ID`，對應 Google Calendar 事件的 `colorId`。系統透過 colorId 篩選出該教練的課表。
+---
 
-### 學員與事件的對應
+## 效能優化
 
-Calendar 事件的 `summary`（標題）包含學員姓名。系統以模糊比對方式匹配：
-- 完全相同：`summary === studentName`
-- 包含關係：`summary.includes(studentName)` 或 `studentName.includes(summary)`
+### 每日課表批次查詢
 
-### 課程時長計算
+原本每個 Calendar 事件逐一查詢 Notion（N+1 問題），已改為 3 個並行 API 呼叫 + 記憶體比對：
 
-打卡時從 Calendar 事件的 `startTime` 和 `endTime` 構建 date range 存入打卡紀錄的 `課程時段` 欄位（Notion date with start+end）。讀取時從 date range 自動計算時長（分鐘），不需要教練手動輸入。
+1. `getStudentsByCoachId` → 一次取得所有學員
+2. `getTodayEvents` → 一次取得行事曆事件
+3. `getCheckinsByDate` → 一次取得當日所有打卡
+
+然後在記憶體中用 `Map` / `Set` 比對，從 ~9 秒降到 ~1-2 秒。
+
+### Notion API Rate Limit
+
+- Notion API 限制約 3 req/s
+- `pMap` 工具預設 concurrency=1 + 350ms delay
+- 批次查詢 + 記憶體比對，減少 API 呼叫次數
+- `getStudentHoursSummary` 有 1 分鐘 cache
+
+### Eventual Consistency 處理
+
+Notion 新建紀錄後立即查詢可能找不到。解法：在建立紀錄**之前**先取得舊資料，建立後直接用已知數值計算新結果，不重新查詢。
 
 ---
 
 ## 多步驟對話狀態管理
 
-教練端有多個需要連續對話的功能（新增學員、加值時數、收款等）。系統使用 **記憶體內的 Map** 管理對話狀態：
+系統使用 **記憶體內的 Map** 管理多步驟對話狀態：
 
 ```typescript
-const addStudentStates = new Map<string, AddStudentState>();   // LINE User ID → 狀態
-const editStudentStates = new Map<string, EditStudentState>();
-const paymentStates = new Map<string, PaymentState>();
+const collectAndAddStates = new Map<string, CollectAndAddState>();
 const bindingStates = new Map<string, BindingState>();
 ```
 
-Message handler 在處理教練訊息時，依序檢查是否有進行中的流程：
+Message handler 在處理訊息時，優先檢查是否有進行中的流程。輸入「取消」可隨時退出。
 
-```
-editState → paymentState → addStudentState → 一般指令
-```
-
-輸入「取消」可隨時退出任何進行中的流程。
-
-> 注意：狀態存在記憶體中，Serverless 環境下（如 Vercel）實例可能被回收。適用於短時間內完成的對話流程。
+> Serverless 環境下實例可能被回收而導致狀態遺失。關鍵操作（如收款確認）使用 Postback data 攜帶完整參數，實現無狀態化。
 
 ---
 
@@ -283,17 +347,17 @@ src/
 │   └── follow.handler.ts             # 新好友處理
 ├── services/
 │   ├── calendar.service.ts           # Calendar 事件查詢 + 學員比對
-│   ├── checkin.service.ts            # 打卡邏輯
-│   ├── coach.service.ts              # 教練課表
-│   ├── stats.service.ts              # 月度統計
-│   ├── student-management.service.ts # 學員管理多步驟流程
+│   ├── checkin.service.ts            # 打卡邏輯 + 繳費提醒
+│   ├── coach.service.ts              # 教練課表（批次查詢優化）
+│   ├── stats.service.ts              # 月度統計 + 續約預測
+│   ├── student-management.service.ts # 新增學員/收款/補繳/綁定
 │   └── student.service.ts            # 身份識別
 ├── lib/
 │   ├── config/
 │   │   ├── constants.ts              # 關鍵字、Action、角色常數
 │   │   └── env.ts                    # 環境變數驗證（Zod）
 │   ├── google/
-│   │   └── calendar.ts               # Google Calendar API 客戶端
+│   │   └── calendar.ts               # Google Calendar API（含分頁）
 │   ├── line/
 │   │   ├── client.ts                 # LINE Messaging API 客戶端
 │   │   ├── reply.ts                  # 回覆工具函式
@@ -305,21 +369,24 @@ src/
 │   │   ├── types.ts                  # Notion 欄位名稱對應
 │   │   ├── students.ts               # 學員 CRUD
 │   │   ├── coaches.ts                # 教練 CRUD
-│   │   ├── checkins.ts               # 打卡紀錄 CRUD
+│   │   ├── checkins.ts               # 打卡紀錄 CRUD（含批次查詢）
 │   │   ├── payments.ts               # 繳費紀錄 CRUD
-│   │   └── hours.ts                  # 剩餘時數計算
+│   │   └── hours.ts                  # FIFO 時數計算 + 快取
 │   └── utils/
-│       └── date.ts                   # 日期/時區工具函式
+│       ├── date.ts                   # 日期/時區工具函式
+│       └── concurrency.ts            # pMap 並行控制
 ├── templates/
 │   ├── flex/
 │   │   ├── main-menu.ts              # 學員/教練主選單
 │   │   ├── today-schedule.ts         # 今日課表卡片
 │   │   ├── student-info.ts           # 學員資訊卡片
 │   │   ├── student-mgmt-list.ts      # 學員管理列表
-│   │   ├── class-history.ts          # 上課紀錄卡片
+│   │   ├── class-history.ts          # 上課紀錄 + 繳費期數選單 + 繳費明細
+│   │   ├── payment-confirm.ts        # 收款期數選擇（新期/補繳）
 │   │   ├── monthly-stats.ts          # 月度統計卡片
-│   │   ├── empty-state.ts            # 空狀態提示
-│   │   └── confirm-dialog.ts         # 確認對話框
+│   │   ├── student-schedule.ts       # 學員下週課程
+│   │   ├── add-student-confirm.ts    # 新增學員確認卡片
+│   │   └── empty-state.ts            # 空狀態提示
 │   ├── quick-reply.ts                # Quick Reply 按鈕
 │   └── text-messages.ts              # 固定文字訊息
 └── types/
@@ -350,6 +417,7 @@ GOOGLE_SERVICE_ACCOUNT_EMAIL=your_service_account@project.iam.gserviceaccount.co
 GOOGLE_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----\n"
 
 # Optional
+CRON_SECRET=your_cron_secret
 RICH_MENU_STUDENT_ID=richmenu-xxx
 RICH_MENU_COACH_ID=richmenu-xxx
 ```
