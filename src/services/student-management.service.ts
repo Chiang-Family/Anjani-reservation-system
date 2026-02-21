@@ -3,6 +3,7 @@ import { findCoachByLineId, findCoachByName, bindCoachLineId } from '@/lib/notio
 import { createPaymentRecord, getLatestPaymentByStudent } from '@/lib/notion/payments';
 import { getStudentHoursSummary } from '@/lib/notion/hours';
 import { formatHours } from '@/lib/utils/date';
+import { pushText } from '@/lib/line/push';
 
 /** 對話狀態管理（記憶體暫存） */
 interface AddStudentState {
@@ -227,6 +228,20 @@ export async function handleCollectAndAddStep(
   });
 
   const summary = await getStudentHoursSummary(state.studentId);
+
+  // Push notification to student
+  const student = await getStudentById(state.studentId);
+  if (student?.lineUserId) {
+    const studentMsg = [
+      `💰 已收到繳費通知！`,
+      `📊 加值時數：${hours} 小時`,
+      `📊 剩餘時數：${formatHours(summary.remainingHours)}`,
+    ].join('\n');
+    pushText(student.lineUserId, studentMsg).catch((err) =>
+      console.error('Push payment notification to student failed:', err)
+    );
+  }
+
   collectAndAddStates.delete(lineUserId);
 
   return {
