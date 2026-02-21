@@ -37,3 +37,10 @@ export async function pushMessages(
     messages,
   });
 }
+
+export async function showLoading(userId: string, seconds: number = 10): Promise<void> {
+  await getLineClient().showLoadingAnimation({
+    chatId: userId,
+    loadingSeconds: seconds,
+  });
+}

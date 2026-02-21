@@ -112,9 +112,9 @@ export async function GET() {
 
     // Find coach 鄒京甫
     const coaches = await getAllCoaches();
-    const coach = coaches.find((c) => c.name.includes('鄒京甫'));
+    const coach = coaches.find((c) => c.name === 'Andy' || c.name.includes('Andy'));
     if (!coach) {
-      return NextResponse.json({ success: false, error: '找不到教練 鄒京甫' }, { status: 404 });
+      return NextResponse.json({ success: false, error: '找不到教練 Andy' }, { status: 404 });
     }
 
     const notion = getNotionClient();
