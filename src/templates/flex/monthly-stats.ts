@@ -108,7 +108,7 @@ export function renewalStudentListCard(
   students: RenewalStudent[],
   headerColor: string,
 ): FlexBubble {
-  const fmtDate = (d: string) => `${d.slice(5, 7)}/${d.slice(8, 10)}`;
+  const fmtDate = (d: string) => d ? `${d.slice(5, 7)}/${d.slice(8, 10)}` : '待確認';
 
   const bodyContents: FlexComponent[] = [];
 
@@ -133,14 +133,23 @@ export function renewalStudentListCard(
       color: '#333333',
       margin: bodyContents.length > 0 ? 'lg' : 'none',
     } as FlexComponent);
-    bodyContents.push(
-      detailRow('到期日', fmtDate(s.expiryDate)),
-      isPaid
-        ? detailRow('續約日', fmtDate(s.renewedDate!))
-        : detailRow('應繳日', fmtDate(s.dueDate)),
-      detailRow('續約時數', `${s.expectedRenewalHours} hr`),
-      detailRow('金額', `$${s.expectedRenewalAmount.toLocaleString()}`),
-    );
+    if (s.insufficientData) {
+      bodyContents.push(
+        detailRow('剩餘時數', `${s.remainingHours} hr`),
+        detailRow('到期日', '行事曆不足'),
+        detailRow('續約時數', `${s.expectedRenewalHours} hr`),
+        detailRow('金額', `$${s.expectedRenewalAmount.toLocaleString()}`),
+      );
+    } else {
+      bodyContents.push(
+        detailRow('到期日', fmtDate(s.expiryDate)),
+        isPaid
+          ? detailRow('續約日', fmtDate(s.renewedDate!))
+          : detailRow('應繳日', fmtDate(s.dueDate)),
+        detailRow('續約時數', `${s.expectedRenewalHours} hr`),
+        detailRow('金額', `$${s.expectedRenewalAmount.toLocaleString()}`),
+      );
+    }
     if (!isPaid && s.paidAmount > 0) {
       bodyContents.push(detailRow('已付', `$${s.paidAmount.toLocaleString()}`));
     }
