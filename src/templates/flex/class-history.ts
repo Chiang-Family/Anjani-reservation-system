@@ -167,7 +167,7 @@ export function classHistoryCard(
 
 function toRocDate(dateStr: string): string {
   const [y, m, d] = dateStr.split('-');
-  return `${parseInt(y, 10) - 1911}/${parseInt(m, 10)}/${parseInt(d, 10)}`;
+  return `${parseInt(y, 10) - 1911}-${m}-${d}`;
 }
 
 export function paymentPeriodSelector(
