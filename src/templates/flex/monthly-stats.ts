@@ -6,11 +6,14 @@ type FlexComponent = messagingApi.FlexComponent;
 
 export function monthlyStatsCard(stats: CoachMonthlyStats): FlexBubble {
   const bodyContents: FlexComponent[] = [
-    statRow('📅 本月堂數', `${stats.scheduledClasses} 堂`),
-    statRow('💵 執行收入', `$${stats.executedRevenue.toLocaleString()}`),
+    statRow('📅 已預約堂數', `${stats.scheduledClasses} 堂`),
+    statRow('✅ 已打卡堂數', `${stats.checkedInClasses} 堂`),
     separator(),
-    statRow('💰 已收金額', `$${stats.collectedAmount.toLocaleString()}`),
-    statRow('📋 待收金額', `$${stats.pendingAmount.toLocaleString()}`),
+    statRow('💵 預計執行收入', `$${stats.estimatedRevenue.toLocaleString()}`),
+    statRow('🏷️ 已執行收入', `$${stats.executedRevenue.toLocaleString()}`),
+    separator(),
+    statRow('💰 實際收款', `$${stats.collectedAmount.toLocaleString()}`),
+    statRow('📋 待收款', `$${stats.pendingAmount.toLocaleString()}`),
   ];
 
   // Renewal forecast section
