@@ -131,6 +131,21 @@ export async function findCheckinToday(
   return extractCheckin(res.results[0] as unknown as Record<string, unknown>);
 }
 
+export async function getCheckinsByDate(classDate: string): Promise<CheckinRecord[]> {
+  const notion = getNotionClient();
+  const res = await notion.databases.query({
+    database_id: getEnv().NOTION_CHECKIN_DB_ID,
+    filter: {
+      property: CHECKIN_PROPS.TITLE,
+      title: { contains: classDate },
+    },
+  });
+
+  return res.results.map((page) =>
+    extractCheckin(page as unknown as Record<string, unknown>)
+  );
+}
+
 export async function getCheckinsByStudent(studentId: string): Promise<CheckinRecord[]> {
   const notion = getNotionClient();
   const res = await notion.databases.query({

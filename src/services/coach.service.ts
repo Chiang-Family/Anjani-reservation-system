@@ -1,9 +1,8 @@
 import { findCoachByLineId } from '@/lib/notion/coaches';
-import { findStudentByName } from '@/lib/notion/students';
-import { findCheckinToday } from '@/lib/notion/checkins';
-import { getTodayEventsForCoach, getEventsForDateByCoach } from './calendar.service';
+import { getStudentsByCoachId } from '@/lib/notion/students';
+import { getCheckinsByDate } from '@/lib/notion/checkins';
+import { getTodayEvents, getEventsForDate } from '@/lib/google/calendar';
 import { todayDateString } from '@/lib/utils/date';
-import { pMap } from '@/lib/utils/concurrency';
 import type { CalendarEvent } from '@/types';
 
 export interface ScheduleItem {
@@ -21,31 +20,44 @@ export async function getCoachScheduleForDate(
   if (!coach) return null;
 
   const targetDate = dateStr || todayDateString();
-  const events = dateStr
-    ? await getEventsForDateByCoach(coach.id, dateStr)
-    : await getTodayEventsForCoach(coach.id);
 
-  // Query all students + checkin status with limited concurrency
-  const items = await pMap(
-    events,
-    async (event) => {
-      const studentName = event.summary.trim();
-      const student = await findStudentByName(studentName);
-      let isCheckedIn = false;
+  // 並行取得：學員名單、行事曆事件、當日打卡紀錄（3 個 API 呼叫）
+  const [students, calendarEvents, checkins] = await Promise.all([
+    getStudentsByCoachId(coach.id),
+    dateStr ? getEventsForDate(dateStr) : getTodayEvents(),
+    getCheckinsByDate(targetDate),
+  ]);
 
-      if (student) {
-        const checkin = await findCheckinToday(student.id, targetDate);
-        isCheckedIn = !!checkin;
+  // 建立學員名稱→學員物件的查找表
+  const studentByName = new Map(students.map(s => [s.name, s]));
+
+  // 建立當日已打卡的學員 ID 集合
+  const checkedInStudentIds = new Set(checkins.map(c => c.studentId));
+
+  // 篩選該教練學員的事件，並在記憶體中比對打卡狀態
+  const items: ScheduleItem[] = [];
+  for (const event of calendarEvents) {
+    const summary = event.summary.trim();
+
+    // 精確比對 → 模糊比對
+    let matched = studentByName.get(summary);
+    if (!matched) {
+      for (const [name, student] of studentByName) {
+        if (summary.includes(name) || name.includes(summary)) {
+          matched = student;
+          break;
+        }
       }
-
-      return {
-        event,
-        studentName,
-        studentNotionId: student?.id,
-        isCheckedIn,
-      } as ScheduleItem;
     }
-  );
+    if (!matched) continue;
+
+    items.push({
+      event,
+      studentName: summary,
+      studentNotionId: matched.id,
+      isCheckedIn: checkedInStudentIds.has(matched.id),
+    });
+  }
 
   return { items, coachName: coach.name, date: targetDate };
 }
