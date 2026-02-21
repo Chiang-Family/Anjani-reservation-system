@@ -61,7 +61,7 @@ export function scheduleList(items: ScheduleItem[], dateStr: string, mode: Sched
         },
       ];
 
-      if (!item.isCheckedIn && item.studentNotionId) {
+      if (!item.isCheckedIn && item.studentNotionId && item.isExactMatch) {
         contents.push({
           type: 'button',
           action: {

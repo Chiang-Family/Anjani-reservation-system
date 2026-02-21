@@ -10,6 +10,7 @@ export interface ScheduleItem {
   studentName: string;
   studentNotionId?: string;
   isCheckedIn: boolean;
+  isExactMatch: boolean;
 }
 
 export async function getCoachScheduleForDate(
@@ -41,6 +42,7 @@ export async function getCoachScheduleForDate(
 
     // 精確比對 → 模糊比對
     let matched = studentByName.get(summary);
+    let isExactMatch = !!matched;
     if (!matched) {
       for (const [name, student] of studentByName) {
         if (summary.includes(name) || name.includes(summary)) {
@@ -56,6 +58,7 @@ export async function getCoachScheduleForDate(
       studentName: summary,
       studentNotionId: matched.id,
       isCheckedIn: checkedInStudentIds.has(matched.id),
+      isExactMatch,
     });
   }
 
