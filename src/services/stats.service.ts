@@ -25,8 +25,7 @@ export interface CoachMonthlyStats {
   year: number;
   month: number;
   scheduledClasses: number;
-  totalHours: number;
-  studentCount: number;
+  executedRevenue: number;
   collectedAmount: number;
   pendingAmount: number;
   renewalForecast: RenewalForecast;
@@ -50,20 +49,37 @@ export async function getCoachMonthlyStats(
   ]);
 
   const scheduledClasses = events.length;
-  let totalHours = 0;
+
+  // Build studentName → latest pricePerHour map (payments are sorted by createdAt desc)
+  const priceMap = new Map<string, number>();
+  for (const p of payments) {
+    if (!priceMap.has(p.studentName)) {
+      priceMap.set(p.studentName, p.pricePerHour);
+    }
+  }
+
+  // Executed revenue: each event's duration × student's hourly rate
+  let executedRevenue = 0;
   for (const event of events) {
     const [startH, startM] = event.startTime.split(':').map(Number);
     const [endH, endM] = event.endTime.split(':').map(Number);
-    const durationMinutes = (endH * 60 + endM) - (startH * 60 + startM);
-    totalHours += durationMinutes / 60;
+    const durationHours = ((endH * 60 + endM) - (startH * 60 + startM)) / 60;
+    const price = priceMap.get(event.summary.trim()) ?? 0;
+    executedRevenue += durationHours * price;
+  }
+  executedRevenue = Math.round(executedRevenue);
+
+  // Collected amount: only this month's payments
+  const monthPrefix = `${year}-${String(month).padStart(2, '0')}`;
+  let collectedAmount = 0;
+  for (const payment of payments) {
+    if (payment.createdAt.startsWith(monthPrefix)) {
+      collectedAmount += payment.paidAmount;
+    }
   }
 
-  let collectedAmount = 0;
-  let pendingAmount = 0;
-  for (const payment of payments) {
-    collectedAmount += payment.paidAmount;
-    pendingAmount += payment.totalAmount - payment.paidAmount;
-  }
+  // Pending amount: executed revenue minus collected
+  const pendingAmount = Math.max(0, executedRevenue - collectedAmount);
   const monthEnd = endOfMonth(now);
   const remainingWeeks = differenceInCalendarWeeks(monthEnd, now, { weekStartsOn: 1 }) + 1;
 
@@ -103,8 +119,7 @@ export async function getCoachMonthlyStats(
     year,
     month,
     scheduledClasses,
-    totalHours: Math.round(totalHours * 10) / 10,
-    studentCount: students.length,
+    executedRevenue,
     collectedAmount,
     pendingAmount,
     renewalForecast,

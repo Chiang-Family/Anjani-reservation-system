@@ -6,9 +6,8 @@ type FlexComponent = messagingApi.FlexComponent;
 
 export function monthlyStatsCard(stats: CoachMonthlyStats): FlexBubble {
   const bodyContents: FlexComponent[] = [
-    statRow('📅 本月排課', `${stats.scheduledClasses} 堂`),
-    statRow('⏱️ 總時數', `${stats.totalHours} 小時`),
-    statRow('👥 學員人數', `${stats.studentCount} 人`),
+    statRow('📅 本月堂數', `${stats.scheduledClasses} 堂`),
+    statRow('💵 執行收入', `$${stats.executedRevenue.toLocaleString()}`),
     separator(),
     statRow('💰 已收金額', `$${stats.collectedAmount.toLocaleString()}`),
     statRow('📋 待收金額', `$${stats.pendingAmount.toLocaleString()}`),
