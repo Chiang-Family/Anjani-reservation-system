@@ -189,7 +189,7 @@ async function handleCoachMessage(
         return;
       }
       const checkinCount = schedule.items.filter(i => i.studentNotionId).length;
-      await replyFlex(replyToken, `今日課表（共 ${checkinCount} 堂）`, scheduleList(schedule.items, today));
+      await replyFlex(replyToken, `每日課表（共 ${checkinCount} 堂）`, scheduleList(schedule.items, today));
       return;
     }
 

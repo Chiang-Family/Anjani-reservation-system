@@ -2,7 +2,7 @@
 export const KEYWORD = {
   CLASS_HISTORY: '上課紀錄',
   PAYMENT_HISTORY: '繳費紀錄',
-  TODAY_SCHEDULE: '今日課表',
+  TODAY_SCHEDULE: '每日課表',
   ADD_STUDENT: '新增學員',
   STUDENT_MGMT: '學員管理',
   MONTHLY_STATS: '本月統計',

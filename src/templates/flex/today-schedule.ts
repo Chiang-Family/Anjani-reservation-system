@@ -15,7 +15,7 @@ export function scheduleList(items: ScheduleItem[], dateStr: string, mode: Sched
 
   const headerText = mode === 'checkin'
     ? (isToday ? `打卡清單 ${dateLabel}` : `補打卡 ${dateLabel}`)
-    : (isToday ? `今日課表 ${dateLabel}` : `課表 ${dateLabel}`);
+    : (isToday ? `每日課表 ${dateLabel}` : `課表 ${dateLabel}`);
 
   const navAction = mode === 'checkin' ? ACTION.CHECKIN_SCHEDULE : ACTION.VIEW_SCHEDULE;
 
