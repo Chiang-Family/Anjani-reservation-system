@@ -3,15 +3,13 @@ import { coachCheckinForStudent } from '@/services/checkin.service';
 import { getCoachScheduleForDate } from '@/services/coach.service';
 import { startCollectAndAdd, executeAddStudent } from '@/services/student-management.service';
 import { getStudentById } from '@/lib/notion/students';
-import { getCheckinsByStudent } from '@/lib/notion/checkins';
 import { getStudentOverflowInfo } from '@/lib/notion/hours';
-import { getPaymentsByStudent } from '@/lib/notion/payments';
 import { replyText, replyFlex, replyMessages } from '@/lib/line/reply';
 import { ACTION } from '@/lib/config/constants';
 import { TEXT } from '@/templates/text-messages';
 import { scheduleList } from '@/templates/flex/today-schedule';
 import { classHistoryCard, paymentPeriodSelector } from '@/templates/flex/class-history';
-import { formatDateLabel, todayDateString, addDays } from '@/lib/utils/date';
+import { formatDateLabel, todayDateString } from '@/lib/utils/date';
 import { menuQuickReply, coachQuickReply } from '@/templates/quick-reply';
 
 function replyTextWithMenu(replyToken: string, text: string) {
@@ -94,11 +92,7 @@ export async function handlePostback(event: PostbackEvent): Promise<void> {
       case ACTION.VIEW_CLASS_BY_PAYMENT: {
         // data = view_class_pay:{studentId}:{paymentIndex}
         const paymentIndex = parseInt(extra, 10);
-        const [allPayments, allCheckins, { summary: hoursSummary, overflow }] = await Promise.all([
-          getPaymentsByStudent(id),
-          getCheckinsByStudent(id),
-          getStudentOverflowInfo(id),
-        ]);
+        const { summary: hoursSummary, payments: allPayments, buckets } = await getStudentOverflowInfo(id);
         if (isNaN(paymentIndex) || paymentIndex >= allPayments.length) {
           await replyTextWithMenu(event.replyToken, '找不到該繳費紀錄。');
           return;
@@ -107,23 +101,13 @@ export async function handlePostback(event: PostbackEvent): Promise<void> {
         const student = await getStudentById(id);
         const studentName = student?.name ?? '';
 
-        // 最新一期且有 overflow → 用 paidCheckins 精確分界
-        if (paymentIndex === 0 && overflow.hasOverflow) {
-          const paidDesc = [...overflow.paidCheckins].reverse();
-          await replyFlex(event.replyToken, `${studentName} 上課紀錄`,
-            classHistoryCard(studentName, paidDesc, hoursSummary.remainingHours));
-          return;
-        }
-
-        const fromDate = allPayments[paymentIndex].createdAt;
-        const toDate = paymentIndex === 0
-          ? todayDateString()
-          : addDays(allPayments[paymentIndex - 1].createdAt, -1);
-        const filtered = allCheckins.filter(
-          (c) => c.classDate >= fromDate && c.classDate <= toDate
-        );
+        // payments 降序，buckets 升序 → 用繳費日期對應桶
+        const payment = allPayments[paymentIndex];
+        const bucket = buckets.find(b => b.paymentDate === payment.createdAt);
+        const bucketCheckins = bucket?.checkins ?? [];
+        const checkinsDesc = [...bucketCheckins].reverse();
         await replyFlex(event.replyToken, `${studentName} 上課紀錄`,
-          classHistoryCard(studentName, filtered, hoursSummary.remainingHours));
+          classHistoryCard(studentName, checkinsDesc, hoursSummary.remainingHours));
         return;
       }
 
