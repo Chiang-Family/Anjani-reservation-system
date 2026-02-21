@@ -7,6 +7,7 @@ export const KEYWORD = {
   STUDENT_MGMT: '學員管理',
   MONTHLY_STATS: '本月統計',
 
+  NEXT_WEEK: '下週課程',
   MENU: '選單',
 } as const;
 

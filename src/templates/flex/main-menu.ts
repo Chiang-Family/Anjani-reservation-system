@@ -60,6 +60,7 @@ export function studentMenu(name: string): FlexBubble {
       type: 'box',
       layout: 'vertical',
       contents: [
+        menuButton(KEYWORD.NEXT_WEEK, '#27ae60'),
         menuButton(KEYWORD.CLASS_HISTORY, '#4A90D9'),
         menuButton(KEYWORD.PAYMENT_HISTORY),
       ] as messagingApi.FlexComponent[],

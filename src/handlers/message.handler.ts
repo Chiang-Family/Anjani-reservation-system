@@ -27,7 +27,9 @@ import { studentInfoCard } from '@/templates/flex/student-info';
 import { paymentHistoryCard } from '@/templates/flex/payment-history';
 import { studentMenu, coachMenu } from '@/templates/flex/main-menu';
 import { scheduleList } from '@/templates/flex/today-schedule';
-import { todayDateString } from '@/lib/utils/date';
+import { getEventsForDateRange } from '@/lib/google/calendar';
+import { todayDateString, addDays, nowTaipei } from '@/lib/utils/date';
+import { studentScheduleCard } from '@/templates/flex/student-schedule';
 import { monthlyStatsCard } from '@/templates/flex/monthly-stats';
 import { studentMgmtList } from '@/templates/flex/student-mgmt-list';
 import { classHistoryCard } from '@/templates/flex/class-history';
@@ -167,6 +169,27 @@ async function handleStudentMessage(
       } else {
         await replyFlex(replyToken, '繳費紀錄', paymentHistoryCard(student.name, payments, summary));
       }
+      return;
+    }
+
+    case KEYWORD.NEXT_WEEK: {
+      const student = await findStudentByLineId(lineUserId);
+      if (!student) {
+        const qr = studentQuickReply();
+        await replyMessages(replyToken, [
+          { type: 'text', text: TEXT.UNKNOWN_USER, quickReply: { items: qr } },
+        ]);
+        return;
+      }
+      const now = nowTaipei();
+      const dayOfWeek = now.getDay(); // 0=Sun
+      const daysUntilNextMon = dayOfWeek === 0 ? 1 : 8 - dayOfWeek;
+      const today = todayDateString();
+      const nextMon = addDays(today, daysUntilNextMon);
+      const nextSun = addDays(nextMon, 6);
+      const events = await getEventsForDateRange(nextMon, nextSun);
+      const matched = events.filter((e) => e.summary.trim() === student.name);
+      await replyFlex(replyToken, '下週課程', studentScheduleCard(student.name, matched, nextMon, nextSun));
       return;
     }
 

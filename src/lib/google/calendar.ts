@@ -124,6 +124,29 @@ export async function getMonthEvents(year: number, month: number): Promise<Calen
   return events;
 }
 
+export async function getEventsForDateRange(fromDate: string, toDate: string): Promise<CalendarEvent[]> {
+  const calendar = getCalendarClient();
+  const env = getEnv();
+
+  const timeMin = `${fromDate}T00:00:00+08:00`;
+  const timeMax = `${toDate}T23:59:59+08:00`;
+
+  const res = await calendar.events.list({
+    calendarId: env.GOOGLE_CALENDAR_ID,
+    timeMin,
+    timeMax,
+    singleEvents: true,
+    orderBy: 'startTime',
+  });
+
+  const events: CalendarEvent[] = [];
+  for (const item of res.data.items || []) {
+    const ev = toCalendarEvent(item);
+    if (ev) events.push(ev);
+  }
+  return events;
+}
+
 export function getEventsByColorId(events: CalendarEvent[], colorId: number): CalendarEvent[] {
   const filtered = events.filter((e) => e.colorId === String(colorId));
   console.log(`[Calendar] Filter by colorId=${colorId}: ${filtered.length}/${events.length} events matched`);
