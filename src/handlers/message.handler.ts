@@ -188,7 +188,8 @@ async function handleCoachMessage(
         ]);
         return;
       }
-      await replyFlex(replyToken, `今日課表（共 ${schedule.items.length} 堂）`, scheduleList(schedule.items, today));
+      const checkinCount = schedule.items.filter(i => i.studentNotionId).length;
+      await replyFlex(replyToken, `今日課表（共 ${checkinCount} 堂）`, scheduleList(schedule.items, today));
       return;
     }
 
