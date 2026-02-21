@@ -10,47 +10,67 @@ export function classHistoryCard(
   records: CheckinRecord[],
   remainingHours: number
 ): FlexBubble {
-  const recent = records.slice(0, 10);
+  const totalCount = records.length;
+
+  // records 目前是從近到遠 (newest first)
+  // 加上序號（i=0 是最新一筆，對應總數 totalCount）
+  const withSequence = records.map((r, i) => ({
+    ...r,
+    sequence: totalCount - i
+  }));
+
+  // 取最近 10 筆，並反轉陣列（變成由遠至近，如 "第 19 堂", "第 20 堂", "第 21 堂" 往下排）
+  const recent = withSequence.slice(0, 10).reverse();
 
   const rows: FlexComponent[] = recent.length > 0
     ? recent.map((r) => ({
-        type: 'box',
-        layout: 'horizontal',
-        contents: [
-          {
-            type: 'text',
-            text: r.classDate,
-            size: 'sm',
-            color: '#555555',
-            flex: 4,
-          },
-          {
-            type: 'text',
-            text: r.classTimeSlot,
-            size: 'sm',
-            color: '#333333',
-            flex: 4,
-          },
-          {
-            type: 'text',
-            text: r.durationMinutes > 0 ? `${r.durationMinutes}分` : '-',
-            size: 'sm',
-            color: '#333333',
-            flex: 2,
-            align: 'end',
-          },
-        ],
-        margin: 'sm',
-      } as FlexComponent))
-    : [
+      type: 'box',
+      layout: 'horizontal',
+      contents: [
         {
           type: 'text',
-          text: '目前沒有上課紀錄。',
+          text: `#${r.sequence}`,
           size: 'sm',
-          color: '#999999',
-          margin: 'md',
-        } as FlexComponent,
-      ];
+          color: '#888888',
+          flex: 2,
+        },
+        {
+          type: 'text',
+          text: (() => {
+            const [y, m, d] = r.classDate.split('-');
+            return `${parseInt(y, 10) - 1911}-${m}-${d}`;
+          })(),
+          size: 'sm',
+          color: '#555555',
+          flex: 3,
+        },
+        {
+          type: 'text',
+          text: r.classTimeSlot,
+          size: 'sm',
+          color: '#333333',
+          flex: 4,
+        },
+        {
+          type: 'text',
+          text: r.durationMinutes > 0 ? `${r.durationMinutes}分` : '-',
+          size: 'sm',
+          color: '#333333',
+          flex: 2,
+          align: 'end',
+        },
+      ],
+      margin: 'sm',
+    } as FlexComponent))
+    : [
+      {
+        type: 'text',
+        text: '目前沒有上課紀錄。',
+        size: 'sm',
+        color: '#999999',
+        margin: 'md',
+      } as FlexComponent,
+    ];
 
   return {
     type: 'bubble',
@@ -87,11 +107,19 @@ export function classHistoryCard(
           contents: [
             {
               type: 'text',
+              text: '堂數',
+              size: 'xs',
+              color: '#999999',
+              weight: 'bold',
+              flex: 2,
+            },
+            {
+              type: 'text',
               text: '日期',
               size: 'xs',
               color: '#999999',
               weight: 'bold',
-              flex: 4,
+              flex: 3,
             },
             {
               type: 'text',
@@ -119,15 +147,15 @@ export function classHistoryCard(
         ...rows,
         ...(records.length > 10
           ? [
-              {
-                type: 'text',
-                text: `⋯ 還有 ${records.length - 10} 筆紀錄`,
-                size: 'xs',
-                color: '#999999',
-                margin: 'md',
-                align: 'center',
-              } as FlexComponent,
-            ]
+            {
+              type: 'text',
+              text: `⋯ 還有 ${records.length - 10} 筆紀錄`,
+              size: 'xs',
+              color: '#999999',
+              margin: 'md',
+              align: 'center',
+            } as FlexComponent,
+          ]
           : []),
       ],
       paddingAll: '16px',
