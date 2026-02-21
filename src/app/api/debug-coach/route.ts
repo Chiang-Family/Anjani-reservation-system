@@ -1,25 +1,25 @@
 import { NextResponse } from 'next/server';
-import { getAllCoaches } from '@/lib/notion/coaches';
-import { getAllStudents } from '@/lib/notion/students';
+import { getNotionClient } from '@/lib/notion/client';
+import { getEnv } from '@/lib/config/env';
 
 export async function GET() {
   try {
-    const [coaches, students] = await Promise.all([
-      getAllCoaches(),
-      getAllStudents(),
-    ]);
-    return NextResponse.json({
-      coaches: coaches.map((c) => ({
-        name: c.name,
-        lineUrl: c.lineUrl,
-        hasLineUrl: !!c.lineUrl,
-      })),
-      sampleStudents: students.slice(0, 3).map((s) => ({
-        name: s.name,
-        coachId: s.coachId,
-        hasCoachId: !!s.coachId,
-      })),
+    const notion = getNotionClient();
+    const res = await notion.databases.query({
+      database_id: getEnv().NOTION_COACHES_DB_ID,
+      page_size: 3,
     });
+    const raw = res.results.map((page: unknown) => {
+      const p = page as { properties: Record<string, unknown> };
+      return {
+        props: Object.entries(p.properties).map(([key, val]) => ({
+          key,
+          type: (val as Record<string, unknown>).type,
+          value: val,
+        })),
+      };
+    });
+    return NextResponse.json(raw);
   } catch (error) {
     return NextResponse.json({ error: String(error) }, { status: 500 });
   }
