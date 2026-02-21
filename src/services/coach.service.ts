@@ -24,27 +24,26 @@ export async function getCoachScheduleForDate(
     ? await getEventsForDateByCoach(coach.id, dateStr)
     : await getTodayEventsForCoach(coach.id);
 
-  const items: ScheduleItem[] = [];
+  // Query all students + checkin status in parallel (major speedup)
+  const items = await Promise.all(
+    events.map(async (event) => {
+      const studentName = event.summary.trim();
+      const student = await findStudentByName(studentName);
+      let isCheckedIn = false;
 
-  for (const event of events) {
-    const studentName = event.summary.trim();
-    const student = await findStudentByName(studentName);
-    let isCheckedIn = false;
-
-    if (student) {
-      const checkin = await findCheckinToday(student.id, targetDate);
-      if (checkin) {
-        isCheckedIn = true;
+      if (student) {
+        const checkin = await findCheckinToday(student.id, targetDate);
+        isCheckedIn = !!checkin;
       }
-    }
 
-    items.push({
-      event,
-      studentName,
-      studentNotionId: student?.id,
-      isCheckedIn,
-    });
-  }
+      return {
+        event,
+        studentName,
+        studentNotionId: student?.id,
+        isCheckedIn,
+      } as ScheduleItem;
+    })
+  );
 
   return { items, coachName: coach.name, date: targetDate };
 }

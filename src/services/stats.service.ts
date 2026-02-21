@@ -41,10 +41,14 @@ export async function getCoachMonthlyStats(
   const year = now.getFullYear();
   const month = now.getMonth() + 1;
 
-  // Calendar events this month
-  const events = await getMonthEventsForCoach(coach.id, year, month);
-  const scheduledClasses = events.length;
+  // Query calendar, payments, students in parallel
+  const [events, payments, students] = await Promise.all([
+    getMonthEventsForCoach(coach.id, year, month),
+    getPaymentsByCoachStudents(coach.id),
+    getStudentsByCoachId(coach.id),
+  ]);
 
+  const scheduledClasses = events.length;
   let totalHours = 0;
   for (const event of events) {
     const [startH, startM] = event.startTime.split(':').map(Number);
@@ -53,17 +57,12 @@ export async function getCoachMonthlyStats(
     totalHours += durationMinutes / 60;
   }
 
-  // Payment records for this coach's students
-  const payments = await getPaymentsByCoachStudents(coach.id);
   let collectedAmount = 0;
   let pendingAmount = 0;
   for (const payment of payments) {
     collectedAmount += payment.paidAmount;
     pendingAmount += payment.totalAmount - payment.paidAmount;
   }
-
-  // Students & renewal forecast
-  const students = await getStudentsByCoachId(coach.id);
   const monthEnd = endOfMonth(now);
   const remainingWeeks = differenceInCalendarWeeks(monthEnd, now, { weekStartsOn: 1 }) + 1;
 
@@ -71,24 +70,30 @@ export async function getCoachMonthlyStats(
     students.map(s => getStudentHoursSummary(s.id))
   );
 
-  const renewalStudents: RenewalStudent[] = [];
+  // Find candidates needing renewal, then fetch their latest payments in parallel
+  const renewalCandidates: { student: typeof students[0]; summary: typeof summaries[0] }[] = [];
   for (let i = 0; i < students.length; i++) {
-    const student = students[i];
-    const summary = summaries[i];
-    const remaining = summary.remainingHours;
-    if (remaining <= 0) continue;
-    if (remaining <= remainingWeeks * 1.5) {
-      const latestPayment = await getLatestPaymentByStudent(student.id);
-      const expectedHours = latestPayment?.purchasedHours || summary.purchasedHours;
-      const expectedPrice = latestPayment?.pricePerHour || 0;
-      renewalStudents.push({
-        name: student.name,
-        remainingHours: remaining,
-        expectedRenewalHours: expectedHours,
-        expectedRenewalAmount: expectedHours * expectedPrice,
-      });
+    const remaining = summaries[i].remainingHours;
+    if (remaining > 0 && remaining <= remainingWeeks * 1.5) {
+      renewalCandidates.push({ student: students[i], summary: summaries[i] });
     }
   }
+
+  const latestPayments = await Promise.all(
+    renewalCandidates.map(c => getLatestPaymentByStudent(c.student.id))
+  );
+
+  const renewalStudents: RenewalStudent[] = renewalCandidates.map((c, i) => {
+    const latestPayment = latestPayments[i];
+    const expectedHours = latestPayment?.purchasedHours || c.summary.purchasedHours;
+    const expectedPrice = latestPayment?.pricePerHour || 0;
+    return {
+      name: c.student.name,
+      remainingHours: c.summary.remainingHours,
+      expectedRenewalHours: expectedHours,
+      expectedRenewalAmount: expectedHours * expectedPrice,
+    };
+  });
 
   const renewalForecast: RenewalForecast = {
     studentCount: renewalStudents.length,
