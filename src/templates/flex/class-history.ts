@@ -42,21 +42,21 @@ export function classHistoryCard(
           })(),
           size: 'sm',
           color: '#555555',
-          flex: 3,
+          flex: 4, // 增加比例，拉開與時段的距離
         },
         {
           type: 'text',
           text: r.classTimeSlot,
           size: 'sm',
           color: '#333333',
-          flex: 5, // 增大：日期與時段拉開
+          flex: 4, // 相對應縮小比例
         },
         {
           type: 'text',
           text: r.durationMinutes > 0 ? `${r.durationMinutes}分` : '-',
           size: 'sm',
           color: '#333333',
-          flex: 2, // 維持或微調：時段與時長靠近
+          flex: 2,
           align: 'end',
         },
       ],
@@ -119,7 +119,7 @@ export function classHistoryCard(
               size: 'xs',
               color: '#999999',
               weight: 'bold',
-              flex: 3, // 對齊資料列
+              flex: 4, // 與資料列一致
             },
             {
               type: 'text',
@@ -127,7 +127,7 @@ export function classHistoryCard(
               size: 'xs',
               color: '#999999',
               weight: 'bold',
-              flex: 5, // 對齊資料列
+              flex: 4, // 與資料列一致
             },
             {
               type: 'text',
@@ -135,7 +135,7 @@ export function classHistoryCard(
               size: 'xs',
               color: '#999999',
               weight: 'bold',
-              flex: 2, // 對齊資料列
+              flex: 2,
               align: 'end',
             },
           ],
