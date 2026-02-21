@@ -1,7 +1,7 @@
 import { createStudent, findStudentByName, bindStudentLineId, getStudentById } from '@/lib/notion/students';
 import { findCoachByLineId, findCoachByName, bindCoachLineId } from '@/lib/notion/coaches';
-import { createPaymentRecord, getLatestPaymentByStudent, getPaymentsByStudent } from '@/lib/notion/payments';
-import { getStudentHoursSummary } from '@/lib/notion/hours';
+import { createPaymentRecord, getLatestPaymentByStudent } from '@/lib/notion/payments';
+import { getStudentHoursSummary, getStudentOverflowInfo } from '@/lib/notion/hours';
 import { formatHours, formatDateTime, nowTaipei } from '@/lib/utils/date';
 import { pushText } from '@/lib/line/push';
 import { paymentPeriodChoiceCard } from '@/templates/flex/payment-confirm';
@@ -166,14 +166,17 @@ export async function handleCollectAndAddStep(
   const pricePerHour = state.pricePerHour!;
   const hours = Math.round((amount / pricePerHour) * 10) / 10;
 
-  // 查詢學員現有繳費紀錄
-  const existingPayments = await getPaymentsByStudent(state.studentId);
+  // 查詢學員繳費紀錄 + FIFO 分桶資訊
+  const { payments: existingPayments, buckets } = await getStudentOverflowInfo(state.studentId);
 
   if (existingPayments.length > 0) {
-    // 有現有繳費紀錄 → 顯示期數選擇卡片
+    // 過濾掉已用罄的期數，只顯示尚有剩餘的期可補繳
     const grouped = new Map<string, number>();
-    for (const p of existingPayments) {
-      grouped.set(p.createdAt, (grouped.get(p.createdAt) ?? 0) + p.purchasedHours);
+    for (const b of buckets) {
+      const consumed = b.checkins.reduce((sum, c) => sum + c.durationMinutes, 0);
+      if (consumed < b.purchasedHours * 60) {
+        grouped.set(b.paymentDate, b.purchasedHours);
+      }
     }
     const periodDates = [...grouped.keys()].sort((a, b) => b.localeCompare(a));
 
