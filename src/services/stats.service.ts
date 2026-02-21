@@ -222,6 +222,7 @@ export async function getCoachMonthlyStats(
       collectedAmount += payment.paidAmount;
     }
   }
+  collectedAmount = Math.round(collectedAmount);
 
   // --- 待收款: calendar-based renewal prediction ---
   // Group future events by student name
@@ -284,7 +285,7 @@ export async function getCoachMonthlyStats(
     const latestPayment = latestPayments[i];
     const expectedHours = latestPayment?.purchasedHours || c.summary.purchasedHours;
     const expectedPrice = latestPayment?.pricePerHour || 0;
-    const expectedAmount = expectedHours * expectedPrice;
+    const expectedAmount = Math.round(expectedHours * expectedPrice);
     return {
       name: c.student.name,
       remainingHours: c.summary.remainingHours,
@@ -302,7 +303,7 @@ export async function getCoachMonthlyStats(
   };
 
   // 待收款 = 預估續約金額 - 實際收款
-  const pendingAmount = Math.max(0, renewalForecast.expectedAmount - collectedAmount);
+  const pendingAmount = Math.round(Math.max(0, renewalForecast.expectedAmount - collectedAmount));
 
   return {
     coachName: coach.name,
