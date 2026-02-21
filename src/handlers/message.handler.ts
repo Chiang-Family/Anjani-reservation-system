@@ -5,9 +5,7 @@ import { getCoachMonthlyStats } from '@/services/stats.service';
 import { getStudentsByCoachId } from '@/lib/notion/students';
 import { findCoachByLineId, getCoachById } from '@/lib/notion/coaches';
 import { findStudentByLineId } from '@/lib/notion/students';
-import { getCheckinsByStudent } from '@/lib/notion/checkins';
-import { getStudentHoursSummary } from '@/lib/notion/hours';
-import { getPaymentsByStudent } from '@/lib/notion/payments';
+import { getStudentHoursSummary, getStudentOverflowInfo } from '@/lib/notion/hours';
 import { paymentPeriodSelector } from '@/templates/flex/class-history';
 import {
   startAddStudent,
@@ -123,17 +121,14 @@ async function handleStudentMessage(
         ]);
         return;
       }
-      const [allCheckins, payments, summary] = await Promise.all([
-        getCheckinsByStudent(student.id),
-        getPaymentsByStudent(student.id),
-        getStudentHoursSummary(student.id),
-      ]);
-      let records = allCheckins;
-      if (payments.length > 0) {
-        const latestPayDate = payments[0].createdAt;
-        records = allCheckins.filter((c) => c.classDate >= latestPayDate);
+      const { summary, overflow } = await getStudentOverflowInfo(student.id);
+      if (overflow.hasOverflow) {
+        const unpaidDesc = [...overflow.unpaidCheckins].reverse();
+        await replyFlex(replyToken, '當期上課紀錄', classHistoryCard(student.name, unpaidDesc, summary.remainingHours, '未繳費'));
+      } else {
+        const paidDesc = [...overflow.paidCheckins].reverse();
+        await replyFlex(replyToken, '當期上課紀錄', classHistoryCard(student.name, paidDesc, summary.remainingHours));
       }
-      await replyFlex(replyToken, '當期上課紀錄', classHistoryCard(student.name, records, summary.remainingHours));
       return;
     }
 
@@ -146,12 +141,9 @@ async function handleStudentMessage(
         ]);
         return;
       }
-      const [payments, summary] = await Promise.all([
-        getPaymentsByStudent(student.id),
-        getStudentHoursSummary(student.id),
-      ]);
+      const { summary, overflow, payments } = await getStudentOverflowInfo(student.id);
       if (payments.length > 0) {
-        await replyFlex(replyToken, '繳費紀錄', paymentPeriodSelector(student.name, payments, student.id, summary.remainingHours));
+        await replyFlex(replyToken, '繳費紀錄', paymentPeriodSelector(student.name, payments, student.id, summary.remainingHours, overflow.hasOverflow));
       } else {
         await replyFlex(replyToken, '繳費紀錄', paymentHistoryCard(student.name, payments, summary));
       }

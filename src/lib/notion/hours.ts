@@ -1,6 +1,6 @@
 import { getPaymentsByStudent } from './payments';
 import { getCheckinsByStudent } from './checkins';
-import type { StudentHoursSummary } from '@/types';
+import type { StudentHoursSummary, OverflowInfo, CheckinRecord, PaymentRecord } from '@/types';
 
 interface CacheEntry {
   data: StudentHoursSummary;
@@ -49,4 +49,86 @@ export async function getStudentHoursSummary(studentId: string): Promise<Student
 
 export function clearStudentHoursCache(studentId: string): void {
   summaryCache.delete(studentId);
+}
+
+/** 計算當期已繳費/未繳費的上課紀錄分界 */
+export function computeOverflowInfo(
+  purchasedHours: number,
+  currentPeriodCheckins: CheckinRecord[]
+): OverflowInfo {
+  if (currentPeriodCheckins.length === 0) {
+    return { hasOverflow: false, overflowBoundaryDate: null, paidCheckins: [], unpaidCheckins: [] };
+  }
+
+  // 按日期升序排列
+  const sorted = [...currentPeriodCheckins].sort(
+    (a, b) => a.classDate.localeCompare(b.classDate)
+  );
+
+  if (purchasedHours <= 0) {
+    return {
+      hasOverflow: true,
+      overflowBoundaryDate: sorted[0].classDate,
+      paidCheckins: [],
+      unpaidCheckins: sorted,
+    };
+  }
+
+  const purchasedMinutes = purchasedHours * 60;
+  let cumulativeMinutes = 0;
+  let boundaryIndex = -1;
+
+  for (let i = 0; i < sorted.length; i++) {
+    cumulativeMinutes += sorted[i].durationMinutes;
+    if (cumulativeMinutes > purchasedMinutes) {
+      boundaryIndex = i;
+      break;
+    }
+  }
+
+  // 沒有超過或最後一堂剛好超過 → 沒有 overflow
+  if (boundaryIndex === -1 || boundaryIndex >= sorted.length - 1) {
+    return { hasOverflow: false, overflowBoundaryDate: null, paidCheckins: sorted, unpaidCheckins: [] };
+  }
+
+  const paidCheckins = sorted.slice(0, boundaryIndex + 1);
+  const unpaidCheckins = sorted.slice(boundaryIndex + 1);
+
+  return {
+    hasOverflow: true,
+    overflowBoundaryDate: unpaidCheckins[0].classDate,
+    paidCheckins,
+    unpaidCheckins,
+  };
+}
+
+/** 取得學員當期 summary + overflow 資訊 */
+export async function getStudentOverflowInfo(studentId: string): Promise<{
+  summary: StudentHoursSummary;
+  overflow: OverflowInfo;
+  payments: PaymentRecord[];
+}> {
+  const [payments, checkins] = await Promise.all([
+    getPaymentsByStudent(studentId),
+    getCheckinsByStudent(studentId),
+  ]);
+
+  const latestPayDate = payments.length > 0 ? payments[0].createdAt : null;
+  const currentPeriodPayments = latestPayDate
+    ? payments.filter((p) => p.createdAt === latestPayDate)
+    : payments;
+  const currentPeriodCheckins = latestPayDate
+    ? checkins.filter((c) => c.classDate >= latestPayDate)
+    : checkins;
+
+  const purchasedHours = currentPeriodPayments.reduce((sum, p) => sum + p.purchasedHours, 0);
+  const completedMinutes = currentPeriodCheckins.reduce((sum, c) => sum + c.durationMinutes, 0);
+  const completedHours = Math.round(completedMinutes / 60 * 10) / 10;
+  const remainingHours = Math.round((purchasedHours - completedMinutes / 60) * 10) / 10;
+
+  return {
+    summary: { purchasedHours, completedHours, remainingHours },
+    overflow: computeOverflowInfo(purchasedHours, currentPeriodCheckins),
+    payments,
+  };
 }

@@ -20,6 +20,7 @@ export const ACTION = {
   COLLECT_AND_ADD: 'collect_add',
   VIEW_STUDENT_HISTORY: 'view_history',
   VIEW_CLASS_BY_PAYMENT: 'view_class_pay',
+  VIEW_UNPAID_OVERFLOW: 'view_unpaid',
   VIEW_PAYMENT_HISTORY: 'view_pay_hist',
 } as const;
 

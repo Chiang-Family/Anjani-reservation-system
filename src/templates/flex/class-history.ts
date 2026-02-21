@@ -9,7 +9,8 @@ type FlexComponent = messagingApi.FlexComponent;
 export function classHistoryCard(
   studentName: string,
   records: CheckinRecord[],
-  remainingHours: number
+  remainingHours: number,
+  periodLabel?: string
 ): FlexBubble {
   const totalCount = records.length;
 
@@ -82,21 +83,23 @@ export function classHistoryCard(
       contents: [
         {
           type: 'text',
-          text: '上課紀錄',
+          text: periodLabel ? `上課紀錄（${periodLabel}）` : '上課紀錄',
           weight: 'bold',
           size: 'lg',
           color: '#FFFFFF',
         },
         {
           type: 'text',
-          text: `${studentName}｜剩餘 ${formatHours(remainingHours)}`,
+          text: periodLabel
+            ? `${studentName}｜${periodLabel}`
+            : `${studentName}｜剩餘 ${formatHours(remainingHours)}`,
           size: 'sm',
           color: '#FFFFFFCC',
           margin: 'sm',
         },
       ],
       paddingAll: '20px',
-      backgroundColor: '#1B4965',
+      backgroundColor: periodLabel ? '#c0392b' : '#1B4965',
     },
     body: {
       type: 'box',
@@ -174,8 +177,25 @@ export function paymentPeriodSelector(
   studentName: string,
   payments: PaymentRecord[],
   studentId: string,
-  remainingHours: number
+  remainingHours: number,
+  hasOverflow = false
 ): FlexBubble {
+  const unpaidButton: FlexComponent[] = hasOverflow
+    ? [{
+      type: 'button',
+      action: {
+        type: 'postback',
+        label: '未繳費（超出時數）',
+        data: `${ACTION.VIEW_UNPAID_OVERFLOW}:${studentId}`,
+        displayText: '查詢未繳費期間上課紀錄',
+      },
+      style: 'primary',
+      color: '#e74c3c',
+      height: 'sm',
+      margin: 'sm',
+    } as FlexComponent]
+    : [];
+
   const buttons: FlexComponent[] = payments.map((p, i) => ({
     type: 'button',
     action: {
@@ -225,6 +245,7 @@ export function paymentPeriodSelector(
           color: '#555555',
           margin: 'none',
         } as FlexComponent,
+        ...unpaidButton,
         ...buttons,
       ],
       paddingAll: '16px',

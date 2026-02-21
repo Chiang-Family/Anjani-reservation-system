@@ -4,7 +4,7 @@ import { getCoachScheduleForDate } from '@/services/coach.service';
 import { startCollectAndAdd, executeAddStudent } from '@/services/student-management.service';
 import { getStudentById } from '@/lib/notion/students';
 import { getCheckinsByStudent } from '@/lib/notion/checkins';
-import { getStudentHoursSummary } from '@/lib/notion/hours';
+import { getStudentOverflowInfo } from '@/lib/notion/hours';
 import { getPaymentsByStudent } from '@/lib/notion/payments';
 import { replyText, replyFlex, replyMessages } from '@/lib/line/reply';
 import { ACTION } from '@/lib/config/constants';
@@ -94,15 +94,27 @@ export async function handlePostback(event: PostbackEvent): Promise<void> {
       case ACTION.VIEW_CLASS_BY_PAYMENT: {
         // data = view_class_pay:{studentId}:{paymentIndex}
         const paymentIndex = parseInt(extra, 10);
-        const [allPayments, allCheckins, hoursSummary] = await Promise.all([
+        const [allPayments, allCheckins, { summary: hoursSummary, overflow }] = await Promise.all([
           getPaymentsByStudent(id),
           getCheckinsByStudent(id),
-          getStudentHoursSummary(id),
+          getStudentOverflowInfo(id),
         ]);
         if (isNaN(paymentIndex) || paymentIndex >= allPayments.length) {
           await replyTextWithMenu(event.replyToken, '找不到該繳費紀錄。');
           return;
         }
+
+        const student = await getStudentById(id);
+        const studentName = student?.name ?? '';
+
+        // 最新一期且有 overflow → 用 paidCheckins 精確分界
+        if (paymentIndex === 0 && overflow.hasOverflow) {
+          const paidDesc = [...overflow.paidCheckins].reverse();
+          await replyFlex(event.replyToken, `${studentName} 上課紀錄`,
+            classHistoryCard(studentName, paidDesc, hoursSummary.remainingHours));
+          return;
+        }
+
         const fromDate = allPayments[paymentIndex].createdAt;
         const toDate = paymentIndex === 0
           ? todayDateString()
@@ -110,32 +122,46 @@ export async function handlePostback(event: PostbackEvent): Promise<void> {
         const filtered = allCheckins.filter(
           (c) => c.classDate >= fromDate && c.classDate <= toDate
         );
-        const student = await getStudentById(id);
-        const studentName = student?.name ?? '';
         await replyFlex(event.replyToken, `${studentName} 上課紀錄`,
           classHistoryCard(studentName, filtered, hoursSummary.remainingHours));
         return;
       }
 
       case ACTION.VIEW_STUDENT_HISTORY: {
-        // 顯示最新一期（最近繳費日之後）的上課紀錄
+        // 顯示最新一期的上課紀錄（有 overflow 時顯示未繳費期）
         const student = await getStudentById(id);
         if (!student) {
           await replyTextWithMenu(event.replyToken, '找不到該學員資料。');
           return;
         }
-        const [allCheckins, payments, summary] = await Promise.all([
-          getCheckinsByStudent(id),
-          getPaymentsByStudent(id),
-          getStudentHoursSummary(id),
-        ]);
-        let records = allCheckins;
-        if (payments.length > 0) {
-          const latestPayDate = payments[0].createdAt;
-          records = allCheckins.filter((c) => c.classDate >= latestPayDate);
+        const { summary, overflow } = await getStudentOverflowInfo(id);
+        if (overflow.hasOverflow) {
+          const unpaidDesc = [...overflow.unpaidCheckins].reverse();
+          await replyFlex(event.replyToken, `${student.name} 上課紀錄`,
+            classHistoryCard(student.name, unpaidDesc, summary.remainingHours, '未繳費'));
+        } else {
+          const paidDesc = [...overflow.paidCheckins].reverse();
+          await replyFlex(event.replyToken, `${student.name} 上課紀錄`,
+            classHistoryCard(student.name, paidDesc, summary.remainingHours));
         }
-        await replyFlex(event.replyToken, `${student.name} 上課紀錄`,
-          classHistoryCard(student.name, records, summary.remainingHours));
+        return;
+      }
+
+      case ACTION.VIEW_UNPAID_OVERFLOW: {
+        // data = view_unpaid:{studentId}
+        const student = await getStudentById(id);
+        if (!student) {
+          await replyTextWithMenu(event.replyToken, '找不到該學員資料。');
+          return;
+        }
+        const { summary: overflowSummary, overflow: overflowInfo } = await getStudentOverflowInfo(id);
+        if (!overflowInfo.hasOverflow) {
+          await replyTextWithMenu(event.replyToken, `${student.name} 目前沒有未繳費的上課紀錄。`);
+          return;
+        }
+        const unpaidDesc = [...overflowInfo.unpaidCheckins].reverse();
+        await replyFlex(event.replyToken, `${student.name} 未繳費上課紀錄`,
+          classHistoryCard(student.name, unpaidDesc, overflowSummary.remainingHours, '未繳費'));
         return;
       }
 
@@ -146,16 +172,13 @@ export async function handlePostback(event: PostbackEvent): Promise<void> {
           await replyTextWithMenu(event.replyToken, '找不到該學員資料。');
           return;
         }
-        const [payments, summary] = await Promise.all([
-          getPaymentsByStudent(id),
-          getStudentHoursSummary(id),
-        ]);
+        const { summary, overflow, payments } = await getStudentOverflowInfo(id);
         if (payments.length === 0) {
           await replyTextWithMenu(event.replyToken, `${student.name} 目前沒有繳費紀錄。`);
           return;
         }
         await replyFlex(event.replyToken, `${student.name} 繳費紀錄`,
-          paymentPeriodSelector(student.name, payments, id, summary.remainingHours));
+          paymentPeriodSelector(student.name, payments, id, summary.remainingHours, overflow.hasOverflow));
         return;
       }
 

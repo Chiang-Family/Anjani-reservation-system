@@ -58,6 +58,13 @@ export interface StudentHoursSummary {
   remainingHours: number;
 }
 
+export interface OverflowInfo {
+  hasOverflow: boolean;
+  overflowBoundaryDate: string | null;
+  paidCheckins: CheckinRecord[];
+  unpaidCheckins: CheckinRecord[];
+}
+
 export interface UserIdentity {
   lineUserId: string;
   role: Role;
