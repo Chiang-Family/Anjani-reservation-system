@@ -44,9 +44,8 @@ async function filterEventsByCoach(events: CalendarEvent[], coachNotionId: strin
 
   return events.filter((event) => {
     const summary = event.summary.trim();
-    // 精確比對或模糊比對
     for (const name of studentNames) {
-      if (summary === name || summary.includes(name) || name.includes(summary)) {
+      if (summary === name) {
         return true;
       }
     }
@@ -54,11 +53,9 @@ async function filterEventsByCoach(events: CalendarEvent[], coachNotionId: strin
   });
 }
 
-/** 模糊比對：event.summary 包含學員名，或學員名包含 event.summary */
 function matchEventByName(events: CalendarEvent[], studentName: string): CalendarEvent | null {
   for (const event of events) {
-    const summary = event.summary.trim();
-    if (summary === studentName || summary.includes(studentName) || studentName.includes(summary)) {
+    if (event.summary.trim() === studentName) {
       return event;
     }
   }

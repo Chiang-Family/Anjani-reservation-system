@@ -95,14 +95,12 @@ export async function GET(request: Request) {
       const summary = event.summary.trim();
 
       // Skip if student filter is set and doesn't match
-      if (studentFilter && !summary.includes(studentFilter) && !studentFilter.includes(summary)) {
+      if (studentFilter && summary !== studentFilter) {
         continue;
       }
 
-      // Find matching student by name
-      const student = students.find(
-        (s) => summary === s.name || summary.includes(s.name) || s.name.includes(summary)
-      );
+      // Find matching student by name (exact match)
+      const student = students.find((s) => summary === s.name);
 
       if (!student) {
         results.push({ date: event.date, student: summary, status: 'no_match' });
