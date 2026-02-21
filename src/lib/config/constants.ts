@@ -18,6 +18,7 @@ export const ACTION = {
   ADD_STUDENT_CONFIRM: 'add_student_confirm',
   COLLECT_AND_ADD: 'collect_add',
   VIEW_STUDENT_HISTORY: 'view_history',
+  VIEW_CLASS_BY_PAYMENT: 'view_class_pay',
 } as const;
 
 // 角色

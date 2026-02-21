@@ -1,6 +1,7 @@
 import type { messagingApi } from '@line/bot-sdk';
-import type { CheckinRecord } from '@/types';
+import type { CheckinRecord, PaymentRecord } from '@/types';
 import { formatHours } from '@/lib/utils/date';
+import { ACTION } from '@/lib/config/constants';
 
 type FlexBubble = messagingApi.FlexBubble;
 type FlexComponent = messagingApi.FlexComponent;
@@ -160,6 +161,73 @@ export function classHistoryCard(
       ],
       paddingAll: '16px',
       spacing: 'none',
+    },
+  };
+}
+
+function toRocDate(dateStr: string): string {
+  const [y, m, d] = dateStr.split('-');
+  return `${parseInt(y, 10) - 1911}/${parseInt(m, 10)}/${parseInt(d, 10)}`;
+}
+
+export function paymentPeriodSelector(
+  studentName: string,
+  payments: PaymentRecord[],
+  studentId: string,
+  remainingHours: number
+): FlexBubble {
+  const buttons: FlexComponent[] = payments.map((p, i) => ({
+    type: 'button',
+    action: {
+      type: 'postback',
+      label: `${toRocDate(p.createdAt)} ｜ ${p.purchasedHours}hr ｜ $${p.totalAmount.toLocaleString()}`,
+      data: `${ACTION.VIEW_CLASS_BY_PAYMENT}:${studentId}:${i}`,
+      displayText: `查詢 ${toRocDate(p.createdAt)} 上課紀錄`,
+    },
+    style: 'secondary',
+    height: 'sm',
+    margin: 'sm',
+  } as FlexComponent));
+
+  return {
+    type: 'bubble',
+    size: 'mega',
+    header: {
+      type: 'box',
+      layout: 'vertical',
+      contents: [
+        {
+          type: 'text',
+          text: '上課紀錄',
+          weight: 'bold',
+          size: 'lg',
+          color: '#FFFFFF',
+        },
+        {
+          type: 'text',
+          text: `${studentName}｜剩餘 ${formatHours(remainingHours)}`,
+          size: 'sm',
+          color: '#FFFFFFCC',
+          margin: 'sm',
+        },
+      ],
+      paddingAll: '20px',
+      backgroundColor: '#1B4965',
+    },
+    body: {
+      type: 'box',
+      layout: 'vertical',
+      contents: [
+        {
+          type: 'text',
+          text: '請選擇繳費期數查看上課紀錄：',
+          size: 'sm',
+          color: '#555555',
+          margin: 'none',
+        } as FlexComponent,
+        ...buttons,
+      ],
+      paddingAll: '16px',
     },
   };
 }

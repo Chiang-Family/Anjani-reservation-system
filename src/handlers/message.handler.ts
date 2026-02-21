@@ -8,6 +8,7 @@ import { findStudentByLineId } from '@/lib/notion/students';
 import { getCheckinsByStudent } from '@/lib/notion/checkins';
 import { getStudentHoursSummary } from '@/lib/notion/hours';
 import { getPaymentsByStudent } from '@/lib/notion/payments';
+import { paymentPeriodSelector } from '@/templates/flex/class-history';
 import {
   startAddStudent,
   handleAddStudentStep,
@@ -134,11 +135,16 @@ async function handleStudentMessage(
         ]);
         return;
       }
-      const [records, summary] = await Promise.all([
+      const [records, payments, summary] = await Promise.all([
         getCheckinsByStudent(student.id),
+        getPaymentsByStudent(student.id),
         getStudentHoursSummary(student.id),
       ]);
-      await replyFlex(replyToken, '上課紀錄', classHistoryCard(student.name, records, summary.remainingHours));
+      if (payments.length > 0) {
+        await replyFlex(replyToken, '上課紀錄', paymentPeriodSelector(student.name, payments, student.id, summary.remainingHours));
+      } else {
+        await replyFlex(replyToken, '上課紀錄', classHistoryCard(student.name, records, summary.remainingHours));
+      }
       return;
     }
 

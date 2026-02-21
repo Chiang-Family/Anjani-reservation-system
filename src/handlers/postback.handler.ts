@@ -5,12 +5,13 @@ import { startCollectAndAdd } from '@/services/student-management.service';
 import { getStudentById } from '@/lib/notion/students';
 import { getCheckinsByStudent } from '@/lib/notion/checkins';
 import { getStudentHoursSummary } from '@/lib/notion/hours';
+import { getPaymentsByStudent } from '@/lib/notion/payments';
 import { replyText, replyFlex, replyMessages } from '@/lib/line/reply';
 import { ACTION } from '@/lib/config/constants';
 import { TEXT } from '@/templates/text-messages';
 import { scheduleList } from '@/templates/flex/today-schedule';
 import { classHistoryCard } from '@/templates/flex/class-history';
-import { formatDateLabel, todayDateString } from '@/lib/utils/date';
+import { formatDateLabel, todayDateString, addDays } from '@/lib/utils/date';
 import { menuQuickReply, coachQuickReply } from '@/templates/quick-reply';
 
 function replyTextWithMenu(replyToken: string, text: string) {
@@ -74,6 +75,32 @@ export async function handlePostback(event: PostbackEvent): Promise<void> {
       case ACTION.COLLECT_AND_ADD: {
         const msg = await startCollectAndAdd(id, lineUserId);
         await replyText(event.replyToken, msg);
+        return;
+      }
+
+      case ACTION.VIEW_CLASS_BY_PAYMENT: {
+        // data = view_class_pay:{studentId}:{paymentIndex}
+        const paymentIndex = parseInt(extra, 10);
+        const [allPayments, allCheckins, hoursSummary] = await Promise.all([
+          getPaymentsByStudent(id),
+          getCheckinsByStudent(id),
+          getStudentHoursSummary(id),
+        ]);
+        if (isNaN(paymentIndex) || paymentIndex >= allPayments.length) {
+          await replyTextWithMenu(event.replyToken, '找不到該繳費紀錄。');
+          return;
+        }
+        const fromDate = allPayments[paymentIndex].createdAt;
+        const toDate = paymentIndex === 0
+          ? todayDateString()
+          : addDays(allPayments[paymentIndex - 1].createdAt, -1);
+        const filtered = allCheckins.filter(
+          (c) => c.classDate >= fromDate && c.classDate <= toDate
+        );
+        const student = await getStudentById(id);
+        const studentName = student?.name ?? '';
+        await replyFlex(event.replyToken, `${studentName} 上課紀錄`,
+          classHistoryCard(studentName, filtered, hoursSummary.remainingHours));
         return;
       }
 
