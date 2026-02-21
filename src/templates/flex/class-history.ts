@@ -29,10 +29,10 @@ export function classHistoryCard(
       contents: [
         {
           type: 'text',
-          text: `#${r.sequence}`,
+          text: `${r.sequence}`, // 移除 #
           size: 'sm',
           color: '#888888',
-          flex: 2,
+          flex: 1, // 減小：堂數與日期靠近
         },
         {
           type: 'text',
@@ -49,14 +49,14 @@ export function classHistoryCard(
           text: r.classTimeSlot,
           size: 'sm',
           color: '#333333',
-          flex: 4,
+          flex: 5, // 增大：日期與時段拉開
         },
         {
           type: 'text',
           text: r.durationMinutes > 0 ? `${r.durationMinutes}分` : '-',
           size: 'sm',
           color: '#333333',
-          flex: 2,
+          flex: 2, // 維持或微調：時段與時長靠近
           align: 'end',
         },
       ],
@@ -111,7 +111,7 @@ export function classHistoryCard(
               size: 'xs',
               color: '#999999',
               weight: 'bold',
-              flex: 2,
+              flex: 1, // 對齊資料列
             },
             {
               type: 'text',
@@ -119,7 +119,7 @@ export function classHistoryCard(
               size: 'xs',
               color: '#999999',
               weight: 'bold',
-              flex: 3,
+              flex: 3, // 對齊資料列
             },
             {
               type: 'text',
@@ -127,7 +127,7 @@ export function classHistoryCard(
               size: 'xs',
               color: '#999999',
               weight: 'bold',
-              flex: 4,
+              flex: 5, // 對齊資料列
             },
             {
               type: 'text',
@@ -135,7 +135,7 @@ export function classHistoryCard(
               size: 'xs',
               color: '#999999',
               weight: 'bold',
-              flex: 2,
+              flex: 2, // 對齊資料列
               align: 'end',
             },
           ],
