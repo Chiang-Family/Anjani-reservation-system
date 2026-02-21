@@ -215,14 +215,19 @@ export async function getCoachMonthlyStats(
   }
   executedRevenue = Math.round(executedRevenue);
 
-  // --- 實際收款: this month's payments only ---
-  let collectedAmount = 0;
+  // --- 本月繳費: group by student ---
+  const monthPaymentsByStudent = new Map<string, { paid: number; total: number; hours: number; date: string }>();
   for (const payment of payments) {
     if (payment.actualDate.startsWith(monthPrefix)) {
-      collectedAmount += payment.paidAmount;
+      const prev = monthPaymentsByStudent.get(payment.studentName) ?? { paid: 0, total: 0, hours: 0, date: '' };
+      monthPaymentsByStudent.set(payment.studentName, {
+        paid: prev.paid + payment.paidAmount,
+        total: prev.total + payment.totalAmount,
+        hours: prev.hours + payment.purchasedHours,
+        date: payment.actualDate > prev.date ? payment.actualDate : prev.date,
+      });
     }
   }
-  collectedAmount = Math.round(collectedAmount);
 
   // --- 待收款: calendar-based renewal prediction ---
   // Group future events by student name
@@ -296,23 +301,42 @@ export async function getCoachMonthlyStats(
     };
   });
 
+  // Include students who already renewed this month (have payments but not in predicted list)
+  const predictedNames = new Set(renewalStudents.map(s => s.name));
+  const summaryByName = new Map<string, typeof summaries[0]>();
+  for (let i = 0; i < students.length; i++) {
+    summaryByName.set(students[i].name, summaries[i]);
+  }
+  for (const [name, info] of monthPaymentsByStudent) {
+    if (!predictedNames.has(name)) {
+      renewalStudents.push({
+        name,
+        remainingHours: summaryByName.get(name)?.remainingHours ?? 0,
+        expectedRenewalHours: info.hours,
+        expectedRenewalAmount: Math.round(info.total),
+        predictedRenewalDate: info.date,
+        isEstimated: false,
+      });
+    }
+  }
+
   const renewalForecast: RenewalForecast = {
     studentCount: renewalStudents.length,
     expectedAmount: renewalStudents.reduce((sum, s) => sum + s.expectedRenewalAmount, 0),
     students: renewalStudents,
   };
 
-  // 待收款: 逐學員計算（預期續約金額 - 該學員本月已繳金額）
-  const monthPaymentsByStudent = new Map<string, number>();
-  for (const payment of payments) {
-    if (payment.actualDate.startsWith(monthPrefix)) {
-      const prev = monthPaymentsByStudent.get(payment.studentName) ?? 0;
-      monthPaymentsByStudent.set(payment.studentName, prev + payment.paidAmount);
-    }
+  // 實際收款: from renewal students only (ensures 續約總額 = 實際收款 + 待收款)
+  let collectedAmount = 0;
+  for (const s of renewalStudents) {
+    collectedAmount += monthPaymentsByStudent.get(s.name)?.paid ?? 0;
   }
+  collectedAmount = Math.round(collectedAmount);
+
+  // 待收款: per renewal student (expected - paid)
   const pendingAmount = Math.round(
     renewalStudents.reduce((sum, s) => {
-      const paid = monthPaymentsByStudent.get(s.name) ?? 0;
+      const paid = monthPaymentsByStudent.get(s.name)?.paid ?? 0;
       return sum + Math.max(0, s.expectedRenewalAmount - paid);
     }, 0)
   );
