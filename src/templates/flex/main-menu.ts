@@ -79,7 +79,7 @@ export function coachMenu(name: string): FlexBubble {
       contents: [
         {
           type: 'text',
-          text: 'Anjani 教練管理',
+          text: '安傑力教練管理系統',
           weight: 'bold',
           size: 'lg',
           color: '#FFFFFF',

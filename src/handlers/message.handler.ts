@@ -89,7 +89,7 @@ export async function handleMessage(event: MessageEvent): Promise<void> {
           }
           const coach = await findCoachByLineId(lineUserId);
           if (coach) {
-            await replyFlex(event.replyToken, 'Anjani 教練管理', coachMenu(coach.name));
+            await replyFlex(event.replyToken, '安傑力教練管理系統', coachMenu(coach.name));
             return;
           }
         }
@@ -231,7 +231,7 @@ async function handleCoachMessage(
     }
 
     case KEYWORD.MENU: {
-      await replyFlex(replyToken, 'Anjani 教練管理', coachMenu(name));
+      await replyFlex(replyToken, '安傑力教練管理系統', coachMenu(name));
       return;
     }
 
@@ -259,7 +259,7 @@ async function handleCoachMessage(
           return;
         }
       }
-      await replyFlex(replyToken, 'Anjani 教練管理', coachMenu(name));
+      await replyFlex(replyToken, '安傑力教練管理系統', coachMenu(name));
     }
   }
 }

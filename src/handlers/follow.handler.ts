@@ -40,6 +40,6 @@ export async function handleFollow(event: FollowEvent): Promise<void> {
         console.error('Failed to link coach rich menu:', err);
       }
     }
-    await replyFlex(event.replyToken, 'Anjani 教練管理', coachMenu(user.name));
+    await replyFlex(event.replyToken, '安傑力教練管理系統', coachMenu(user.name));
   }
 }
