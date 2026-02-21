@@ -45,7 +45,7 @@ async function filterEventsByCoach(events: CalendarEvent[], coachNotionId: strin
   return events.filter((event) => {
     const summary = event.summary.trim();
     for (const name of studentNames) {
-      if (summary === name) {
+      if (summary === name || summary.includes(name) || name.includes(summary)) {
         return true;
       }
     }
