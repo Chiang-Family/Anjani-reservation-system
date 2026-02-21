@@ -33,9 +33,10 @@ export async function getStudentHoursSummary(studentId: string): Promise<Student
     : checkins;
 
   const purchasedHours = currentPeriodPayments.reduce((sum, p) => sum + p.purchasedHours, 0);
+  const prevOverflowMinutes = computePrevOverflowMinutes(payments, checkins);
   const completedMinutes = currentPeriodCheckins.reduce((sum, c) => sum + c.durationMinutes, 0);
   const completedHours = Math.round(completedMinutes / 60 * 10) / 10;
-  const remainingHours = Math.round((purchasedHours - completedMinutes / 60) * 10) / 10;
+  const remainingHours = Math.round((purchasedHours - prevOverflowMinutes / 60 - completedMinutes / 60) * 10) / 10;
 
   const result = { purchasedHours, completedHours, remainingHours };
 
@@ -49,6 +50,28 @@ export async function getStudentHoursSummary(studentId: string): Promise<Student
 
 export function clearStudentHoursCache(studentId: string): void {
   summaryCache.delete(studentId);
+}
+
+/** 計算前一期的溢出分鐘數（用完時數後未繳費繼續上的課） */
+function computePrevOverflowMinutes(
+  payments: PaymentRecord[],
+  checkins: CheckinRecord[]
+): number {
+  const uniquePayDates = [...new Set(payments.map(p => p.createdAt))];
+  if (uniquePayDates.length < 2) return 0;
+
+  const latestPayDate = uniquePayDates[0];
+  const prevPayDate = uniquePayDates[1];
+
+  const prevPeriodPayments = payments.filter(p => p.createdAt === prevPayDate);
+  const prevPeriodCheckins = checkins.filter(
+    c => c.classDate >= prevPayDate && c.classDate < latestPayDate
+  );
+
+  const prevPurchasedMinutes = prevPeriodPayments.reduce((sum, p) => sum + p.purchasedHours, 0) * 60;
+  const prevUsedMinutes = prevPeriodCheckins.reduce((sum, c) => sum + c.durationMinutes, 0);
+
+  return Math.max(0, prevUsedMinutes - prevPurchasedMinutes);
 }
 
 /** 計算當期已繳費/未繳費的上課紀錄分界 */
@@ -123,13 +146,15 @@ export async function getStudentOverflowInfo(studentId: string): Promise<{
     : checkins;
 
   const purchasedHours = currentPeriodPayments.reduce((sum, p) => sum + p.purchasedHours, 0);
+  const prevOverflowMinutes = computePrevOverflowMinutes(payments, checkins);
+  const effectivePurchasedHours = purchasedHours - prevOverflowMinutes / 60;
   const completedMinutes = currentPeriodCheckins.reduce((sum, c) => sum + c.durationMinutes, 0);
   const completedHours = Math.round(completedMinutes / 60 * 10) / 10;
-  const remainingHours = Math.round((purchasedHours - completedMinutes / 60) * 10) / 10;
+  const remainingHours = Math.round((effectivePurchasedHours - completedMinutes / 60) * 10) / 10;
 
   return {
     summary: { purchasedHours, completedHours, remainingHours },
-    overflow: computeOverflowInfo(purchasedHours, currentPeriodCheckins),
+    overflow: computeOverflowInfo(effectivePurchasedHours, currentPeriodCheckins),
     payments,
   };
 }
