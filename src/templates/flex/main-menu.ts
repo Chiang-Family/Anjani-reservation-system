@@ -17,7 +17,21 @@ function menuButton(label: string, color = '#4A90D9'): messagingApi.FlexButton {
   };
 }
 
-export function studentMenu(name: string): FlexBubble {
+function uriButton(label: string, uri: string, color = '#4A90D9'): messagingApi.FlexButton {
+  return {
+    type: 'button',
+    action: {
+      type: 'uri',
+      label,
+      uri,
+    },
+    style: 'primary',
+    color,
+    margin: 'sm',
+  };
+}
+
+export function studentMenu(name: string, coachLineUrl?: string): FlexBubble {
   return {
     type: 'bubble',
     size: 'mega',
@@ -63,6 +77,9 @@ export function studentMenu(name: string): FlexBubble {
         menuButton(KEYWORD.NEXT_WEEK, '#2D6A4F'),
         menuButton(KEYWORD.CLASS_HISTORY, '#3D5A80'),
         menuButton(KEYWORD.PAYMENT_HISTORY, '#6D597A'),
+        ...(coachLineUrl
+          ? [uriButton('聯繫教練', coachLineUrl, '#C0392B')]
+          : []),
       ] as messagingApi.FlexComponent[],
       paddingAll: '16px',
       spacing: 'sm',

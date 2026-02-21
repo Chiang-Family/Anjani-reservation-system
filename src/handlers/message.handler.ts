@@ -3,7 +3,7 @@ import { identifyUser, getStudentInfo } from '@/services/student.service';
 import { getCoachScheduleForDate } from '@/services/coach.service';
 import { getCoachMonthlyStats } from '@/services/stats.service';
 import { getStudentsByCoachId } from '@/lib/notion/students';
-import { findCoachByLineId } from '@/lib/notion/coaches';
+import { findCoachByLineId, getCoachById } from '@/lib/notion/coaches';
 import { findStudentByLineId } from '@/lib/notion/students';
 import { getCheckinsByStudent } from '@/lib/notion/checkins';
 import { getStudentHoursSummary } from '@/lib/notion/hours';
@@ -71,7 +71,8 @@ export async function handleMessage(event: MessageEvent): Promise<void> {
         if (result.success) {
           const student = await getStudentInfo(lineUserId);
           if (student) {
-            await replyFlex(event.replyToken, '安傑力課程管理系統', studentMenu(student.name));
+            const coach = student.coachId ? await getCoachById(student.coachId) : null;
+            await replyFlex(event.replyToken, '安傑力課程管理系統', studentMenu(student.name, coach?.lineUrl));
             return;
           }
           const coach = await findCoachByLineId(lineUserId);
@@ -178,13 +179,11 @@ async function handleStudentMessage(
       return;
     }
 
-    case KEYWORD.MENU: {
-      await replyFlex(replyToken, '安傑力課程管理系統', studentMenu(name));
-      return;
-    }
-
+    case KEYWORD.MENU:
     default: {
-      await replyFlex(replyToken, '安傑力課程管理系統', studentMenu(name));
+      const student = await findStudentByLineId(lineUserId);
+      const coach = student?.coachId ? await getCoachById(student.coachId) : null;
+      await replyFlex(replyToken, '安傑力課程管理系統', studentMenu(name, coach?.lineUrl));
     }
   }
 }

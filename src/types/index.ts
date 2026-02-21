@@ -25,6 +25,7 @@ export interface Coach {
   id: string;
   name: string;
   lineUserId: string;
+  lineUrl?: string;
   calendarColorId?: number;
   status?: string;
 }

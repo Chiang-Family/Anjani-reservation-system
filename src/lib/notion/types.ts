@@ -10,6 +10,7 @@ export const STUDENT_PROPS = {
 export const COACH_PROPS = {
   NAME: '姓名',
   LINE_USER_ID: 'LINE User ID',
+  LINE_URL: '個人LINE連結',
   CALENDAR_COLOR_ID: '日曆顏色ID',
   STATUS: '狀態',
 } as const;
