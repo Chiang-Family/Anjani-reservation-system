@@ -24,6 +24,8 @@ export const ACTION = {
   VIEW_PAYMENT_HISTORY: 'view_pay_hist',
   VIEW_PAYMENT_DETAIL: 'view_pay_dtl',
   CONFIRM_PAYMENT: 'confirm_pay',
+  VIEW_RENEWAL_UNPAID: 'renewal_unpaid',
+  VIEW_RENEWAL_PAID: 'renewal_paid',
 } as const;
 
 // 角色

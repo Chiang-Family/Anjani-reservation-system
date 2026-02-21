@@ -9,6 +9,8 @@ import { ACTION } from '@/lib/config/constants';
 import { TEXT } from '@/templates/text-messages';
 import { scheduleList } from '@/templates/flex/today-schedule';
 import { classHistoryCard, paymentPeriodSelector, paymentDetailCard } from '@/templates/flex/class-history';
+import { renewalStudentListCard } from '@/templates/flex/monthly-stats';
+import { getCoachMonthlyStats } from '@/services/stats.service';
 import { formatDateLabel, todayDateString } from '@/lib/utils/date';
 import { menuQuickReply, coachQuickReply } from '@/templates/quick-reply';
 
@@ -191,6 +193,25 @@ export async function handlePostback(event: PostbackEvent): Promise<void> {
         }
         await replyFlex(event.replyToken, `${student.name} 繳費紀錄`,
           paymentPeriodSelector(student.name, payments, id, summary.remainingHours, overflow.hasOverflow));
+        return;
+      }
+
+      case ACTION.VIEW_RENEWAL_UNPAID:
+      case ACTION.VIEW_RENEWAL_PAID: {
+        const stats = await getCoachMonthlyStats(lineUserId);
+        if (!stats || stats.renewalForecast.students.length === 0) {
+          await replyTextWithMenu(event.replyToken, '本月沒有續約學員資料。');
+          return;
+        }
+        const showPaid = action === ACTION.VIEW_RENEWAL_PAID;
+        const filtered = stats.renewalForecast.students.filter(s => {
+          const isPaid = s.renewedDate !== null && s.paidAmount >= s.expectedRenewalAmount;
+          return showPaid ? isPaid : !isPaid;
+        });
+        const title = showPaid ? '✅ 已繳費學員' : '❌ 未繳費學員';
+        const color = showPaid ? '#2ecc71' : '#e74c3c';
+        await replyFlex(event.replyToken, title,
+          renewalStudentListCard(title, filtered, color));
         return;
       }
 
