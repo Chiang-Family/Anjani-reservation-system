@@ -76,7 +76,7 @@ function extractPayment(page: Record<string, unknown>): PaymentRecord {
     totalAmount: getFormulaNumberValue(props[PAYMENT_PROPS.TOTAL_AMOUNT]),
     paidAmount,
     status: status === '已繳費' ? '已繳費' : status === '部分繳費' ? '部分繳費' : '未繳費',
-    createdAt: getDateValue(props[PAYMENT_PROPS.CREATED_AT]),
+    createdAt: getRichTextValue(props[PAYMENT_PROPS.TITLE]).split(' - ')[1]?.trim() || getDateValue(props[PAYMENT_PROPS.CREATED_AT]),
   };
 }
 
