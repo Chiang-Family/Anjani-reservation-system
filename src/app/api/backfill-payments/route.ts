@@ -1,167 +1,76 @@
 import { NextResponse } from 'next/server';
-import { readFileSync } from 'fs';
 import { getNotionClient } from '@/lib/notion/client';
 import { getEnv } from '@/lib/config/env';
 import { PAYMENT_PROPS } from '@/lib/notion/types';
 import { findStudentByName } from '@/lib/notion/students';
-import { getAllCoaches } from '@/lib/notion/coaches';
-
-interface PaymentEntry {
-  studentName: string;
-  pricePerHour: number;
-  purchasedHours: number;
-  date: string;        // yyyy-MM-dd
-  paidAmount: number;
-  status: '已繳費' | '部分繳費' | '未繳費';
-}
-
-function parseCsv(content: string, year: number, month: number): PaymentEntry[] {
-  const lines = content.split('\n').filter((l) => l.trim());
-  if (lines.length < 5) return [];
-
-  // Row 2 (index 1) has the date numbers in columns 5+
-  const dateRow = lines[1].split(',');
-
-  const entries: PaymentEntry[] = [];
-
-  // Data rows start at index 4 (row 5 in 1-based)
-  for (let i = 4; i < lines.length; i++) {
-    const cols = lines[i].split(',');
-    const name = cols[0]?.trim();
-    if (!name || name === '運動按摩') break; // Stop at footer section
-
-    const pricePerHour = parseFloat(cols[1]) || 0;
-    const purchasedHours = parseFloat(cols[2]) || 0;
-    const received = parseFloat(cols[3]) || 0;
-
-    if (pricePerHour === 0 || purchasedHours === 0) continue;
-
-    // Find all "1V" cells in this row (columns 5+)
-    const oneVDates: string[] = [];
-    for (let col = 5; col < cols.length; col++) {
-      const cell = cols[col]?.trim();
-      if (cell === '1V') {
-        const day = parseInt(dateRow[col]?.trim(), 10);
-        if (!day || day < 1 || day > 31) continue;
-
-        // Validate the date exists (e.g., Feb 29-31 invalid for non-leap year)
-        const maxDay = new Date(year, month, 0).getDate();
-        if (day > maxDay) continue;
-
-        const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-        oneVDates.push(dateStr);
-      }
-    }
-
-    if (oneVDates.length === 0) continue;
-
-    // Distribute 已收 across payment periods chronologically
-    const totalPerPeriod = pricePerHour * purchasedHours;
-    let remainingReceived = received;
-
-    for (const date of oneVDates) {
-      let paidAmount = 0;
-      let status: '已繳費' | '部分繳費' | '未繳費' = '未繳費';
-
-      if (remainingReceived >= totalPerPeriod) {
-        paidAmount = totalPerPeriod;
-        status = '已繳費';
-        remainingReceived -= totalPerPeriod;
-      } else if (remainingReceived > 0) {
-        paidAmount = remainingReceived;
-        status = '部分繳費';
-        remainingReceived = 0;
-      }
-
-      entries.push({
-        studentName: name,
-        pricePerHour,
-        purchasedHours,
-        date,
-        paidAmount,
-        status,
-      });
-    }
-  }
-
-  return entries;
-}
 
 /**
- * 一次性回填繳費紀錄 API
- * GET /api/backfill-payments
- *
- * 從 CSV 解析 1V 欄位，自動建立繳費紀錄。
+ * 一次性建立繳費紀錄
+ * GET /api/backfill-payments?student=林香吟&coach_id=xxx
  */
-export async function GET() {
+export async function GET(request: Request) {
+  const url = new URL(request.url);
+  const dryRun = url.searchParams.get('dry') === '1';
+
   try {
-    // Read CSV files
-    const jan = readFileSync(
-      '/Users/pinhsuchiang/Downloads/2026堂數表 - 鄒京甫11501.csv',
-      'utf-8'
-    );
-    const feb = readFileSync(
-      '/Users/pinhsuchiang/Downloads/2026堂數表 - 鄒京甫11502.csv',
-      'utf-8'
-    );
+    const student = await findStudentByName('林香吟');
+    if (!student) {
+      return NextResponse.json({ success: false, error: '找不到學員 林香吟' }, { status: 404 });
+    }
+    if (!student.coachId) {
+      return NextResponse.json({ success: false, error: '林香吟 沒有教練' }, { status: 400 });
+    }
 
-    // Parse entries
-    const janEntries = parseCsv(jan, 2026, 1);
-    const febEntries = parseCsv(feb, 2026, 2);
-    const allEntries = [...janEntries, ...febEntries];
+    const entries = [
+      {
+        studentName: '林香吟',
+        studentId: student.id,
+        coachId: student.coachId,
+        date: '2025-12-16',
+        pricePerHour: 1300,
+        purchasedHours: 4.6,
+        paidAmount: 6000,
+        status: '已繳費' as const,
+      },
+      {
+        studentName: '林香吟',
+        studentId: student.id,
+        coachId: student.coachId,
+        date: '2025-12-16',  // 同一期，用相同日期
+        pricePerHour: 1300,
+        purchasedHours: 0.4,
+        paidAmount: 500,
+        status: '已繳費' as const,
+      },
+    ];
 
-    // Find coach 鄒京甫
-    const coaches = await getAllCoaches();
-    const coach = coaches.find((c) => c.name === 'Andy' || c.name.includes('Andy'));
-    if (!coach) {
-      return NextResponse.json({ success: false, error: '找不到教練 Andy' }, { status: 404 });
+    if (dryRun) {
+      return NextResponse.json({
+        success: true,
+        dryRun: true,
+        studentId: student.id,
+        coachId: student.coachId,
+        entries,
+        totalHours: entries.reduce((s, e) => s + e.purchasedHours, 0),
+        totalAmount: entries.reduce((s, e) => s + e.paidAmount, 0),
+      });
     }
 
     const notion = getNotionClient();
     const env = getEnv();
+    const results = [];
 
-    const results: Array<{
-      student: string;
-      date: string;
-      hours: number;
-      price: number;
-      paid: number;
-      status: string;
-      result: string;
-    }> = [];
-
-    let created = 0;
-    let skipped = 0;
-    let notFound = 0;
-
-    for (const entry of allEntries) {
-      // Find student in Notion
-      const student = await findStudentByName(entry.studentName);
-      if (!student) {
-        results.push({
-          student: entry.studentName,
-          date: entry.date,
-          hours: entry.purchasedHours,
-          price: entry.pricePerHour,
-          paid: entry.paidAmount,
-          status: entry.status,
-          result: 'student_not_found',
-        });
-        notFound++;
-        continue;
-      }
-
-      // Create payment record with custom date and paid amount
+    for (const entry of entries) {
       const title = `${entry.studentName} - ${entry.date}`;
       const properties = {
         [PAYMENT_PROPS.TITLE]: {
           title: [{ type: 'text', text: { content: title } }],
         },
         [PAYMENT_PROPS.STUDENT]: {
-          relation: [{ id: student.id }],
+          relation: [{ id: entry.studentId }],
         },
         [PAYMENT_PROPS.COACH]: {
-          relation: [{ id: coach.id }],
+          relation: [{ id: entry.coachId }],
         },
         [PAYMENT_PROPS.PURCHASED_HOURS]: {
           number: entry.purchasedHours,
@@ -185,25 +94,14 @@ export async function GET() {
         properties,
       });
 
-      results.push({
-        student: entry.studentName,
-        date: entry.date,
-        hours: entry.purchasedHours,
-        price: entry.pricePerHour,
-        paid: entry.paidAmount,
-        status: entry.status,
-        result: 'created',
-      });
-      created++;
-
-      // Rate limit: ~3 req/s for Notion API
+      results.push({ ...entry, result: 'created' });
       await new Promise((r) => setTimeout(r, 350));
     }
 
     return NextResponse.json({
       success: true,
-      coach: coach.name,
-      summary: { total: allEntries.length, created, skipped, notFound },
+      totalHours: entries.reduce((s, e) => s + e.purchasedHours, 0),
+      totalAmount: entries.reduce((s, e) => s + e.paidAmount, 0),
       details: results,
     });
   } catch (error) {
