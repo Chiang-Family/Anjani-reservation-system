@@ -135,16 +135,17 @@ async function handleStudentMessage(
         ]);
         return;
       }
-      const [records, payments, summary] = await Promise.all([
+      const [allCheckins, payments, summary] = await Promise.all([
         getCheckinsByStudent(student.id),
         getPaymentsByStudent(student.id),
         getStudentHoursSummary(student.id),
       ]);
+      let records = allCheckins;
       if (payments.length > 0) {
-        await replyFlex(replyToken, '上課紀錄', paymentPeriodSelector(student.name, payments, student.id, summary.remainingHours));
-      } else {
-        await replyFlex(replyToken, '上課紀錄', classHistoryCard(student.name, records, summary.remainingHours));
+        const latestPayDate = payments[0].createdAt;
+        records = allCheckins.filter((c) => c.classDate >= latestPayDate);
       }
+      await replyFlex(replyToken, '當期上課紀錄', classHistoryCard(student.name, records, summary.remainingHours));
       return;
     }
 
@@ -161,7 +162,11 @@ async function handleStudentMessage(
         getPaymentsByStudent(student.id),
         getStudentHoursSummary(student.id),
       ]);
-      await replyFlex(replyToken, '繳費紀錄', paymentHistoryCard(student.name, payments, summary));
+      if (payments.length > 0) {
+        await replyFlex(replyToken, '繳費紀錄', paymentPeriodSelector(student.name, payments, student.id, summary.remainingHours));
+      } else {
+        await replyFlex(replyToken, '繳費紀錄', paymentHistoryCard(student.name, payments, summary));
+      }
       return;
     }
 
