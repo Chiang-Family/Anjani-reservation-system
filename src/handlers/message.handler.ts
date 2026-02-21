@@ -185,20 +185,14 @@ async function handleCoachMessage(
     case KEYWORD.COACH_CHECKIN: {
       const today = todayDateString();
       const schedule = await getCoachScheduleForDate(lineUserId);
-      if (!schedule || schedule.items.length === 0) {
+      if (!schedule) {
         await replyMessages(replyToken, [
-          { type: 'text', text: '今天沒有安排課程，無法幫學員打卡。', quickReply: { items: qr } },
+          { type: 'text', text: '找不到教練資料。', quickReply: { items: qr } },
         ]);
         return;
       }
       const unchecked = schedule.items.filter((item) => !item.isCheckedIn && item.studentNotionId);
-      if (unchecked.length === 0) {
-        await replyMessages(replyToken, [
-          { type: 'text', text: '今天所有學員都已打卡完成！', quickReply: { items: qr } },
-        ]);
-        return;
-      }
-      await replyFlex(replyToken, '幫學員打卡', scheduleList(unchecked, today));
+      await replyFlex(replyToken, '幫學員打卡', scheduleList(unchecked, today, 'checkin'));
       return;
     }
 

@@ -10,7 +10,7 @@ import { ACTION } from '@/lib/config/constants';
 import { TEXT } from '@/templates/text-messages';
 import { scheduleList } from '@/templates/flex/today-schedule';
 import { classHistoryCard } from '@/templates/flex/class-history';
-import { formatDateLabel } from '@/lib/utils/date';
+import { formatDateLabel, todayDateString } from '@/lib/utils/date';
 import { menuQuickReply, coachQuickReply } from '@/templates/quick-reply';
 
 function replyTextWithMenu(replyToken: string, text: string) {
@@ -52,6 +52,20 @@ export async function handlePostback(event: PostbackEvent): Promise<void> {
         }
         const label = formatDateLabel(dateStr);
         await replyFlex(event.replyToken, `${label} 課表`, scheduleList(schedule.items, dateStr));
+        return;
+      }
+
+      case ACTION.CHECKIN_SCHEDULE: {
+        // data = checkin_schedule:{date}
+        const dateStr = id || todayDateString();
+        const schedule = await getCoachScheduleForDate(lineUserId, dateStr);
+        if (!schedule) {
+          await replyTextWithMenu(event.replyToken, '找不到教練資料。');
+          return;
+        }
+        const unchecked = schedule.items.filter((item) => !item.isCheckedIn && item.studentNotionId);
+        const label = formatDateLabel(dateStr);
+        await replyFlex(event.replyToken, `${label} 打卡清單`, scheduleList(unchecked, dateStr, 'checkin'));
         return;
       }
 

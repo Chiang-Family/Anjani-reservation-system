@@ -14,6 +14,7 @@ export const KEYWORD = {
 export const ACTION = {
   COACH_CHECKIN: 'coach_checkin',
   VIEW_SCHEDULE: 'view_schedule',
+  CHECKIN_SCHEDULE: 'checkin_schedule',
   ADD_STUDENT_CONFIRM: 'add_student_confirm',
   COLLECT_AND_ADD: 'collect_add',
   VIEW_STUDENT_HISTORY: 'view_history',
