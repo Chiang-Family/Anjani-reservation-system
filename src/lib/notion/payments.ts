@@ -142,9 +142,12 @@ export async function getPaymentsByStudent(studentId: string): Promise<PaymentRe
     sorts: [{ property: PAYMENT_PROPS.CREATED_AT, direction: 'descending' }],
   });
 
-  return res.results.map((page) =>
+  const payments = res.results.map((page) =>
     extractPayment(page as unknown as Record<string, unknown>)
   );
+  // 依標題日期重新排序（降序），確保與期數計算一致
+  payments.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  return payments;
 }
 
 export async function getLatestPaymentByStudent(studentId: string): Promise<PaymentRecord | null> {
