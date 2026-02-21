@@ -8,7 +8,7 @@ import { replyText, replyFlex, replyMessages } from '@/lib/line/reply';
 import { ACTION } from '@/lib/config/constants';
 import { TEXT } from '@/templates/text-messages';
 import { scheduleList } from '@/templates/flex/today-schedule';
-import { classHistoryCard, paymentPeriodSelector } from '@/templates/flex/class-history';
+import { classHistoryCard, paymentPeriodSelector, paymentDetailCard } from '@/templates/flex/class-history';
 import { formatDateLabel, todayDateString } from '@/lib/utils/date';
 import { menuQuickReply, coachQuickReply } from '@/templates/quick-reply';
 
@@ -90,24 +90,39 @@ export async function handlePostback(event: PostbackEvent): Promise<void> {
       }
 
       case ACTION.VIEW_CLASS_BY_PAYMENT: {
-        // data = view_class_pay:{studentId}:{paymentIndex}
-        const paymentIndex = parseInt(extra, 10);
-        const { summary: hoursSummary, payments: allPayments, buckets } = await getStudentOverflowInfo(id);
-        if (isNaN(paymentIndex) || paymentIndex >= allPayments.length) {
+        // data = view_class_pay:{studentId}:{bucketDate}
+        const bucketDate = extra;
+        const { summary: hoursSummary, buckets } = await getStudentOverflowInfo(id);
+        const bucket = buckets.find(b => b.paymentDate === bucketDate);
+        if (!bucket) {
           await replyTextWithMenu(event.replyToken, '找不到該繳費紀錄。');
           return;
         }
 
         const student = await getStudentById(id);
         const studentName = student?.name ?? '';
-
-        // payments 降序，buckets 升序 → 用繳費日期對應桶
-        const payment = allPayments[paymentIndex];
-        const bucket = buckets.find(b => b.paymentDate === payment.createdAt);
-        const bucketCheckins = bucket?.checkins ?? [];
-        const checkinsDesc = [...bucketCheckins].reverse();
+        const checkinsDesc = [...bucket.checkins].reverse();
         await replyFlex(event.replyToken, `${studentName} 上課紀錄`,
           classHistoryCard(studentName, checkinsDesc, hoursSummary.remainingHours));
+        return;
+      }
+
+      case ACTION.VIEW_PAYMENT_DETAIL: {
+        // data = view_pay_dtl:{studentId}:{bucketDate}
+        const detailDate = extra;
+        const student = await getStudentById(id);
+        if (!student) {
+          await replyTextWithMenu(event.replyToken, '找不到該學員資料。');
+          return;
+        }
+        const { payments: allPayments } = await getStudentOverflowInfo(id);
+        const periodPayments = allPayments.filter(p => p.createdAt === detailDate);
+        if (periodPayments.length === 0) {
+          await replyTextWithMenu(event.replyToken, '找不到該期繳費紀錄。');
+          return;
+        }
+        await replyFlex(event.replyToken, `${student.name} 繳費明細`,
+          paymentDetailCard(student.name, detailDate, periodPayments, id));
         return;
       }
 

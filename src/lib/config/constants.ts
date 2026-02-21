@@ -22,6 +22,7 @@ export const ACTION = {
   VIEW_CLASS_BY_PAYMENT: 'view_class_pay',
   VIEW_UNPAID_OVERFLOW: 'view_unpaid',
   VIEW_PAYMENT_HISTORY: 'view_pay_hist',
+  VIEW_PAYMENT_DETAIL: 'view_pay_dtl',
 } as const;
 
 // 角色

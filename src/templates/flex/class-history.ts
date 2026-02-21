@@ -196,18 +196,40 @@ export function paymentPeriodSelector(
     } as FlexComponent]
     : [];
 
-  const buttons: FlexComponent[] = payments.map((p, i) => ({
-    type: 'button',
-    action: {
-      type: 'postback',
-      label: `${toRocDate(p.createdAt)} ｜ ${p.purchasedHours}hr ｜ $${p.totalAmount.toLocaleString()}`,
-      data: `${ACTION.VIEW_CLASS_BY_PAYMENT}:${studentId}:${i}`,
-      displayText: `查詢 ${toRocDate(p.createdAt)} 上課紀錄`,
-    },
-    style: 'secondary',
-    height: 'sm',
-    margin: 'sm',
-  } as FlexComponent));
+  // 按繳費日期分組（同日期多筆合併為一期）
+  const grouped = new Map<string, PaymentRecord[]>();
+  for (const p of payments) {
+    const list = grouped.get(p.createdAt) ?? [];
+    list.push(p);
+    grouped.set(p.createdAt, list);
+  }
+
+  // 按日期降序排列（與 payments 順序一致：最新在前）
+  const sortedDates = [...grouped.keys()].sort((a, b) => b.localeCompare(a));
+
+  const buttons: FlexComponent[] = sortedDates.map(date => {
+    const periodPayments = grouped.get(date)!;
+    const totalHours = periodPayments.reduce((sum, p) => sum + p.purchasedHours, 0);
+    const totalPaid = periodPayments.reduce((sum, p) => sum + p.paidAmount, 0);
+    const isMulti = periodPayments.length > 1;
+
+    return {
+      type: 'button',
+      action: {
+        type: 'postback',
+        label: `${toRocDate(date)} ｜ ${totalHours}hr ｜ $${totalPaid.toLocaleString()}`,
+        data: isMulti
+          ? `${ACTION.VIEW_PAYMENT_DETAIL}:${studentId}:${date}`
+          : `${ACTION.VIEW_CLASS_BY_PAYMENT}:${studentId}:${date}`,
+        displayText: isMulti
+          ? `查詢 ${toRocDate(date)} 繳費明細`
+          : `查詢 ${toRocDate(date)} 上課紀錄`,
+      },
+      style: 'secondary',
+      height: 'sm',
+      margin: 'sm',
+    } as FlexComponent;
+  });
 
   return {
     type: 'bubble',
@@ -247,6 +269,112 @@ export function paymentPeriodSelector(
         } as FlexComponent,
         ...unpaidButton,
         ...buttons,
+      ],
+      paddingAll: '16px',
+    },
+  };
+}
+
+export function paymentDetailCard(
+  studentName: string,
+  bucketDate: string,
+  periodPayments: PaymentRecord[],
+  studentId: string
+): FlexBubble {
+  const totalHours = periodPayments.reduce((sum, p) => sum + p.purchasedHours, 0);
+  const totalPaid = periodPayments.reduce((sum, p) => sum + p.paidAmount, 0);
+
+  const rows: FlexComponent[] = periodPayments.map(p => ({
+    type: 'box',
+    layout: 'horizontal',
+    contents: [
+      {
+        type: 'text',
+        text: `${p.purchasedHours}hr`,
+        size: 'sm',
+        color: '#555555',
+        flex: 2,
+      },
+      {
+        type: 'text',
+        text: `$${p.paidAmount.toLocaleString()}`,
+        size: 'sm',
+        color: '#333333',
+        flex: 3,
+        align: 'end',
+      },
+    ],
+    margin: 'sm',
+  } as FlexComponent));
+
+  return {
+    type: 'bubble',
+    size: 'mega',
+    header: {
+      type: 'box',
+      layout: 'vertical',
+      contents: [
+        {
+          type: 'text',
+          text: '繳費明細',
+          weight: 'bold',
+          size: 'lg',
+          color: '#FFFFFF',
+        },
+        {
+          type: 'text',
+          text: `${studentName}｜${toRocDate(bucketDate)}｜共 ${totalHours}hr`,
+          size: 'sm',
+          color: '#FFFFFFCC',
+          margin: 'sm',
+        },
+      ],
+      paddingAll: '20px',
+      backgroundColor: '#1B4965',
+    },
+    body: {
+      type: 'box',
+      layout: 'vertical',
+      contents: [
+        {
+          type: 'box',
+          layout: 'horizontal',
+          contents: [
+            { type: 'text', text: '時數', size: 'xs', color: '#999999', weight: 'bold', flex: 2 },
+            { type: 'text', text: '金額', size: 'xs', color: '#999999', weight: 'bold', flex: 3, align: 'end' },
+          ],
+        } as FlexComponent,
+        { type: 'separator', margin: 'sm' } as FlexComponent,
+        ...rows,
+        { type: 'separator', margin: 'md' } as FlexComponent,
+        {
+          type: 'box',
+          layout: 'horizontal',
+          contents: [
+            { type: 'text', text: '合計', size: 'sm', color: '#333333', weight: 'bold', flex: 2 },
+            { type: 'text', text: `$${totalPaid.toLocaleString()}`, size: 'sm', color: '#333333', weight: 'bold', flex: 3, align: 'end' },
+          ],
+          margin: 'sm',
+        } as FlexComponent,
+      ],
+      paddingAll: '16px',
+    },
+    footer: {
+      type: 'box',
+      layout: 'vertical',
+      contents: [
+        {
+          type: 'button',
+          action: {
+            type: 'postback',
+            label: '查看上課紀錄',
+            data: `${ACTION.VIEW_CLASS_BY_PAYMENT}:${studentId}:${bucketDate}`,
+            displayText: `查詢 ${toRocDate(bucketDate)} 上課紀錄`,
+          },
+          style: 'primary',
+          color: '#1B4965',
+          height: 'sm',
+        },
       ],
       paddingAll: '16px',
     },
