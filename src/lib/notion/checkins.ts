@@ -55,7 +55,7 @@ function extractCheckin(page: Record<string, unknown>): CheckinRecord {
     studentId: studentRelation[0] || '',
     coachId: coachRelation[0] || '',
     checkinTime,
-    classDate: checkinTime ? checkinTime.slice(0, 10) : '',
+    classDate: timeRange ? timeRange.start.slice(0, 10) : (checkinTime ? checkinTime.slice(0, 10) : ''),
     classTimeSlot,
     durationMinutes,
     studentName: title.split(' - ')[0] || undefined,
