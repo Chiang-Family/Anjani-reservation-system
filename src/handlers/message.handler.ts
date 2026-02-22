@@ -27,7 +27,7 @@ import { paymentHistoryCard } from '@/templates/flex/payment-history';
 import { studentMenu, coachMenu } from '@/templates/flex/main-menu';
 import { scheduleList } from '@/templates/flex/today-schedule';
 import { getEventsForDateRange } from '@/lib/google/calendar';
-import { todayDateString, addDays, nowTaipei } from '@/lib/utils/date';
+import { todayDateString, addDays } from '@/lib/utils/date';
 import { studentScheduleCard } from '@/templates/flex/student-schedule';
 import { monthlyStatsCard } from '@/templates/flex/monthly-stats';
 import { studentMgmtList } from '@/templates/flex/student-mgmt-list';
@@ -197,7 +197,7 @@ async function handleStudentMessage(
       return;
     }
 
-    case KEYWORD.NEXT_WEEK: {
+    case KEYWORD.UPCOMING_CLASSES: {
       const student = await findStudentByLineId(lineUserId);
       if (!student) {
         const qr = studentQuickReply();
@@ -206,15 +206,18 @@ async function handleStudentMessage(
         ]);
         return;
       }
-      const now = nowTaipei();
-      const dayOfWeek = now.getDay(); // 0=Sun
-      const daysUntilNextMon = dayOfWeek === 0 ? 1 : 8 - dayOfWeek;
       const today = todayDateString();
-      const nextMon = addDays(today, daysUntilNextMon);
-      const nextSun = addDays(nextMon, 6);
-      const events = await getEventsForDateRange(nextMon, nextSun);
-      const matched = events.filter((e) => e.summary.trim() === student.name);
-      await replyFlex(replyToken, '下週課程', studentScheduleCard(student.name, matched, nextMon, nextSun), studentQuickReply(student.paymentType));
+      const twoMonthsLater = addDays(today, 60);
+      const [events, checkins] = await Promise.all([
+        getEventsForDateRange(today, twoMonthsLater),
+        getCheckinsByStudent(student.id),
+      ]);
+      const checkedDates = new Set(checkins.map(c => c.classDate));
+      const upcoming = events
+        .filter(e => e.summary.trim() === student.name)
+        .filter(e => !checkedDates.has(e.date))
+        .slice(0, 2);
+      await replyFlex(replyToken, '近期預約', studentScheduleCard(student.name, upcoming), studentQuickReply(student.paymentType));
       return;
     }
 

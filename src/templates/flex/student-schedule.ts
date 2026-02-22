@@ -1,26 +1,24 @@
 import type { messagingApi } from '@line/bot-sdk';
 import type { CalendarEvent } from '@/types';
+import { toZonedTime } from 'date-fns-tz';
 
 type FlexBubble = messagingApi.FlexBubble;
 type FlexComponent = messagingApi.FlexComponent;
 
+const TZ = 'Asia/Taipei';
 const WEEKDAYS = ['日', '一', '二', '三', '四', '五', '六'];
 
 export function studentScheduleCard(
   studentName: string,
   events: CalendarEvent[],
-  fromDate: string,
-  toDate: string
 ): FlexBubble {
-  const fromRoc = toRocDate(fromDate);
-  const toRoc = toRocDate(toDate);
-
   const rows: FlexComponent[] = events.length > 0
     ? events.map((e) => {
-      const d = new Date(e.date + 'T00:00:00+08:00');
+      const d = toZonedTime(new Date(e.date + 'T00:00:00+08:00'), TZ);
       const weekday = WEEKDAYS[d.getDay()];
-      const [y, m, day] = e.date.split('-');
-      const dateStr = `${parseInt(m, 10)}/${parseInt(day, 10)}（${weekday}）`;
+      const [, m, day] = e.date.split('-');
+      const rocYear = parseInt(e.date.split('-')[0], 10) - 1911;
+      const dateStr = `${rocYear}/${parseInt(m, 10)}/${parseInt(day, 10)}（${weekday}）`;
       return {
         type: 'box',
         layout: 'horizontal',
@@ -30,7 +28,7 @@ export function studentScheduleCard(
             text: dateStr,
             size: 'sm',
             color: '#555555',
-            flex: 5,
+            flex: 6,
           },
           {
             type: 'text',
@@ -47,7 +45,7 @@ export function studentScheduleCard(
     : [
       {
         type: 'text',
-        text: '下週沒有排課。',
+        text: '目前沒有預約課程。',
         size: 'sm',
         color: '#999999',
         margin: 'md',
@@ -63,14 +61,14 @@ export function studentScheduleCard(
       contents: [
         {
           type: 'text',
-          text: '下週課程',
+          text: '近期預約',
           weight: 'bold',
           size: 'lg',
           color: '#FFFFFF',
         },
         {
           type: 'text',
-          text: `${studentName}｜${fromRoc} ~ ${toRoc}`,
+          text: studentName,
           size: 'sm',
           color: '#FFFFFFCC',
           margin: 'sm',
@@ -93,7 +91,7 @@ export function studentScheduleCard(
               size: 'xs',
               color: '#999999',
               weight: 'bold',
-              flex: 5,
+              flex: 6,
             },
             {
               type: 'text',
@@ -116,9 +114,4 @@ export function studentScheduleCard(
       spacing: 'none',
     },
   };
-}
-
-function toRocDate(dateStr: string): string {
-  const [y, m, d] = dateStr.split('-');
-  return `${parseInt(y, 10) - 1911}/${parseInt(m, 10)}/${parseInt(d, 10)}`;
 }

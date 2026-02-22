@@ -76,7 +76,7 @@ export function studentMenu(name: string, coachLineUrl?: string, paymentType?: s
       type: 'box',
       layout: 'vertical',
       contents: [
-        menuButton(KEYWORD.NEXT_WEEK, '#2D6A4F'),
+        menuButton(KEYWORD.UPCOMING_CLASSES, '#2D6A4F'),
         menuButton(isPerSession ? KEYWORD.SESSION_CLASS_HISTORY : KEYWORD.CLASS_HISTORY, '#3D5A80'),
         ...(!isPerSession
           ? [menuButton(KEYWORD.PAYMENT_HISTORY, '#6D597A')]
