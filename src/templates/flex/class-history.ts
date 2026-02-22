@@ -172,6 +172,7 @@ export function classHistoryCard(
 export function sessionMonthlyCard(
   studentName: string,
   records: Array<CheckinRecord & { isPaid: boolean }>,
+  historicalUnpaid?: CheckinRecord[],
 ): FlexBubble {
   const totalCount = records.length;
   const withSequence = records.map((r, i) => ({
@@ -229,7 +230,66 @@ export function sessionMonthlyCard(
       } as FlexComponent,
     ];
 
-  const unpaidCount = records.filter(r => !r.isPaid).length;
+  const monthUnpaid = records.filter(r => !r.isPaid).length;
+  const histCount = historicalUnpaid?.length ?? 0;
+  const totalUnpaid = monthUnpaid + histCount;
+
+  // 歷史欠費區塊
+  const historicalSection: FlexComponent[] = histCount > 0
+    ? [
+      { type: 'separator', margin: 'lg' } as FlexComponent,
+      {
+        type: 'text',
+        text: `歷史欠費（${histCount} 堂）`,
+        size: 'sm',
+        color: '#e74c3c',
+        weight: 'bold',
+        margin: 'lg',
+      } as FlexComponent,
+      // 按日期降序排列，取最近 5 筆
+      ...[...historicalUnpaid!].sort((a, b) => b.classDate.localeCompare(a.classDate)).slice(0, 5).map((r) => ({
+        type: 'box',
+        layout: 'horizontal',
+        contents: [
+          {
+            type: 'text',
+            text: (() => {
+              const [y, m, d] = r.classDate.split('-');
+              return `${parseInt(y, 10) - 1911}-${m}-${d}`;
+            })(),
+            size: 'sm',
+            color: '#555555',
+            flex: 5,
+          },
+          {
+            type: 'text',
+            text: r.classTimeSlot,
+            size: 'sm',
+            color: '#333333',
+            flex: 4,
+          },
+          {
+            type: 'text',
+            text: '❌',
+            size: 'sm',
+            flex: 2,
+            align: 'end',
+          },
+        ],
+        margin: 'sm',
+      } as FlexComponent)),
+      ...(histCount > 5
+        ? [{
+          type: 'text',
+          text: `⋯ 還有 ${histCount - 5} 筆`,
+          size: 'xs',
+          color: '#999999',
+          margin: 'md',
+          align: 'center',
+        } as FlexComponent]
+        : []),
+    ]
+    : [];
 
   return {
     type: 'bubble',
@@ -247,8 +307,8 @@ export function sessionMonthlyCard(
         },
         {
           type: 'text',
-          text: unpaidCount > 0
-            ? `${studentName}｜欠費 ${unpaidCount} 堂`
+          text: totalUnpaid > 0
+            ? `${studentName}｜欠費 ${totalUnpaid} 堂`
             : `${studentName}｜全數已繳`,
           size: 'sm',
           color: '#FFFFFFCC',
@@ -256,7 +316,7 @@ export function sessionMonthlyCard(
         },
       ],
       paddingAll: '20px',
-      backgroundColor: unpaidCount > 0 ? '#c0392b' : '#1B4965',
+      backgroundColor: totalUnpaid > 0 ? '#c0392b' : '#1B4965',
     },
     body: {
       type: 'box',
@@ -284,6 +344,7 @@ export function sessionMonthlyCard(
             align: 'center',
           } as FlexComponent]
           : []),
+        ...historicalSection,
       ],
       paddingAll: '16px',
       spacing: 'none',

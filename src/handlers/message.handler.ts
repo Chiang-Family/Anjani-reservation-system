@@ -141,7 +141,9 @@ async function handleStudentMessage(
         const monthRecords = checkins
           .filter(c => c.classDate.startsWith(currentMonth))
           .map(c => ({ ...c, isPaid: paidDates.has(c.classDate) }));
-        await replyFlex(replyToken, '當月上課紀錄', sessionMonthlyCard(student.name, monthRecords));
+        const historicalUnpaid = checkins
+          .filter(c => !c.classDate.startsWith(currentMonth) && !paidDates.has(c.classDate));
+        await replyFlex(replyToken, '當月上課紀錄', sessionMonthlyCard(student.name, monthRecords, historicalUnpaid));
         return;
       }
 

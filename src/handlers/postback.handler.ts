@@ -181,8 +181,10 @@ export async function handlePostback(event: PostbackEvent): Promise<void> {
           const monthRecords = checkins
             .filter(c => c.classDate.startsWith(currentMonth))
             .map(c => ({ ...c, isPaid: paidDates.has(c.classDate) }));
+          const historicalUnpaid = checkins
+            .filter(c => !c.classDate.startsWith(currentMonth) && !paidDates.has(c.classDate));
           await replyFlex(event.replyToken, `${student.name} 當月上課紀錄`,
-            sessionMonthlyCard(student.name, monthRecords));
+            sessionMonthlyCard(student.name, monthRecords, historicalUnpaid));
           return;
         }
 
