@@ -205,7 +205,7 @@ export async function handlePostback(event: PostbackEvent): Promise<void> {
         }
         const showPaid = action === ACTION.VIEW_RENEWAL_PAID;
         const filtered = stats.renewalForecast.students.filter(s => {
-          const isPaid = s.renewedDate !== null && s.paidAmount >= s.expectedRenewalAmount;
+          const isPaid = s.isPaid;
           return showPaid ? isPaid : !isPaid;
         });
         const title = showPaid ? '✅ 已繳費學員' : '❌ 未繳費學員';

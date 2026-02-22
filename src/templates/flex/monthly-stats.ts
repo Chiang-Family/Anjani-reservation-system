@@ -35,7 +35,7 @@ export function monthlyStatsCard(stats: CoachMonthlyStats): FlexBubble {
     );
   }
 
-  const unpaidCount = forecast.students.filter(s => !(s.renewedDate !== null && s.paidAmount >= s.expectedRenewalAmount)).length;
+  const unpaidCount = forecast.students.filter(s => !s.isPaid).length;
   const paidCount = forecast.students.length - unpaidCount;
 
   return {
@@ -124,7 +124,6 @@ export function renewalStudentListCard(
   }
 
   for (const s of students) {
-    const isPaid = s.renewedDate !== null && s.paidAmount >= s.expectedRenewalAmount;
     bodyContents.push({
       type: 'text',
       text: s.name,
@@ -136,21 +135,20 @@ export function renewalStudentListCard(
     if (s.insufficientData) {
       bodyContents.push(
         detailRow('剩餘時數', `${s.remainingHours} hr`),
-        detailRow('到期日', '行事曆不足'),
+        detailRow('到期日', fmtDate(s.expiryDate)),
+        detailRow('續約日', '行事曆不足'),
         detailRow('續約時數', `${s.expectedRenewalHours} hr`),
         detailRow('金額', `$${s.expectedRenewalAmount.toLocaleString()}`),
       );
     } else {
       bodyContents.push(
         detailRow('到期日', fmtDate(s.expiryDate)),
-        isPaid
-          ? detailRow('續約日', fmtDate(s.renewedDate!))
-          : detailRow('應繳日', fmtDate(s.dueDate)),
+        detailRow('續約日', fmtDate(s.dueDate)),
         detailRow('續約時數', `${s.expectedRenewalHours} hr`),
         detailRow('金額', `$${s.expectedRenewalAmount.toLocaleString()}`),
       );
     }
-    if (!isPaid && s.paidAmount > 0) {
+    if (!s.isPaid && s.paidAmount > 0) {
       bodyContents.push(detailRow('已付', `$${s.paidAmount.toLocaleString()}`));
     }
     if (bodyContents.length < 50) {

@@ -14,10 +14,10 @@ export interface RenewalStudent {
   expectedRenewalHours: number;
   expectedRenewalAmount: number;
   paidAmount: number;
-  expiryDate: string;           // yyyy-MM-dd or '' if unknown
-  dueDate: string;              // yyyy-MM-dd or '' if unknown
-  renewedDate: string | null;   // yyyy-MM-dd (payment date, null if not yet)
-  insufficientData: boolean;    // true when calendar data insufficient to determine dates
+  expiryDate: string;           // yyyy-MM-dd: 時數歸零的日期
+  dueDate: string;              // yyyy-MM-dd: 已繳費→繳費日；未繳費→到期後下一堂課日期；'' = 行事曆不足
+  isPaid: boolean;              // true if renewed and fully paid
+  insufficientData: boolean;    // true when calendar data insufficient to determine dueDate
 }
 
 export interface RenewalForecast {
@@ -56,8 +56,8 @@ function filterEventsByStudentNames(events: CalendarEvent[], studentNames: Set<s
 
 interface RenewalCycle {
   expiryDate: string;        // 時數歸零的日期
-  dueDate: string;           // 到期後下一堂課日期，'' = 行事曆不足
-  renewedDate: string | null;// 下一期繳費日（已繳費），null = 未繳費
+  dueDate: string;           // 已繳費→繳費日；未繳費→到期後下一堂課日期；'' = 行事曆不足
+  isPaid: boolean;           // 是否已續約且全額繳費
   expectedHours: number;     // 已繳費→實際購買時數；未繳費→預估（同上期）
   expectedAmount: number;    // 已繳費→實際金額；未繳費→預估
   paidAmount: number;        // 已繳費→實付金額；未繳費→0
@@ -105,8 +105,8 @@ function findRenewalCycles(
     const nextInfo = getBucketInfo(i + 1);
     cycles.push({
       expiryDate: buckets[i].checkins[buckets[i].checkins.length - 1].classDate,
-      dueDate: '',
-      renewedDate: nextInfo.actualDate,
+      dueDate: nextInfo.actualDate,
+      isPaid: nextInfo.paidAmount >= nextInfo.totalAmount,
       expectedHours: nextInfo.purchasedHours,
       expectedAmount: nextInfo.totalAmount,
       paidAmount: nextInfo.paidAmount,
@@ -134,8 +134,8 @@ function findRenewalCycles(
           const nextInfo = getBucketInfo(nextIdx);
           cycles.push({
             expiryDate,
-            dueDate: evtIdx < futureEvents.length ? futureEvents[evtIdx].date : '',
-            renewedDate: nextInfo.actualDate,
+            dueDate: nextInfo.actualDate,
+            isPaid: nextInfo.paidAmount >= nextInfo.totalAmount,
             expectedHours: nextInfo.purchasedHours,
             expectedAmount: nextInfo.totalAmount,
             paidAmount: nextInfo.paidAmount,
@@ -148,7 +148,7 @@ function findRenewalCycles(
           cycles.push({
             expiryDate,
             dueDate: evtIdx < futureEvents.length ? futureEvents[evtIdx].date : '',
-            renewedDate: null,
+            isPaid: false,
             expectedHours: curInfo.purchasedHours,
             expectedAmount: Math.round(curInfo.purchasedHours * curInfo.pricePerHour),
             paidAmount: 0,
@@ -173,7 +173,7 @@ function findRenewalCycles(
       cycles.push({
         expiryDate: lastCheckin.classDate,
         dueDate: futureEvents.length > 0 ? futureEvents[0].date : '',
-        renewedDate: null,
+        isPaid: false,
         expectedHours: lastInfo.purchasedHours,
         expectedAmount: Math.round(lastInfo.purchasedHours * lastInfo.pricePerHour),
         paidAmount: 0,
@@ -300,15 +300,9 @@ export async function getCoachMonthlyStats(
     const cycles = findRenewalCycles(buckets, overflowCheckins, studentFutureEvents, studentPayments);
 
     for (const cycle of cycles) {
-      const isRenewed = cycle.renewedDate !== null;
-      let inMonth = false;
-      if (isRenewed) {
-        inMonth = cycle.renewedDate!.startsWith(monthPrefix);
-      } else if (cycle.dueDate !== '') {
-        inMonth = cycle.dueDate.startsWith(monthPrefix);
-      } else {
-        inMonth = cycle.expiryDate.startsWith(monthPrefix);
-      }
+      const inMonth = cycle.dueDate !== ''
+        ? cycle.dueDate.startsWith(monthPrefix)
+        : cycle.expiryDate.startsWith(monthPrefix);
       if (!inMonth) continue;
 
       renewalStudents.push({
@@ -319,8 +313,8 @@ export async function getCoachMonthlyStats(
         paidAmount: Math.round(cycle.paidAmount),
         expiryDate: cycle.expiryDate,
         dueDate: cycle.dueDate,
-        renewedDate: cycle.renewedDate,
-        insufficientData: !isRenewed && cycle.dueDate === '',
+        isPaid: cycle.isPaid,
+        insufficientData: !cycle.isPaid && cycle.dueDate === '',
       });
     }
   }
@@ -341,13 +335,17 @@ export async function getCoachMonthlyStats(
     students: renewalStudents,
   };
 
-  // 實際收款 + 待收款: from renewal cycle data
-  const collectedAmount = Math.round(
-    renewalStudents.reduce((sum, s) => sum + s.paidAmount, 0)
-  );
-  const pendingAmount = Math.round(
-    renewalStudents.reduce((sum, s) => sum + Math.max(0, s.expectedRenewalAmount - s.paidAmount), 0)
-  );
+  // 實際收款 + 待收款: from actual payments created in this month
+  let collectedAmount = 0;
+  let pendingAmount = 0;
+  for (const p of payments) {
+    if (p.createdAt.startsWith(monthPrefix) || p.actualDate.startsWith(monthPrefix)) {
+      collectedAmount += p.paidAmount;
+      if (p.totalAmount > p.paidAmount) {
+        pendingAmount += (p.totalAmount - p.paidAmount);
+      }
+    }
+  }
 
   return {
     coachName: coach.name,
