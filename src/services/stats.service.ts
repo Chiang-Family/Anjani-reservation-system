@@ -5,7 +5,7 @@ import { assignCheckinsToBuckets, computeSummaryFromBuckets } from '@/lib/notion
 import { getCheckinsByDateRange, getCheckinsByCoach } from '@/lib/notion/checkins';
 import { getMonthEvents, getEventsForDateRange } from '@/lib/google/calendar';
 import { nowTaipei, computeDurationMinutes, todayDateString } from '@/lib/utils/date';
-import { format, addMonths } from 'date-fns';
+import { format, addMonths, addDays, parseISO } from 'date-fns';
 import type { CalendarEvent, CheckinRecord, PaymentRecord } from '@/types';
 
 export interface RenewalStudent {
@@ -36,19 +36,6 @@ export interface CoachMonthlyStats {
   collectedAmount: number;
   pendingAmount: number;
   renewalForecast: RenewalForecast;
-}
-
-/**
- * Walk future events consuming remainingHours, return the date when hours reach zero.
- */
-function computeExpiryFromFutureEvents(remainingHours: number, futureEvents: CalendarEvent[]): string {
-  let remainingMin = remainingHours * 60;
-  for (const evt of futureEvents) {
-    const durMin = computeDurationMinutes(evt.startTime, evt.endTime);
-    remainingMin -= durMin;
-    if (remainingMin <= 0) return evt.date;
-  }
-  return '';
 }
 
 /**
@@ -322,7 +309,7 @@ export async function getCoachMonthlyStats(
         expectedRenewalAmount: cycle.expectedAmount,
         paidAmount: Math.round(cycle.paidAmount),
         expiryDate: cycle.isPaid
-          ? (computeExpiryFromFutureEvents(summary.remainingHours, studentFutureEvents) || cycle.expiryDate)
+          ? format(addDays(parseISO(cycle.renewalDate), cycle.expectedHours), 'yyyy-MM-dd')
           : cycle.expiryDate,
         renewalDate: cycle.renewalDate,
         isPaid: cycle.isPaid,
