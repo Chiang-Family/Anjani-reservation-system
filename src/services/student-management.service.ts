@@ -343,13 +343,13 @@ export async function handleBinding(
   name: string
 ): Promise<{ success: boolean; message: string }> {
   // Check if input is meant for a coach
-  const coachMatch = name.trim().match(/^教練[+＋\s]*(.*)/);
+  const coachMatch = name.trim().match(/^教練(.+)/);
   if (coachMatch) {
     const coachName = coachMatch[1].trim();
     if (!coachName) {
       return {
         success: false,
-        message: '請輸入教練的姓名。例如：「教練 王大明」或「教練+王大明」',
+        message: '請輸入教練的姓名。例如：「教練Jack」',
       };
     }
     const coach = await findCoachByName(coachName);
