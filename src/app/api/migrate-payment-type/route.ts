@@ -34,9 +34,10 @@ export async function GET(req: Request) {
     const payments = await getPaymentsByStudent(student.id);
     if (payments.length === 0) continue;
 
+    const alreadyMarked = student.paymentType === '單堂';
     const allSingleSession = payments.every(p => p.purchasedHours === 1);
 
-    if (allSingleSession) {
+    if (allSingleSession || (alreadyMarked && !student.perSessionFee)) {
       // 取最新一筆的 pricePerHour 作為單堂費用
       const latestPayment = payments[0]; // already sorted desc
       const fee = latestPayment.pricePerHour;
