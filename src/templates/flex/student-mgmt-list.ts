@@ -6,9 +6,22 @@ import { formatHours } from '@/lib/utils/date';
 type FlexBubble = messagingApi.FlexBubble;
 type FlexComponent = messagingApi.FlexComponent;
 
-export function studentMgmtList(students: Array<Student & { summary: StudentHoursSummary }>): FlexBubble[] {
+export function studentMgmtList(students: Array<Student & { summary: StudentHoursSummary; monthlyCheckinCount?: number }>): FlexBubble[] {
   return students.map((student) => {
     const { summary } = student;
+    const isPerSession = student.paymentType === '單堂';
+
+    const bodyContents: FlexComponent[] = isPerSession
+      ? [
+          infoRow('收費方式', '單堂'),
+          infoRow('單堂費用', `$${(student.perSessionFee ?? 0).toLocaleString()}`),
+          infoRow('當月上課', `${student.monthlyCheckinCount ?? 0} 堂`),
+        ]
+      : [
+          infoRow('購買時數', formatHours(summary.purchasedHours)),
+          infoRow('已上時數', formatHours(summary.completedHours)),
+          infoRow('剩餘時數', formatHours(summary.remainingHours)),
+        ];
 
     return {
       type: 'bubble',
@@ -31,11 +44,7 @@ export function studentMgmtList(students: Array<Student & { summary: StudentHour
       body: {
         type: 'box',
         layout: 'vertical',
-        contents: [
-          infoRow('購買時數', formatHours(summary.purchasedHours)),
-          infoRow('已上時數', formatHours(summary.completedHours)),
-          infoRow('剩餘時數', formatHours(summary.remainingHours)),
-        ] as FlexComponent[],
+        contents: bodyContents,
         paddingAll: '16px',
         spacing: 'sm',
       },

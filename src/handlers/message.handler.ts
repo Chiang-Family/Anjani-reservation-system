@@ -271,8 +271,21 @@ async function handleCoachMessage(
           (s) => s.name.includes(text) || text.includes(s.name)
         );
         if (matched.length > 0) {
-          const summaries = await pMap(matched, s => getStudentHoursSummary(s.id));
-          const withSummary = matched.map((s, i) => ({ ...s, summary: summaries[i] }));
+          const currentMonth = todayDateString().slice(0, 7);
+          const summaries = await pMap(matched, async (s) => {
+            const summary = await getStudentHoursSummary(s.id);
+            let monthlyCheckinCount: number | undefined;
+            if (s.paymentType === '單堂') {
+              const checkins = await getCheckinsByStudent(s.id);
+              monthlyCheckinCount = checkins.filter(c => c.classDate.startsWith(currentMonth)).length;
+            }
+            return { summary, monthlyCheckinCount };
+          });
+          const withSummary = matched.map((s, i) => ({
+            ...s,
+            summary: summaries[i].summary,
+            monthlyCheckinCount: summaries[i].monthlyCheckinCount,
+          }));
           const bubbles = studentMgmtList(withSummary);
           await replyMessages(replyToken, [
             {
