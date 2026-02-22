@@ -15,9 +15,8 @@ export interface RenewalStudent {
   expectedRenewalAmount: number;
   paidAmount: number;
   expiryDate: string;           // yyyy-MM-dd: 時數歸零的日期
-  renewalDate: string;              // yyyy-MM-dd: 已繳費→繳費日；未繳費→到期後下一堂課日期；'' = 行事曆不足
-  isPaid: boolean;              // true if renewed and fully paid
-  insufficientData: boolean;    // true when calendar data insufficient to determine renewalDate
+  renewalDate: string;              // yyyy-MM-dd: 到期後下一堂課日期（續約日）
+  isPaid: boolean;              // true if has payment record (next bucket exists)
 }
 
 export interface RenewalForecast {
@@ -57,7 +56,7 @@ function filterEventsByStudentNames(events: CalendarEvent[], studentNames: Set<s
 interface RenewalCycle {
   expiryDate: string;        // 時數歸零的日期
   renewalDate: string;           // 已繳費→繳費日；未繳費→到期後下一堂課日期；'' = 行事曆不足
-  isPaid: boolean;           // 是否已續約且全額繳費
+  isPaid: boolean;           // 是否有繳費紀錄（有下一個 bucket）
   expectedHours: number;     // 已繳費→實際購買時數；未繳費→預估（同上期）
   expectedAmount: number;    // 已繳費→實際金額；未繳費→預估
   paidAmount: number;        // 已繳費→實付金額；未繳費→0
@@ -106,7 +105,7 @@ function findRenewalCycles(
     cycles.push({
       expiryDate: buckets[i].checkins[buckets[i].checkins.length - 1].classDate,
       renewalDate: nextInfo.actualDate,
-      isPaid: nextInfo.paidAmount >= nextInfo.totalAmount,
+      isPaid: true,
       expectedHours: nextInfo.purchasedHours,
       expectedAmount: nextInfo.totalAmount,
       paidAmount: nextInfo.paidAmount,
@@ -135,7 +134,7 @@ function findRenewalCycles(
           cycles.push({
             expiryDate,
             renewalDate: evtIdx < futureEvents.length ? futureEvents[evtIdx].date : '',
-            isPaid: nextInfo.paidAmount >= nextInfo.totalAmount,
+            isPaid: true,
             expectedHours: nextInfo.purchasedHours,
             expectedAmount: nextInfo.totalAmount,
             paidAmount: nextInfo.paidAmount,
@@ -300,10 +299,8 @@ export async function getCoachMonthlyStats(
     const cycles = findRenewalCycles(buckets, overflowCheckins, studentFutureEvents, studentPayments);
 
     for (const cycle of cycles) {
-      // 到期日或續約日任一在本月即列入
-      const inMonth = cycle.expiryDate.startsWith(monthPrefix) ||
-        (cycle.renewalDate !== '' && cycle.renewalDate.startsWith(monthPrefix));
-      if (!inMonth) continue;
+      // 只看續約日是否在本月
+      if (cycle.renewalDate === '' || !cycle.renewalDate.startsWith(monthPrefix)) continue;
 
       renewalStudents.push({
         name: student.name,
@@ -314,19 +311,14 @@ export async function getCoachMonthlyStats(
         expiryDate: cycle.expiryDate,
         renewalDate: cycle.renewalDate,
         isPaid: cycle.isPaid,
-        insufficientData: !cycle.isPaid && cycle.renewalDate === '',
       });
     }
   }
 
-  // Sort: unpaid first (low paid ratio), insufficientData last
+  // Sort: unpaid first
   renewalStudents.sort((a, b) => {
-    if (a.insufficientData !== b.insufficientData) {
-      return a.insufficientData ? 1 : -1;
-    }
-    const ratioA = a.paidAmount / (a.expectedRenewalAmount || 1);
-    const ratioB = b.paidAmount / (b.expectedRenewalAmount || 1);
-    return ratioA - ratioB;
+    if (a.isPaid !== b.isPaid) return a.isPaid ? 1 : -1;
+    return 0;
   });
 
   const renewalForecast: RenewalForecast = {

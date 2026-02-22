@@ -132,22 +132,12 @@ export function renewalStudentListCard(
       color: '#333333',
       margin: bodyContents.length > 0 ? 'lg' : 'none',
     } as FlexComponent);
-    if (s.insufficientData) {
-      bodyContents.push(
-        detailRow('剩餘時數', `${s.remainingHours} hr`),
-        detailRow('到期日', fmtDate(s.expiryDate)),
-        detailRow('續約日', '行事曆不足'),
-        detailRow('續約時數', `${s.expectedRenewalHours} hr`),
-        detailRow('金額', `$${s.expectedRenewalAmount.toLocaleString()}`),
-      );
-    } else {
-      bodyContents.push(
-        detailRow('到期日', fmtDate(s.expiryDate)),
-        detailRow('續約日', fmtDate(s.renewalDate)),
-        detailRow('續約時數', `${s.expectedRenewalHours} hr`),
-        detailRow('金額', `$${s.expectedRenewalAmount.toLocaleString()}`),
-      );
-    }
+    bodyContents.push(
+      detailRow('到期日', fmtDate(s.expiryDate)),
+      detailRow('續約日', fmtDate(s.renewalDate)),
+      detailRow('續約時數', `${s.expectedRenewalHours} hr`),
+      detailRow('金額', `$${s.expectedRenewalAmount.toLocaleString()}`),
+    );
     if (!s.isPaid && s.paidAmount > 0) {
       bodyContents.push(detailRow('已付', `$${s.paidAmount.toLocaleString()}`));
     }
