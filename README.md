@@ -65,9 +65,13 @@ handleEvent() 事件分發
 | 姓名 | title | 學員姓名（用於 Calendar 比對） |
 | LINE User ID | rich_text | 綁定的 LINE ID |
 | 所屬教練 | relation → 教練 DB | |
+| 收費方式 | select | `套時數`（預設）或 `單堂` |
+| 單堂費用 | number | 單堂學員的每次上課費用 |
 | 狀態 | select | 學員狀態 |
 
 > 購買時數和已上時數**不存在於學員 DB**，而是從繳費紀錄和打卡紀錄透過 FIFO 模型即時計算。
+>
+> **收費方式**：`套時數`（預先購買時數包，FIFO 消耗）或 `單堂`（每次上課單獨計費，逐堂繳費）。
 
 ### 教練 (Coaches)
 
@@ -152,9 +156,10 @@ handleEvent() 事件分發
 
 | 指令 | 功能 |
 |------|------|
-| `當期上課紀錄` | 查看當期最近 10 筆上課紀錄（有 overflow 時顯示未繳費期） |
-| `繳費紀錄` | 依期數查看繳費與上課紀錄 |
-| `下週課程` | 查看下週排課時間 |
+| `當期上課紀錄` | 套時數學員：查看當期上課紀錄（有 overflow 時顯示未繳費期） |
+| `當月上課/繳費` | 單堂學員：查看當月上課 + 繳費狀態，含歷史欠費 |
+| `繳費紀錄` | 依期數查看繳費與上課紀錄（單堂學員合併至上課紀錄） |
+| `近期預約` | 查看未來兩個月內最近 2 次未打卡的課程 |
 | `選單` | 顯示功能選單 |
 
 ### 教練功能
@@ -186,6 +191,16 @@ handleEvent() 事件分發
 | `view_class_pay` | `{studentId}:{bucketDate}` | 查看指定期的上課紀錄 |
 | `view_pay_dtl` | `{studentId}:{bucketDate}` | 查看指定期的繳費明細 |
 | `view_unpaid` | `{studentId}` | 查看未繳費期上課紀錄 |
+| `session_pay` | `{studentId}:{date}` | 單堂學員繳費（標記某日已繳費） |
+
+---
+
+## Quick Reply 快捷選單
+
+所有回覆訊息皆附帶 Quick Reply 按鈕，方便使用者快速切換功能：
+
+- **學員端**：選單、當期上課紀錄（或當月上課/繳費）、繳費紀錄、近期預約
+- **教練端**：選單、每日課表、學員管理、新增學員、本月統計
 
 ---
 
@@ -384,7 +399,8 @@ src/
 │   │   ├── class-history.ts          # 上課紀錄 + 繳費期數選單 + 繳費明細
 │   │   ├── payment-confirm.ts        # 收款期數選擇（新期/補繳）
 │   │   ├── monthly-stats.ts          # 月度統計卡片
-│   │   ├── student-schedule.ts       # 學員下週課程
+│   │   ├── student-schedule.ts       # 學員近期預約（未來 2 個月）
+│   │   ├── unpaid-session-dates.ts   # 單堂學員欠費日期選擇
 │   │   ├── add-student-confirm.ts    # 新增學員確認卡片
 │   │   └── empty-state.ts            # 空狀態提示
 │   ├── quick-reply.ts                # Quick Reply 按鈕
