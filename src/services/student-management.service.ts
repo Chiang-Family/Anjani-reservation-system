@@ -140,7 +140,7 @@ export async function startCollectAndAdd(studentId: string, lineUserId: string):
     );
     const unpaidCheckins = checkins.filter(c => !paidDates.has(c.classDate));
     if (unpaidCheckins.length === 0) {
-      return { type: 'text', message: '該堂課尚未執行，請先打卡再進行繳費。' };
+      return { type: 'text', message: `${student.name} 目前沒有未繳費的上課紀錄。` };
     }
     return {
       type: 'flex',

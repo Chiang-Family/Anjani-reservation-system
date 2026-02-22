@@ -164,7 +164,7 @@ export async function recordSessionPayment(
     ? await findStudentEventForDate(student.name, dateStr)
     : await findStudentEventToday(student.name);
   if (!event) {
-    return { success: false, message: `${targetDate} 沒有 ${student.name} 的課程安排。` };
+    return { success: false, message: '該堂課尚未執行，請先打卡再進行繳費。' };
   }
 
   const durationMinutes = computeDurationMinutes(event.startTime, event.endTime);
