@@ -6,16 +6,19 @@ import { formatHours } from '@/lib/utils/date';
 type FlexBubble = messagingApi.FlexBubble;
 type FlexComponent = messagingApi.FlexComponent;
 
-export function studentMgmtList(students: Array<Student & { summary: StudentHoursSummary; monthlyCheckinCount?: number }>): FlexBubble[] {
+export function studentMgmtList(students: Array<Student & { summary: StudentHoursSummary; monthlyCheckinCount?: number; unpaidCount?: number }>): FlexBubble[] {
   return students.map((student) => {
     const { summary } = student;
     const isPerSession = student.paymentType === '單堂';
 
+    const unpaidCount = student.unpaidCount ?? 0;
     const bodyContents: FlexComponent[] = isPerSession
       ? [
-          infoRow('收費方式', '單堂'),
           infoRow('單堂費用', `$${(student.perSessionFee ?? 0).toLocaleString()}`),
           infoRow('當月上課', `${student.monthlyCheckinCount ?? 0} 堂`),
+          ...(unpaidCount > 0
+            ? [infoRow('欠費', `${unpaidCount} 堂`, '#e74c3c')]
+            : []),
         ]
       : [
           infoRow('購買時數', formatHours(summary.purchasedHours)),
@@ -56,9 +59,11 @@ export function studentMgmtList(students: Array<Student & { summary: StudentHour
             type: 'button',
             action: {
               type: 'postback',
-              label: '收款/加值',
+              label: isPerSession ? '收款' : '收款/加值',
               data: `${ACTION.COLLECT_AND_ADD}:${student.id}`,
-              displayText: `為 ${student.name} 收款/加值`,
+              displayText: isPerSession
+                ? `為 ${student.name} 收款`
+                : `為 ${student.name} 收款/加值`,
             },
             style: 'primary',
             color: '#27ae60',
@@ -68,7 +73,7 @@ export function studentMgmtList(students: Array<Student & { summary: StudentHour
             type: 'button',
             action: {
               type: 'postback',
-              label: student.paymentType === '單堂' ? '當月上課紀錄' : '當期上課紀錄',
+              label: isPerSession ? '當月上課/繳費' : '當期上課紀錄',
               data: `${ACTION.VIEW_STUDENT_HISTORY}:${student.id}`,
               displayText: `查看 ${student.name} 的上課紀錄`,
             },
@@ -76,18 +81,20 @@ export function studentMgmtList(students: Array<Student & { summary: StudentHour
             color: '#4A90D9',
             height: 'sm',
           },
-          {
-            type: 'button',
-            action: {
-              type: 'postback',
-              label: '繳費紀錄',
-              data: `${ACTION.VIEW_PAYMENT_HISTORY}:${student.id}`,
-              displayText: `查看 ${student.name} 的繳費紀錄`,
-            },
-            style: 'primary',
-            color: '#8e44ad',
-            height: 'sm',
-          },
+          ...(!isPerSession
+            ? [{
+              type: 'button',
+              action: {
+                type: 'postback',
+                label: '繳費紀錄',
+                data: `${ACTION.VIEW_PAYMENT_HISTORY}:${student.id}`,
+                displayText: `查看 ${student.name} 的繳費紀錄`,
+              },
+              style: 'primary',
+              color: '#8e44ad',
+              height: 'sm',
+            } as FlexComponent]
+            : []),
         ] as FlexComponent[],
         paddingAll: '12px',
         spacing: 'sm',
@@ -96,7 +103,7 @@ export function studentMgmtList(students: Array<Student & { summary: StudentHour
   });
 }
 
-function infoRow(label: string, value: string): FlexComponent {
+function infoRow(label: string, value: string, valueColor = '#333333'): FlexComponent {
   return {
     type: 'box',
     layout: 'horizontal',
@@ -112,7 +119,8 @@ function infoRow(label: string, value: string): FlexComponent {
         type: 'text',
         text: value,
         size: 'sm',
-        color: '#333333',
+        color: valueColor,
+        weight: valueColor !== '#333333' ? 'bold' : 'regular',
         flex: 3,
       },
     ],

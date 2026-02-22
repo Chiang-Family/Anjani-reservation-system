@@ -9,7 +9,8 @@ import { replyText, replyFlex, replyMessages } from '@/lib/line/reply';
 import { ACTION } from '@/lib/config/constants';
 import { TEXT } from '@/templates/text-messages';
 import { scheduleList } from '@/templates/flex/today-schedule';
-import { classHistoryCard, paymentPeriodSelector, paymentDetailCard } from '@/templates/flex/class-history';
+import { classHistoryCard, sessionMonthlyCard, paymentPeriodSelector, paymentDetailCard } from '@/templates/flex/class-history';
+import { getPaymentsByStudent } from '@/lib/notion/payments';
 import { renewalStudentListCard } from '@/templates/flex/monthly-stats';
 import { getCoachMonthlyStats } from '@/services/stats.service';
 import { formatDateLabel, todayDateString } from '@/lib/utils/date';
@@ -167,13 +168,21 @@ export async function handlePostback(event: PostbackEvent): Promise<void> {
           return;
         }
 
-        // 單堂學員：顯示當月上課紀錄
+        // 單堂學員：顯示當月上課 + 繳費狀態合併視圖
         if (student.paymentType === '單堂') {
-          const checkins = await getCheckinsByStudent(id);
+          const [checkins, payments] = await Promise.all([
+            getCheckinsByStudent(id),
+            getPaymentsByStudent(id),
+          ]);
           const currentMonth = todayDateString().slice(0, 7);
-          const monthCheckins = checkins.filter(c => c.classDate.startsWith(currentMonth));
+          const paidDates = new Set(
+            payments.filter(p => p.isSessionPayment).map(p => p.actualDate)
+          );
+          const monthRecords = checkins
+            .filter(c => c.classDate.startsWith(currentMonth))
+            .map(c => ({ ...c, isPaid: paidDates.has(c.classDate) }));
           await replyFlex(event.replyToken, `${student.name} 當月上課紀錄`,
-            classHistoryCard(student.name, monthCheckins, 0, '當月'));
+            sessionMonthlyCard(student.name, monthRecords));
           return;
         }
 

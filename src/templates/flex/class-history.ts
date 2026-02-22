@@ -168,6 +168,129 @@ export function classHistoryCard(
   };
 }
 
+/** 單堂學員當月上課 + 繳費狀態合併卡片 */
+export function sessionMonthlyCard(
+  studentName: string,
+  records: Array<CheckinRecord & { isPaid: boolean }>,
+): FlexBubble {
+  const totalCount = records.length;
+  const withSequence = records.map((r, i) => ({
+    ...r,
+    sequence: totalCount - i,
+  }));
+  const recent = withSequence.slice(0, 10).reverse();
+
+  const rows: FlexComponent[] = recent.length > 0
+    ? recent.map((r) => ({
+      type: 'box',
+      layout: 'horizontal',
+      contents: [
+        {
+          type: 'text',
+          text: `${r.sequence}`,
+          size: 'sm',
+          color: '#888888',
+          flex: 1,
+        },
+        {
+          type: 'text',
+          text: (() => {
+            const [y, m, d] = r.classDate.split('-');
+            return `${parseInt(y, 10) - 1911}-${m}-${d}`;
+          })(),
+          size: 'sm',
+          color: '#555555',
+          flex: 4,
+        },
+        {
+          type: 'text',
+          text: r.classTimeSlot,
+          size: 'sm',
+          color: '#333333',
+          flex: 4,
+        },
+        {
+          type: 'text',
+          text: r.isPaid ? '✅' : '❌',
+          size: 'sm',
+          flex: 2,
+          align: 'end',
+        },
+      ],
+      margin: 'sm',
+    } as FlexComponent))
+    : [
+      {
+        type: 'text',
+        text: '本月沒有上課紀錄。',
+        size: 'sm',
+        color: '#999999',
+        margin: 'md',
+      } as FlexComponent,
+    ];
+
+  const unpaidCount = records.filter(r => !r.isPaid).length;
+
+  return {
+    type: 'bubble',
+    size: 'mega',
+    header: {
+      type: 'box',
+      layout: 'vertical',
+      contents: [
+        {
+          type: 'text',
+          text: '當月上課紀錄',
+          weight: 'bold',
+          size: 'lg',
+          color: '#FFFFFF',
+        },
+        {
+          type: 'text',
+          text: unpaidCount > 0
+            ? `${studentName}｜欠費 ${unpaidCount} 堂`
+            : `${studentName}｜全數已繳`,
+          size: 'sm',
+          color: '#FFFFFFCC',
+          margin: 'sm',
+        },
+      ],
+      paddingAll: '20px',
+      backgroundColor: unpaidCount > 0 ? '#c0392b' : '#1B4965',
+    },
+    body: {
+      type: 'box',
+      layout: 'vertical',
+      contents: [
+        {
+          type: 'box',
+          layout: 'horizontal',
+          contents: [
+            { type: 'text', text: '堂數', size: 'xs', color: '#999999', weight: 'bold', flex: 1 },
+            { type: 'text', text: '日期', size: 'xs', color: '#999999', weight: 'bold', flex: 4 },
+            { type: 'text', text: '時段', size: 'xs', color: '#999999', weight: 'bold', flex: 4 },
+            { type: 'text', text: '繳費', size: 'xs', color: '#999999', weight: 'bold', flex: 2, align: 'end' },
+          ],
+        } as FlexComponent,
+        { type: 'separator', margin: 'sm' } as FlexComponent,
+        ...rows,
+        ...(records.length > 10
+          ? [{
+            type: 'text',
+            text: `⋯ 還有 ${records.length - 10} 筆紀錄`,
+            size: 'xs',
+            color: '#999999',
+            margin: 'md',
+            align: 'center',
+          } as FlexComponent]
+          : []),
+      ],
+      paddingAll: '16px',
+      spacing: 'none',
+    },
+  };
+}
+
 function toRocDate(dateStr: string): string {
   const [y, m, d] = dateStr.split('-');
   return `${parseInt(y, 10) - 1911}-${m}-${d}`;

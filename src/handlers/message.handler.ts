@@ -6,6 +6,7 @@ import { getStudentsByCoachId } from '@/lib/notion/students';
 import { findCoachByLineId, getCoachById } from '@/lib/notion/coaches';
 import { findStudentByLineId } from '@/lib/notion/students';
 import { getCheckinsByStudent } from '@/lib/notion/checkins';
+import { getPaymentsByStudent } from '@/lib/notion/payments';
 import { getStudentHoursSummary, getStudentOverflowInfo } from '@/lib/notion/hours';
 import { paymentPeriodSelector } from '@/templates/flex/class-history';
 import {
@@ -30,7 +31,7 @@ import { todayDateString, addDays, nowTaipei } from '@/lib/utils/date';
 import { studentScheduleCard } from '@/templates/flex/student-schedule';
 import { monthlyStatsCard } from '@/templates/flex/monthly-stats';
 import { studentMgmtList } from '@/templates/flex/student-mgmt-list';
-import { classHistoryCard } from '@/templates/flex/class-history';
+import { classHistoryCard, sessionMonthlyCard } from '@/templates/flex/class-history';
 import { studentQuickReply, coachQuickReply } from '@/templates/quick-reply';
 import { addStudentConfirmCard } from '@/templates/flex/add-student-confirm';
 
@@ -127,12 +128,20 @@ async function handleStudentMessage(
         return;
       }
 
-      // 單堂學員：顯示當月上課紀錄
+      // 單堂學員：顯示當月上課 + 繳費狀態合併視圖
       if (student.paymentType === '單堂') {
-        const checkins = await getCheckinsByStudent(student.id);
+        const [checkins, payments] = await Promise.all([
+          getCheckinsByStudent(student.id),
+          getPaymentsByStudent(student.id),
+        ]);
         const currentMonth = todayDateString().slice(0, 7);
-        const monthCheckins = checkins.filter(c => c.classDate.startsWith(currentMonth));
-        await replyFlex(replyToken, '當月上課紀錄', classHistoryCard(student.name, monthCheckins, 0, '當月'));
+        const paidDates = new Set(
+          payments.filter(p => p.isSessionPayment).map(p => p.actualDate)
+        );
+        const monthRecords = checkins
+          .filter(c => c.classDate.startsWith(currentMonth))
+          .map(c => ({ ...c, isPaid: paidDates.has(c.classDate) }));
+        await replyFlex(replyToken, '當月上課紀錄', sessionMonthlyCard(student.name, monthRecords));
         return;
       }
 
@@ -275,16 +284,25 @@ async function handleCoachMessage(
           const summaries = await pMap(matched, async (s) => {
             const summary = await getStudentHoursSummary(s.id);
             let monthlyCheckinCount: number | undefined;
+            let unpaidCount: number | undefined;
             if (s.paymentType === '單堂') {
-              const checkins = await getCheckinsByStudent(s.id);
+              const [checkins, payments] = await Promise.all([
+                getCheckinsByStudent(s.id),
+                getPaymentsByStudent(s.id),
+              ]);
+              const paidDates = new Set(
+                payments.filter(p => p.isSessionPayment).map(p => p.actualDate)
+              );
               monthlyCheckinCount = checkins.filter(c => c.classDate.startsWith(currentMonth)).length;
+              unpaidCount = checkins.filter(c => !paidDates.has(c.classDate)).length;
             }
-            return { summary, monthlyCheckinCount };
+            return { summary, monthlyCheckinCount, unpaidCount };
           });
           const withSummary = matched.map((s, i) => ({
             ...s,
             summary: summaries[i].summary,
             monthlyCheckinCount: summaries[i].monthlyCheckinCount,
+            unpaidCount: summaries[i].unpaidCount,
           }));
           const bubbles = studentMgmtList(withSummary);
           await replyMessages(replyToken, [
