@@ -71,7 +71,7 @@ export function addStudentConfirmCard(parsed: ParsedStudent): FlexBubble {
         },
       ],
       paddingAll: '20px',
-      backgroundColor: '#2D6A4F',
+      backgroundColor: '#1E352D',
     },
     body: {
       type: 'box',
@@ -91,7 +91,7 @@ export function addStudentConfirmCard(parsed: ParsedStudent): FlexBubble {
             data: postbackData,
           },
           style: 'primary',
-          color: '#2D6A4F',
+          color: '#1E352D',
         },
         {
           type: 'button',

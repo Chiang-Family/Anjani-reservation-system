@@ -108,7 +108,7 @@ export function coachMenu(name: string): FlexBubble {
         },
       ],
       paddingAll: '20px',
-      backgroundColor: '#2D6A4F',
+      backgroundColor: '#1A2A3A',
     },
     body: {
       type: 'box',
@@ -134,10 +134,10 @@ export function coachMenu(name: string): FlexBubble {
       type: 'box',
       layout: 'vertical',
       contents: [
-        menuButton(KEYWORD.TODAY_SCHEDULE),
-        menuButton(KEYWORD.STUDENT_MGMT, '#e67e22'),
-        menuButton(KEYWORD.ADD_STUDENT, '#f39c12'),
-        menuButton(KEYWORD.MONTHLY_STATS, '#8e44ad'),
+        menuButton(KEYWORD.TODAY_SCHEDULE, '#2F4858'),
+        menuButton(KEYWORD.STUDENT_MGMT, '#4A5E6D'),
+        menuButton(KEYWORD.ADD_STUDENT, '#5A7A6B'),
+        menuButton(KEYWORD.MONTHLY_STATS, '#4A4462'),
       ] as messagingApi.FlexComponent[],
       paddingAll: '16px',
       spacing: 'sm',

@@ -61,7 +61,7 @@ export function monthlyStatsCard(stats: CoachMonthlyStats): FlexBubble {
         },
       ],
       paddingAll: '20px',
-      backgroundColor: '#8e44ad',
+      backgroundColor: '#2A2438',
     },
     body: {
       type: 'box',

@@ -46,7 +46,7 @@ export function studentMgmtList(students: Array<Student & { summary: StudentHour
           },
         ],
         paddingAll: '16px',
-        backgroundColor: '#1B4965',
+        backgroundColor: '#243447',
       },
       body: {
         type: 'box',
@@ -70,7 +70,7 @@ export function studentMgmtList(students: Array<Student & { summary: StudentHour
                 : `為 ${student.name} 收款/加值`,
             },
             style: 'primary',
-            color: '#27ae60',
+            color: '#3A6B5A',
             height: 'sm',
           },
           {
@@ -82,7 +82,7 @@ export function studentMgmtList(students: Array<Student & { summary: StudentHour
               displayText: `查看 ${student.name} 的上課紀錄`,
             },
             style: 'primary',
-            color: '#4A90D9',
+            color: '#3B5F8A',
             height: 'sm',
           },
           ...(!isPerSession
@@ -95,7 +95,7 @@ export function studentMgmtList(students: Array<Student & { summary: StudentHour
                 displayText: `查看 ${student.name} 的繳費紀錄`,
               },
               style: 'primary',
-              color: '#8e44ad',
+              color: '#5A4A6A',
               height: 'sm',
             } as FlexComponent]
             : []),

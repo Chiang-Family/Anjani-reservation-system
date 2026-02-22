@@ -60,7 +60,7 @@ export function unpaidSessionDatesCard(
         },
       ],
       paddingAll: '20px',
-      backgroundColor: '#1B4965',
+      backgroundColor: '#243447',
     },
     body: {
       type: 'box',
