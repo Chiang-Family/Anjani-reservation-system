@@ -54,41 +54,134 @@ function filterEventsByStudentNames(events: CalendarEvent[], studentNames: Set<s
   });
 }
 
-/**
- * Predict when a student's remaining hours will be exhausted
- * based on future calendar events only (no estimation/extrapolation).
- */
-function predictRenewalDate(
-  remainingHours: number,
-  futureEvents: CalendarEvent[],
-): { expiryDate: string; renewalDate: string } | null {
-  // No future events → can't predict
-  if (futureEvents.length === 0) return null;
+interface RenewalCycle {
+  expiryDate: string;        // 時數歸零的日期
+  dueDate: string;           // 到期後下一堂課日期，'' = 行事曆不足
+  renewedDate: string | null;// 下一期繳費日（已繳費），null = 未繳費
+  expectedHours: number;     // 已繳費→實際購買時數；未繳費→預估（同上期）
+  expectedAmount: number;    // 已繳費→實際金額；未繳費→預估
+  paidAmount: number;        // 已繳費→實付金額；未繳費→0
+}
 
-  // Already exhausted → renewal is next future event
-  if (remainingHours <= 0) {
-    return { expiryDate: futureEvents[0].date, renewalDate: futureEvents[0].date };
+/**
+ * Find all renewal cycles for a student by walking through FIFO buckets.
+ * Each bucket exhaustion = one cycle.
+ */
+function findRenewalCycles(
+  buckets: { paymentDate: string; purchasedHours: number; checkins: CheckinRecord[]; consumedMinutes: number }[],
+  overflowCheckins: CheckinRecord[],
+  futureEvents: CalendarEvent[],
+  payments: PaymentRecord[],
+): RenewalCycle[] {
+  const cycles: RenewalCycle[] = [];
+  if (buckets.length === 0) return cycles;
+
+  // Map paymentDate (createdAt) → payment records for actualDate lookup
+  const paymentsByCreatedAt = new Map<string, PaymentRecord[]>();
+  for (const p of payments) {
+    const arr = paymentsByCreatedAt.get(p.createdAt) ?? [];
+    arr.push(p);
+    paymentsByCreatedAt.set(p.createdAt, arr);
   }
 
-  // Accumulate event durations chronologically
-  let hoursLeft = remainingHours;
-  for (let i = 0; i < futureEvents.length; i++) {
-    const event = futureEvents[i];
-    const duration = computeDurationMinutes(event.startTime, event.endTime) / 60;
-    hoursLeft -= duration;
+  function getBucketInfo(idx: number) {
+    const bucket = buckets[idx];
+    const ps = paymentsByCreatedAt.get(bucket.paymentDate) ?? [];
+    return {
+      actualDate: ps[0]?.actualDate ?? bucket.paymentDate,
+      purchasedHours: bucket.purchasedHours,
+      totalAmount: ps.reduce((s, p) => s + p.totalAmount, 0),
+      paidAmount: ps.reduce((s, p) => s + p.paidAmount, 0),
+      pricePerHour: ps[0]?.pricePerHour ?? 0,
+    };
+  }
 
-    if (hoursLeft <= 0) {
-      const expiryDate = event.date;
-      // 續約日 = 到期日後的下一個行程
-      const renewalDate = i + 1 < futureEvents.length
-        ? futureEvents[i + 1].date
-        : '';  // No next event scheduled
-      return { expiryDate, renewalDate };
+  const activeIdx = buckets.findIndex(b => b.consumedMinutes < b.purchasedHours * 60);
+
+  // 1. Past completed buckets: each with a next bucket = one renewed cycle
+  const pastEnd = activeIdx === -1 ? buckets.length : activeIdx;
+  for (let i = 0; i < pastEnd; i++) {
+    if (buckets[i].checkins.length === 0 || i + 1 >= buckets.length) continue;
+    const nextInfo = getBucketInfo(i + 1);
+    cycles.push({
+      expiryDate: buckets[i].checkins[buckets[i].checkins.length - 1].classDate,
+      dueDate: '',
+      renewedDate: nextInfo.actualDate,
+      expectedHours: nextInfo.purchasedHours,
+      expectedAmount: nextInfo.totalAmount,
+      paidAmount: nextInfo.paidAmount,
+    });
+  }
+
+  // 2. Active + future buckets: simulate future event consumption
+  if (activeIdx !== -1) {
+    let currentIdx = activeIdx;
+    let remainingMin = buckets[currentIdx].purchasedHours * 60 - buckets[currentIdx].consumedMinutes;
+    let evtIdx = 0;
+
+    while (evtIdx < futureEvents.length) {
+      const evt = futureEvents[evtIdx];
+      const durMin = computeDurationMinutes(evt.startTime, evt.endTime);
+      remainingMin -= durMin;
+      evtIdx++;
+
+      if (remainingMin <= 0) {
+        const expiryDate = evt.date;
+        const nextIdx = currentIdx + 1;
+
+        if (nextIdx < buckets.length) {
+          // Renewed: next bucket exists
+          const nextInfo = getBucketInfo(nextIdx);
+          cycles.push({
+            expiryDate,
+            dueDate: evtIdx < futureEvents.length ? futureEvents[evtIdx].date : '',
+            renewedDate: nextInfo.actualDate,
+            expectedHours: nextInfo.purchasedHours,
+            expectedAmount: nextInfo.totalAmount,
+            paidAmount: nextInfo.paidAmount,
+          });
+          currentIdx = nextIdx;
+          remainingMin = buckets[nextIdx].purchasedHours * 60 + remainingMin;
+        } else {
+          // Not renewed: estimate from current bucket
+          const curInfo = getBucketInfo(currentIdx);
+          cycles.push({
+            expiryDate,
+            dueDate: evtIdx < futureEvents.length ? futureEvents[evtIdx].date : '',
+            renewedDate: null,
+            expectedHours: curInfo.purchasedHours,
+            expectedAmount: Math.round(curInfo.purchasedHours * curInfo.pricePerHour),
+            paidAmount: 0,
+          });
+          break;
+        }
+      }
     }
   }
 
-  // Not enough calendar events to exhaust hours → can't determine date
-  return null;
+  // 3. Overflow: all buckets consumed, no active bucket
+  if (activeIdx === -1 && buckets.length > 0) {
+    const lastBucket = buckets[buckets.length - 1];
+    const lastCheckin = lastBucket.checkins.length > 0
+      ? lastBucket.checkins[lastBucket.checkins.length - 1]
+      : overflowCheckins.length > 0
+        ? overflowCheckins[overflowCheckins.length - 1]
+        : null;
+
+    if (lastCheckin) {
+      const lastInfo = getBucketInfo(buckets.length - 1);
+      cycles.push({
+        expiryDate: lastCheckin.classDate,
+        dueDate: futureEvents.length > 0 ? futureEvents[0].date : '',
+        renewedDate: null,
+        expectedHours: lastInfo.purchasedHours,
+        expectedAmount: Math.round(lastInfo.purchasedHours * lastInfo.pricePerHour),
+        paidAmount: 0,
+      });
+    }
+  }
+
+  return cycles;
 }
 
 export async function getCoachMonthlyStats(
@@ -144,12 +237,14 @@ export async function getCoachMonthlyStats(
   }
 
   // ====== Compute hours summary per student in-memory ======
-  const summaries = students.map(s => {
+  const studentBucketData = students.map(s => {
     const studentPayments = paymentsByStudentId.get(s.id) ?? [];
     const studentCheckins = checkinsByStudentId.get(s.id) ?? [];
-    const { buckets, overflowCheckins } = assignCheckinsToBuckets(studentPayments, studentCheckins);
-    return computeSummaryFromBuckets(buckets, overflowCheckins);
+    return assignCheckinsToBuckets(studentPayments, studentCheckins);
   });
+  const summaries = studentBucketData.map(({ buckets, overflowCheckins }) =>
+    computeSummaryFromBuckets(buckets, overflowCheckins)
+  );
 
   // --- 堂數 ---
   const scheduledClasses = events.length;
@@ -180,20 +275,6 @@ export async function getCoachMonthlyStats(
   }
   executedRevenue = Math.round(executedRevenue);
 
-  // --- 本月繳費: group by student ---
-  const monthPaymentsByStudent = new Map<string, { paid: number; total: number; hours: number; date: string }>();
-  for (const payment of payments) {
-    if (payment.actualDate.startsWith(monthPrefix)) {
-      const prev = monthPaymentsByStudent.get(payment.studentName) ?? { paid: 0, total: 0, hours: 0, date: '' };
-      monthPaymentsByStudent.set(payment.studentName, {
-        paid: prev.paid + payment.paidAmount,
-        total: prev.total + payment.totalAmount,
-        hours: prev.hours + payment.purchasedHours,
-        date: payment.actualDate > prev.date ? payment.actualDate : prev.date,
-      });
-    }
-  }
-
   // --- Calendar-based renewal prediction ---
   // Group future events by student name
   const futureEventsByStudent = new Map<string, CalendarEvent[]>();
@@ -205,131 +286,46 @@ export async function getCoachMonthlyStats(
     futureEventsByStudent.get(name)!.push(event);
   }
 
-  // Get latest payment per student from already-loaded payments
-  const latestPaymentByStudentId = new Map<string, PaymentRecord>();
-  for (const p of payments) {
-    const existing = latestPaymentByStudentId.get(p.studentId);
-    if (!existing || p.createdAt > existing.createdAt) {
-      latestPaymentByStudentId.set(p.studentId, p);
-    }
-  }
-
-  // Predict renewal for each student (all in-memory, no API calls)
-  type RenewalCandidate = {
-    student: typeof students[0];
-    summary: typeof summaries[0];
-    expiryDate: string;
-    renewalDate: string;
-  };
-  const candidates: RenewalCandidate[] = [];
-  const predictedStudentIds = new Set<string>();
-
+  // Find renewal cycles per student (all in-memory, no API calls)
+  const renewalStudents: RenewalStudent[] = [];
   for (let i = 0; i < students.length; i++) {
     const student = students[i];
+    const { buckets, overflowCheckins } = studentBucketData[i];
     const summary = summaries[i];
+    const studentPayments = paymentsByStudentId.get(student.id) ?? [];
     const studentFutureEvents = futureEventsByStudent.get(student.name) ?? [];
 
-    const prediction = predictRenewalDate(summary.remainingHours, studentFutureEvents);
+    if (buckets.length === 0) continue;
 
-    if (prediction) {
-      predictedStudentIds.add(student.id);
-      candidates.push({
-        student,
-        summary,
-        expiryDate: prediction.expiryDate,
-        renewalDate: prediction.renewalDate,
+    const cycles = findRenewalCycles(buckets, overflowCheckins, studentFutureEvents, studentPayments);
+
+    for (const cycle of cycles) {
+      const isRenewed = cycle.renewedDate !== null;
+      let inMonth = false;
+      if (isRenewed) {
+        inMonth = cycle.renewedDate!.startsWith(monthPrefix);
+      } else if (cycle.dueDate !== '') {
+        inMonth = cycle.dueDate.startsWith(monthPrefix);
+      } else {
+        inMonth = cycle.expiryDate.startsWith(monthPrefix);
+      }
+      if (!inMonth) continue;
+
+      renewalStudents.push({
+        name: student.name,
+        remainingHours: summary.remainingHours,
+        expectedRenewalHours: cycle.expectedHours,
+        expectedRenewalAmount: cycle.expectedAmount,
+        paidAmount: Math.round(cycle.paidAmount),
+        expiryDate: cycle.expiryDate,
+        dueDate: cycle.dueDate,
+        renewedDate: cycle.renewedDate,
+        insufficientData: !isRenewed && cycle.dueDate === '',
       });
     }
   }
 
-  // Filter to students whose hours expire in current month (到期日 in this month)
-  const thisMonthCandidates = candidates.filter(c =>
-    c.expiryDate.startsWith(monthPrefix)
-  );
-
-  const renewalStudents: RenewalStudent[] = thisMonthCandidates.map((c) => {
-    const latestPayment = latestPaymentByStudentId.get(c.student.id);
-    const expectedHours = latestPayment?.purchasedHours || c.summary.purchasedHours;
-    const expectedPrice = latestPayment?.pricePerHour || 0;
-    const expectedAmount = Math.round(expectedHours * expectedPrice);
-    const monthInfo = monthPaymentsByStudent.get(c.student.name);
-    return {
-      name: c.student.name,
-      remainingHours: c.summary.remainingHours,
-      expectedRenewalHours: expectedHours,
-      expectedRenewalAmount: expectedAmount,
-      paidAmount: Math.round(monthInfo?.paid ?? 0),
-      expiryDate: c.expiryDate,
-      dueDate: c.renewalDate,
-      renewedDate: monthInfo?.date ?? null,
-      insufficientData: false,
-    };
-  });
-
-  // Include students who already renewed this month (have payments but not in predicted list)
-  const predictedNames = new Set(renewalStudents.map(s => s.name));
-  const summaryByName = new Map<string, typeof summaries[0]>();
-  for (let i = 0; i < students.length; i++) {
-    summaryByName.set(students[i].name, summaries[i]);
-  }
-
-  // Find last checkin date per student from all coach checkins
-  const lastCheckinByStudent = new Map<string, string>();
-  for (const c of allCoachCheckins) {
-    if (c.studentName) {
-      const prev = lastCheckinByStudent.get(c.studentName);
-      if (!prev || c.classDate > prev) {
-        lastCheckinByStudent.set(c.studentName, c.classDate);
-      }
-    }
-  }
-
-  const alreadyRenewedNames = [...monthPaymentsByStudent.keys()].filter(n => !predictedNames.has(n));
-
-  for (const name of alreadyRenewedNames) {
-    const info = monthPaymentsByStudent.get(name)!;
-    const lastClassDate = lastCheckinByStudent.get(name) ?? info.date;
-    renewalStudents.push({
-      name,
-      remainingHours: summaryByName.get(name)?.remainingHours ?? 0,
-      expectedRenewalHours: info.hours,
-      expectedRenewalAmount: Math.round(info.total),
-      paidAmount: Math.round(info.paid),
-      expiryDate: lastClassDate,
-      dueDate: info.date,
-      renewedDate: info.date,
-      insufficientData: false,
-    });
-  }
-
-  // Add students with insufficient calendar data (prediction failed)
-  const alreadyIncluded = new Set(renewalStudents.map(s => s.name));
-  for (let i = 0; i < students.length; i++) {
-    const student = students[i];
-    if (predictedStudentIds.has(student.id) || alreadyIncluded.has(student.name)) continue;
-
-    const summary = summaries[i];
-    const latestPayment = latestPaymentByStudentId.get(student.id);
-    if (!latestPayment) continue; // No payment history, skip
-
-    // Only include if remaining hours ≤ latest purchased hours (likely to need renewal soon)
-    if (summary.remainingHours > latestPayment.purchasedHours) continue;
-
-    const monthInfo = monthPaymentsByStudent.get(student.name);
-    renewalStudents.push({
-      name: student.name,
-      remainingHours: summary.remainingHours,
-      expectedRenewalHours: latestPayment.purchasedHours,
-      expectedRenewalAmount: Math.round(latestPayment.purchasedHours * latestPayment.pricePerHour),
-      paidAmount: Math.round(monthInfo?.paid ?? 0),
-      expiryDate: '',
-      dueDate: '',
-      renewedDate: monthInfo?.date ?? null,
-      insufficientData: true,
-    });
-  }
-
-  // Sort: unpaid first, then partial, then fully paid; insufficientData last
+  // Sort: unpaid first (low paid ratio), insufficientData last
   renewalStudents.sort((a, b) => {
     if (a.insufficientData !== b.insufficientData) {
       return a.insufficientData ? 1 : -1;
@@ -345,19 +341,12 @@ export async function getCoachMonthlyStats(
     students: renewalStudents,
   };
 
-  // 實際收款: from renewal students only (ensures 續約總額 = 實際收款 + 待收款)
-  let collectedAmount = 0;
-  for (const s of renewalStudents) {
-    collectedAmount += monthPaymentsByStudent.get(s.name)?.paid ?? 0;
-  }
-  collectedAmount = Math.round(collectedAmount);
-
-  // 待收款: per renewal student (expected - paid)
+  // 實際收款 + 待收款: from renewal cycle data
+  const collectedAmount = Math.round(
+    renewalStudents.reduce((sum, s) => sum + s.paidAmount, 0)
+  );
   const pendingAmount = Math.round(
-    renewalStudents.reduce((sum, s) => {
-      const paid = monthPaymentsByStudent.get(s.name)?.paid ?? 0;
-      return sum + Math.max(0, s.expectedRenewalAmount - paid);
-    }, 0)
+    renewalStudents.reduce((sum, s) => sum + Math.max(0, s.expectedRenewalAmount - s.paidAmount), 0)
   );
 
   return {
