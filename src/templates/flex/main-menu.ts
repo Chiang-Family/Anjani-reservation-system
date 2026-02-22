@@ -31,7 +31,9 @@ function uriButton(label: string, uri: string, color = '#4A90D9'): messagingApi.
   };
 }
 
-export function studentMenu(name: string, coachLineUrl?: string): FlexBubble {
+export function studentMenu(name: string, coachLineUrl?: string, paymentType?: string): FlexBubble {
+  const isPerSession = paymentType === '單堂';
+
   return {
     type: 'bubble',
     size: 'mega',
@@ -75,8 +77,10 @@ export function studentMenu(name: string, coachLineUrl?: string): FlexBubble {
       layout: 'vertical',
       contents: [
         menuButton(KEYWORD.NEXT_WEEK, '#2D6A4F'),
-        menuButton(KEYWORD.CLASS_HISTORY, '#3D5A80'),
-        menuButton(KEYWORD.PAYMENT_HISTORY, '#6D597A'),
+        menuButton(isPerSession ? KEYWORD.SESSION_CLASS_HISTORY : KEYWORD.CLASS_HISTORY, '#3D5A80'),
+        ...(!isPerSession
+          ? [menuButton(KEYWORD.PAYMENT_HISTORY, '#6D597A')]
+          : []),
         ...(coachLineUrl
           ? [uriButton('聯繫教練', coachLineUrl, '#C0392B')]
           : []),

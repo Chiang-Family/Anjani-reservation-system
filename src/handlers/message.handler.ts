@@ -76,7 +76,7 @@ export async function handleMessage(event: MessageEvent): Promise<void> {
           const student = await getStudentInfo(lineUserId);
           if (student) {
             const coach = student.coachId ? await getCoachById(student.coachId) : null;
-            await replyFlex(event.replyToken, '安傑力課程管理系統', studentMenu(student.name, coach?.lineUrl));
+            await replyFlex(event.replyToken, '安傑力課程管理系統', studentMenu(student.name, coach?.lineUrl, student.paymentType));
             return;
           }
           const coach = await findCoachByLineId(lineUserId);
@@ -118,6 +118,7 @@ async function handleStudentMessage(
   name: string
 ): Promise<void> {
   switch (text) {
+    case KEYWORD.SESSION_CLASS_HISTORY:
     case KEYWORD.CLASS_HISTORY: {
       const student = await findStudentByLineId(lineUserId);
       if (!student) {
@@ -167,6 +168,26 @@ async function handleStudentMessage(
         ]);
         return;
       }
+
+      // 單堂學員：繳費紀錄已合併至上課紀錄，導向合併視圖
+      if (student.paymentType === '單堂') {
+        const [checkins, payments] = await Promise.all([
+          getCheckinsByStudent(student.id),
+          getPaymentsByStudent(student.id),
+        ]);
+        const currentMonth = todayDateString().slice(0, 7);
+        const paidDates = new Set(
+          payments.filter(p => p.isSessionPayment).map(p => p.actualDate)
+        );
+        const monthRecords = checkins
+          .filter(c => c.classDate.startsWith(currentMonth))
+          .map(c => ({ ...c, isPaid: paidDates.has(c.classDate) }));
+        const historicalUnpaid = checkins
+          .filter(c => !c.classDate.startsWith(currentMonth) && !paidDates.has(c.classDate));
+        await replyFlex(replyToken, '當月上課紀錄', sessionMonthlyCard(student.name, monthRecords, historicalUnpaid));
+        return;
+      }
+
       const { summary, overflow, payments } = await getStudentOverflowInfo(student.id);
       if (payments.length > 0) {
         await replyFlex(replyToken, '繳費紀錄', paymentPeriodSelector(student.name, payments, student.id, summary.remainingHours, overflow.hasOverflow));
@@ -201,7 +222,7 @@ async function handleStudentMessage(
     default: {
       const student = await findStudentByLineId(lineUserId);
       const coach = student?.coachId ? await getCoachById(student.coachId) : null;
-      await replyFlex(replyToken, '安傑力課程管理系統', studentMenu(name, coach?.lineUrl));
+      await replyFlex(replyToken, '安傑力課程管理系統', studentMenu(name, coach?.lineUrl, student?.paymentType));
     }
   }
 }

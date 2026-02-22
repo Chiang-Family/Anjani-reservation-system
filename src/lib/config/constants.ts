@@ -1,6 +1,7 @@
 // 關鍵字指令
 export const KEYWORD = {
   CLASS_HISTORY: '當期上課紀錄',
+  SESSION_CLASS_HISTORY: '當月上課紀錄',
   PAYMENT_HISTORY: '繳費紀錄',
   TODAY_SCHEDULE: '每日課表',
   ADD_STUDENT: '新增學員',
