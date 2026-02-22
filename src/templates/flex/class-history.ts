@@ -197,7 +197,9 @@ export function sessionMonthlyCard(
           type: 'text',
           text: (() => {
             const [y, m, d] = r.classDate.split('-');
-            return `${parseInt(y, 10) - 1911}-${m}-${d}`;
+            const date = `${parseInt(y, 10) - 1911}-${m}-${d}`;
+            const isJoint = r.studentName && r.studentName !== studentName;
+            return isJoint ? `${date}(共)` : date;
           })(),
           size: 'sm',
           color: '#555555',
@@ -255,7 +257,9 @@ export function sessionMonthlyCard(
             type: 'text',
             text: (() => {
               const [y, m, d] = r.classDate.split('-');
-              return `${parseInt(y, 10) - 1911}-${m}-${d}`;
+              const date = `${parseInt(y, 10) - 1911}-${m}-${d}`;
+              const isJoint = r.studentName && r.studentName !== studentName;
+              return isJoint ? `${date}(共)` : date;
             })(),
             size: 'sm',
             color: '#555555',

@@ -4,9 +4,9 @@ import { getCoachScheduleForDate } from '@/services/coach.service';
 import { getCoachMonthlyStats } from '@/services/stats.service';
 import { getStudentsByCoachId } from '@/lib/notion/students';
 import { findCoachByLineId, getCoachById } from '@/lib/notion/coaches';
-import { findStudentByLineId } from '@/lib/notion/students';
-import { getCheckinsByStudent } from '@/lib/notion/checkins';
-import { getPaymentsByStudent } from '@/lib/notion/payments';
+import { findStudentByLineId, getAllStudentIds, getStudentById } from '@/lib/notion/students';
+import { getCheckinsByStudent, getCheckinsByStudents } from '@/lib/notion/checkins';
+import { getPaymentsByStudent, getPaymentsByStudents } from '@/lib/notion/payments';
 import { getStudentHoursSummary, getStudentOverflowInfo } from '@/lib/notion/hours';
 import { paymentPeriodSelector } from '@/templates/flex/class-history';
 import {
@@ -131,19 +131,20 @@ async function handleStudentMessage(
 
       // 單堂學員：顯示當月上課 + 繳費狀態合併視圖
       if (student.paymentType === '單堂') {
+        const allIds = getAllStudentIds(student);
         const [checkins, payments] = await Promise.all([
-          getCheckinsByStudent(student.id),
-          getPaymentsByStudent(student.id),
+          allIds.length > 1 ? getCheckinsByStudents(allIds) : getCheckinsByStudent(student.id),
+          allIds.length > 1 ? getPaymentsByStudents(allIds) : getPaymentsByStudent(student.id),
         ]);
         const currentMonth = todayDateString().slice(0, 7);
-        const paidDates = new Set(
-          payments.filter(p => p.isSessionPayment).map(p => p.actualDate)
+        const paidKeys = new Set(
+          payments.filter(p => p.isSessionPayment).map(p => `${p.studentId}:${p.actualDate}`)
         );
         const monthRecords = checkins
           .filter(c => c.classDate.startsWith(currentMonth))
-          .map(c => ({ ...c, isPaid: paidDates.has(c.classDate) }));
+          .map(c => ({ ...c, isPaid: paidKeys.has(`${c.studentId}:${c.classDate}`) }));
         const historicalUnpaid = checkins
-          .filter(c => !c.classDate.startsWith(currentMonth) && !paidDates.has(c.classDate));
+          .filter(c => !c.classDate.startsWith(currentMonth) && !paidKeys.has(`${c.studentId}:${c.classDate}`));
         await replyFlex(replyToken, '當月上課紀錄', sessionMonthlyCard(student.name, monthRecords, historicalUnpaid), studentQuickReply(student.paymentType));
         return;
       }
@@ -171,19 +172,20 @@ async function handleStudentMessage(
 
       // 單堂學員：繳費紀錄已合併至上課紀錄，導向合併視圖
       if (student.paymentType === '單堂') {
+        const allIds = getAllStudentIds(student);
         const [checkins, payments] = await Promise.all([
-          getCheckinsByStudent(student.id),
-          getPaymentsByStudent(student.id),
+          allIds.length > 1 ? getCheckinsByStudents(allIds) : getCheckinsByStudent(student.id),
+          allIds.length > 1 ? getPaymentsByStudents(allIds) : getPaymentsByStudent(student.id),
         ]);
         const currentMonth = todayDateString().slice(0, 7);
-        const paidDates = new Set(
-          payments.filter(p => p.isSessionPayment).map(p => p.actualDate)
+        const paidKeys = new Set(
+          payments.filter(p => p.isSessionPayment).map(p => `${p.studentId}:${p.actualDate}`)
         );
         const monthRecords = checkins
           .filter(c => c.classDate.startsWith(currentMonth))
-          .map(c => ({ ...c, isPaid: paidDates.has(c.classDate) }));
+          .map(c => ({ ...c, isPaid: paidKeys.has(`${c.studentId}:${c.classDate}`) }));
         const historicalUnpaid = checkins
-          .filter(c => !c.classDate.startsWith(currentMonth) && !paidDates.has(c.classDate));
+          .filter(c => !c.classDate.startsWith(currentMonth) && !paidKeys.has(`${c.studentId}:${c.classDate}`));
         await replyFlex(replyToken, '當月上課紀錄', sessionMonthlyCard(student.name, monthRecords, historicalUnpaid), studentQuickReply(student.paymentType));
         return;
       }
@@ -206,15 +208,24 @@ async function handleStudentMessage(
         ]);
         return;
       }
+      const allIds = getAllStudentIds(student);
+      // 收集本人 + 關聯學員名稱，用於比對行事曆
+      const relatedNames: string[] = [];
+      if (student.relatedStudentIds?.length) {
+        const related = await Promise.all(student.relatedStudentIds.map(id => getStudentById(id)));
+        related.forEach(s => { if (s) relatedNames.push(s.name); });
+      }
+      const allNames = [student.name, ...relatedNames];
+
       const today = todayDateString();
       const twoMonthsLater = addDays(today, 60);
       const [events, checkins] = await Promise.all([
         getEventsForDateRange(today, twoMonthsLater),
-        getCheckinsByStudent(student.id),
+        allIds.length > 1 ? getCheckinsByStudents(allIds) : getCheckinsByStudent(student.id),
       ]);
       const checkedDates = new Set(checkins.map(c => c.classDate));
       const upcoming = events
-        .filter(e => e.summary.trim() === student.name)
+        .filter(e => allNames.includes(e.summary.trim()))
         .filter(e => !checkedDates.has(e.date))
         .slice(0, 2);
       await replyFlex(replyToken, '近期預約', studentScheduleCard(student.name, upcoming), studentQuickReply(student.paymentType));

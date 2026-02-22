@@ -7,6 +7,7 @@ export const STUDENT_PROPS = {
   STATUS: '狀態',
   PAYMENT_TYPE: '收費方式',
   PER_SESSION_FEE: '單堂費用',
+  RELATED_STUDENTS: '關聯學員',
 } as const;
 
 export const COACH_PROPS = {

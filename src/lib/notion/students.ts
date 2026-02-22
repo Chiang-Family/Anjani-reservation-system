@@ -36,6 +36,7 @@ function extractStudent(page: Record<string, unknown>): Student {
   const props = (page as { properties: Record<string, unknown> }).properties as Record<string, Record<string, unknown>>;
   const coachRelation = getRelationIds(props[STUDENT_PROPS.COACH]);
   const paymentType = getRichTextValue(props[STUDENT_PROPS.PAYMENT_TYPE]) || undefined;
+  const relatedIds = getRelationIds(props[STUDENT_PROPS.RELATED_STUDENTS]);
   return {
     id: (page as { id: string }).id,
     name: getRichTextValue(props[STUDENT_PROPS.NAME]),
@@ -44,7 +45,13 @@ function extractStudent(page: Record<string, unknown>): Student {
     status: getRichTextValue(props[STUDENT_PROPS.STATUS]) || undefined,
     paymentType: paymentType === '單堂' ? '單堂' : paymentType === '多堂' ? '套時數' : undefined,
     perSessionFee: getNumberValue(props[STUDENT_PROPS.PER_SESSION_FEE]),
+    relatedStudentIds: relatedIds.length > 0 ? relatedIds : undefined,
   };
+}
+
+/** 回傳學員本人 + 所有關聯學員的 ID 陣列 */
+export function getAllStudentIds(student: Student): string[] {
+  return [student.id, ...(student.relatedStudentIds ?? [])];
 }
 
 export async function findStudentByLineId(lineUserId: string): Promise<Student | null> {

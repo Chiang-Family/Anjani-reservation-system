@@ -166,6 +166,29 @@ export async function getPaymentsByStudent(studentId: string): Promise<PaymentRe
   return payments;
 }
 
+export async function getPaymentsByStudents(studentIds: string[]): Promise<PaymentRecord[]> {
+  if (studentIds.length === 0) return [];
+  if (studentIds.length === 1) return getPaymentsByStudent(studentIds[0]);
+
+  const notion = getNotionClient();
+  const res = await notion.databases.query({
+    database_id: getEnv().NOTION_PAYMENTS_DB_ID,
+    filter: {
+      or: studentIds.map((id) => ({
+        property: PAYMENT_PROPS.STUDENT,
+        relation: { contains: id },
+      })),
+    } as NotionFilter,
+    sorts: [{ property: PAYMENT_PROPS.CREATED_AT, direction: 'descending' }],
+  });
+
+  const payments = res.results.map((page) =>
+    extractPayment(page as unknown as Record<string, unknown>)
+  );
+  payments.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  return payments;
+}
+
 export async function getLatestPaymentByStudent(studentId: string): Promise<PaymentRecord | null> {
   const notion = getNotionClient();
   const res = await notion.databases.query({

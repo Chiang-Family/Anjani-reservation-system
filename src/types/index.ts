@@ -8,6 +8,7 @@ export interface Student {
   status?: string;
   paymentType?: '單堂' | '套時數';
   perSessionFee?: number;
+  relatedStudentIds?: string[];
 }
 
 export interface PaymentRecord {
