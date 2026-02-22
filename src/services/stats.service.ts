@@ -55,7 +55,7 @@ function filterEventsByStudentNames(events: CalendarEvent[], studentNames: Set<s
 
 interface RenewalCycle {
   expiryDate: string;        // 時數歸零的日期
-  renewalDate: string;           // 已繳費→繳費日；未繳費→到期後下一堂課日期；'' = 行事曆不足
+  renewalDate: string;           // 已繳費→繳費日期；未繳費→到期後下一堂課日期；'' = 行事曆不足
   isPaid: boolean;           // 是否有繳費紀錄（有下一個 bucket）
   expectedHours: number;     // 已繳費→實際購買時數；未繳費→預估（同上期）
   expectedAmount: number;    // 已繳費→實際金額；未繳費→預估
@@ -133,7 +133,7 @@ function findRenewalCycles(
           const nextInfo = getBucketInfo(nextIdx);
           cycles.push({
             expiryDate,
-            renewalDate: evtIdx < futureEvents.length ? futureEvents[evtIdx].date : '',
+            renewalDate: nextInfo.actualDate,
             isPaid: true,
             expectedHours: nextInfo.purchasedHours,
             expectedAmount: nextInfo.totalAmount,
