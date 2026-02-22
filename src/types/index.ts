@@ -22,6 +22,7 @@ export interface PaymentRecord {
   status: '已繳費' | '部分繳費' | '未繳費';
   createdAt: string;
   actualDate: string;
+  isSessionPayment: boolean;
 }
 
 export interface Coach {

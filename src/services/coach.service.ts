@@ -3,8 +3,8 @@ import { getStudentsByCoachId } from '@/lib/notion/students';
 import { getCheckinsByDate } from '@/lib/notion/checkins';
 import { getPaymentsByDate } from '@/lib/notion/payments';
 import { getTodayEvents, getEventsForDate } from '@/lib/google/calendar';
-import { todayDateString, computeDurationMinutes } from '@/lib/utils/date';
-import type { CalendarEvent, PaymentRecord } from '@/types';
+import { todayDateString } from '@/lib/utils/date';
+import type { CalendarEvent } from '@/types';
 
 export interface ScheduleItem {
   event: CalendarEvent;
@@ -40,13 +40,10 @@ export async function getCoachScheduleForDate(
   // 建立當日已打卡的學員 ID 集合
   const checkedInStudentIds = new Set(checkins.map(c => c.studentId));
 
-  // 建立當日繳費紀錄的學員→繳費 map（用於比對單堂繳費）
-  const paymentsByStudentId = new Map<string, PaymentRecord[]>();
-  for (const p of payments) {
-    const arr = paymentsByStudentId.get(p.studentId) || [];
-    arr.push(p);
-    paymentsByStudentId.set(p.studentId, arr);
-  }
+  // 建立當日「單堂繳費」的學員 ID 集合（只認標題有 [單堂] 標記的紀錄）
+  const sessionPaidStudentIds = new Set(
+    payments.filter(p => p.isSessionPayment).map(p => p.studentId)
+  );
 
   // 篩選該教練學員的事件，並在記憶體中比對打卡狀態
   const items: ScheduleItem[] = [];
@@ -76,12 +73,7 @@ export async function getCoachScheduleForDate(
       isExactMatch,
       isPerSession,
       perSessionFee: isPerSession ? matched.perSessionFee : undefined,
-      isPaidForSession: isPerSession && (() => {
-        const studentPayments = paymentsByStudentId.get(matched.id);
-        if (!studentPayments) return false;
-        const durationHours = Math.round(computeDurationMinutes(event.startTime, event.endTime) / 60 * 10) / 10;
-        return studentPayments.some(p => Math.abs(p.purchasedHours - durationHours) < 0.01);
-      })(),
+      isPaidForSession: isPerSession && sessionPaidStudentIds.has(matched.id),
     });
   }
 

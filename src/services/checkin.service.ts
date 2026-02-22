@@ -183,6 +183,7 @@ export async function recordSessionPayment(
     paidAmount: fee,
     periodDate: targetDate,
     overrideDate: targetDate,
+    isSessionPayment: true,
   });
 
   // 推播通知學員

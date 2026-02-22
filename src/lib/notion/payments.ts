@@ -60,24 +60,31 @@ function getDateValue(prop: Record<string, unknown>): string {
   return '';
 }
 
+/** 單堂繳費標題標記 */
+const SESSION_PAYMENT_TAG = '[單堂]';
+
 function extractPayment(page: Record<string, unknown>): PaymentRecord {
   const props = (page as { properties: Record<string, unknown> }).properties as Record<string, Record<string, unknown>>;
   const studentRelation = getRelationIds(props[PAYMENT_PROPS.STUDENT]);
   const coachRelation = getRelationIds(props[PAYMENT_PROPS.COACH]);
   const status = getSelectValue(props[PAYMENT_PROPS.STATUS]);
   const paidAmount = getNumberValue(props[PAYMENT_PROPS.PAID_AMOUNT]);
+  const fullTitle = getRichTextValue(props[PAYMENT_PROPS.TITLE]);
+  const isSessionPayment = fullTitle.includes(SESSION_PAYMENT_TAG);
+  const cleanTitle = fullTitle.replace(SESSION_PAYMENT_TAG, '').trim();
   return {
     id: (page as { id: string }).id,
     studentId: studentRelation[0] || '',
     coachId: coachRelation[0] || '',
-    studentName: getRichTextValue(props[PAYMENT_PROPS.TITLE]).split(' - ')[0] || '',
+    studentName: cleanTitle.split(' - ')[0] || '',
     purchasedHours: getNumberValue(props[PAYMENT_PROPS.PURCHASED_HOURS]),
     pricePerHour: getNumberValue(props[PAYMENT_PROPS.PRICE_PER_HOUR]),
     totalAmount: getFormulaNumberValue(props[PAYMENT_PROPS.TOTAL_AMOUNT]),
     paidAmount,
     status: status === '已繳費' ? '已繳費' : status === '部分繳費' ? '部分繳費' : '未繳費',
-    createdAt: getRichTextValue(props[PAYMENT_PROPS.TITLE]).split(' - ')[1]?.trim() || getDateValue(props[PAYMENT_PROPS.CREATED_AT]),
+    createdAt: cleanTitle.split(' - ')[1]?.trim() || getDateValue(props[PAYMENT_PROPS.CREATED_AT]),
     actualDate: getDateValue(props[PAYMENT_PROPS.CREATED_AT]),
+    isSessionPayment,
   };
 }
 
@@ -92,12 +99,16 @@ export async function createPaymentRecord(params: {
   periodDate?: string;
   /** 覆寫建立日期（用於單堂補繳，讓日期對齊課程日期） */
   overrideDate?: string;
+  /** 標記為單堂繳費（標題加 [單堂] 標記） */
+  isSessionPayment?: boolean;
 }): Promise<PaymentRecord> {
   const notion = getNotionClient();
   const now = nowTaipei();
   const actualDateStr = params.overrideDate ?? format(now, 'yyyy-MM-dd');
   const titleDateStr = params.periodDate ?? actualDateStr;
-  const title = `${params.studentName} - ${titleDateStr}`;
+  const title = params.isSessionPayment
+    ? `${SESSION_PAYMENT_TAG} ${params.studentName} - ${titleDateStr}`
+    : `${params.studentName} - ${titleDateStr}`;
 
   const properties = {
     [PAYMENT_PROPS.TITLE]: {
