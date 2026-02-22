@@ -308,7 +308,9 @@ export async function getCoachMonthlyStats(
         expectedRenewalHours: cycle.expectedHours,
         expectedRenewalAmount: cycle.expectedAmount,
         paidAmount: Math.round(cycle.paidAmount),
-        expiryDate: cycle.expiryDate,
+        expiryDate: cycle.isPaid
+          ? (studentFutureEvents[0]?.date ?? cycle.expiryDate)
+          : cycle.expiryDate,
         renewalDate: cycle.renewalDate,
         isPaid: cycle.isPaid,
       });
