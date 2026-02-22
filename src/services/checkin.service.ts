@@ -159,15 +159,22 @@ export async function recordSessionPayment(
     return { success: false, message: `${student.name} 在 ${targetDate} 已有繳費紀錄。` };
   }
 
-  // 查 Google Calendar 取得課程時長
-  const event = dateStr
-    ? await findStudentEventForDate(student.name, dateStr)
-    : await findStudentEventToday(student.name);
-  if (!event) {
-    return { success: false, message: '該堂課尚未執行，請先打卡再進行繳費。' };
+  // 優先從 Notion checkin 紀錄取得課程時長（補繳場景 Calendar 事件可能已不存在）
+  const checkin = await findCheckinToday(student.id, targetDate);
+  let durationMinutes: number;
+  if (checkin && checkin.durationMinutes > 0) {
+    durationMinutes = checkin.durationMinutes;
+  } else {
+    // fallback: 查 Google Calendar
+    const event = dateStr
+      ? await findStudentEventForDate(student.name, dateStr)
+      : await findStudentEventToday(student.name);
+    if (!event) {
+      return { success: false, message: '該堂課尚未執行，請先打卡再進行繳費。' };
+    }
+    durationMinutes = computeDurationMinutes(event.startTime, event.endTime);
   }
 
-  const durationMinutes = computeDurationMinutes(event.startTime, event.endTime);
   const durationHours = Math.round((durationMinutes / 60) * 10) / 10;
   const fee = student.perSessionFee;
   const pricePerHour = Math.round((fee / durationHours) * 100) / 100;
@@ -204,11 +211,13 @@ export async function recordSessionPayment(
   const isToday = targetDate === todayDateString();
   const datePrefix = isToday ? '' : `（${targetDate}）`;
 
+  const timeSlot = checkin?.classTimeSlot ?? '';
+
   return {
     success: true,
     message: [
       `💰 已為 ${student.name} 記錄繳費！${datePrefix}`,
-      `📅 課程時段：${event.startTime}–${event.endTime}`,
+      ...(timeSlot ? [`📅 課程時段：${timeSlot}`] : []),
       `💵 金額：$${fee}`,
     ].join('\n'),
   };
