@@ -5,6 +5,7 @@ import { getCoachMonthlyStats } from '@/services/stats.service';
 import { getStudentsByCoachId } from '@/lib/notion/students';
 import { findCoachByLineId, getCoachById } from '@/lib/notion/coaches';
 import { findStudentByLineId } from '@/lib/notion/students';
+import { getCheckinsByStudent } from '@/lib/notion/checkins';
 import { getStudentHoursSummary, getStudentOverflowInfo } from '@/lib/notion/hours';
 import { paymentPeriodSelector } from '@/templates/flex/class-history';
 import {
@@ -125,6 +126,16 @@ async function handleStudentMessage(
         ]);
         return;
       }
+
+      // 單堂學員：顯示當月上課紀錄
+      if (student.paymentType === '單堂') {
+        const checkins = await getCheckinsByStudent(student.id);
+        const currentMonth = todayDateString().slice(0, 7);
+        const monthCheckins = checkins.filter(c => c.classDate.startsWith(currentMonth));
+        await replyFlex(replyToken, '當月上課紀錄', classHistoryCard(student.name, monthCheckins, 0, '當月'));
+        return;
+      }
+
       const { summary, overflow } = await getStudentOverflowInfo(student.id);
       if (overflow.hasOverflow) {
         const unpaidDesc = [...overflow.unpaidCheckins].reverse();

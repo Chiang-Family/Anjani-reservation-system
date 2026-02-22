@@ -59,7 +59,7 @@ export function studentMgmtList(students: Array<Student & { summary: StudentHour
             type: 'button',
             action: {
               type: 'postback',
-              label: '當期上課紀錄',
+              label: student.paymentType === '單堂' ? '當月上課紀錄' : '當期上課紀錄',
               data: `${ACTION.VIEW_STUDENT_HISTORY}:${student.id}`,
               displayText: `查看 ${student.name} 的上課紀錄`,
             },

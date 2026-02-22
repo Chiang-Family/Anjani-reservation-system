@@ -3,6 +3,7 @@ import { coachCheckinForStudent, recordSessionPayment } from '@/services/checkin
 import { getCoachScheduleForDate } from '@/services/coach.service';
 import { startCollectAndAdd, executeAddStudent, executeConfirmPayment } from '@/services/student-management.service';
 import { getStudentById } from '@/lib/notion/students';
+import { getCheckinsByStudent } from '@/lib/notion/checkins';
 import { getStudentOverflowInfo } from '@/lib/notion/hours';
 import { replyText, replyFlex, replyMessages } from '@/lib/line/reply';
 import { ACTION } from '@/lib/config/constants';
@@ -160,12 +161,23 @@ export async function handlePostback(event: PostbackEvent): Promise<void> {
       }
 
       case ACTION.VIEW_STUDENT_HISTORY: {
-        // 顯示最新一期的上課紀錄（有 overflow 時顯示未繳費期）
         const student = await getStudentById(id);
         if (!student) {
           await replyTextWithMenu(event.replyToken, '找不到該學員資料。');
           return;
         }
+
+        // 單堂學員：顯示當月上課紀錄
+        if (student.paymentType === '單堂') {
+          const checkins = await getCheckinsByStudent(id);
+          const currentMonth = todayDateString().slice(0, 7);
+          const monthCheckins = checkins.filter(c => c.classDate.startsWith(currentMonth));
+          await replyFlex(event.replyToken, `${student.name} 當月上課紀錄`,
+            classHistoryCard(student.name, monthCheckins, 0, '當月'));
+          return;
+        }
+
+        // 多堂學員：顯示最新一期的上課紀錄（有 overflow 時顯示未繳費期）
         const { summary, overflow } = await getStudentOverflowInfo(id);
         if (overflow.hasOverflow) {
           const unpaidDesc = [...overflow.unpaidCheckins].reverse();

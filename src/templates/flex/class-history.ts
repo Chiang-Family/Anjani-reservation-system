@@ -99,7 +99,7 @@ export function classHistoryCard(
         },
       ],
       paddingAll: '20px',
-      backgroundColor: periodLabel ? '#c0392b' : '#1B4965',
+      backgroundColor: periodLabel === '未繳費' ? '#c0392b' : '#1B4965',
     },
     body: {
       type: 'box',
