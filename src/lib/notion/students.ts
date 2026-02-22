@@ -95,20 +95,32 @@ export async function bindStudentLineId(
 export async function createStudent(params: {
   name: string;
   coachId: string;
+  paymentType?: '單堂' | '多堂';
+  perSessionFee?: number;
 }): Promise<Student> {
   const notion = getNotionClient();
-  const properties = {
+  const properties: Record<string, unknown> = {
     [STUDENT_PROPS.NAME]: {
       title: [{ type: 'text', text: { content: params.name } }],
     },
     [STUDENT_PROPS.COACH]: {
       relation: [{ id: params.coachId }],
     },
-  } as Parameters<typeof notion.pages.create>[0]['properties'];
+  };
+  if (params.paymentType) {
+    properties[STUDENT_PROPS.PAYMENT_TYPE] = {
+      select: { name: params.paymentType },
+    };
+  }
+  if (params.perSessionFee != null) {
+    properties[STUDENT_PROPS.PER_SESSION_FEE] = {
+      number: params.perSessionFee,
+    };
+  }
 
   const page = await notion.pages.create({
     parent: { database_id: getEnv().NOTION_STUDENTS_DB_ID },
-    properties,
+    properties: properties as Parameters<typeof notion.pages.create>[0]['properties'],
   });
 
   return extractStudent(page as unknown as Record<string, unknown>);

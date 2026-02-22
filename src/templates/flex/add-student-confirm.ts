@@ -1,13 +1,60 @@
 import type { messagingApi } from '@line/bot-sdk';
 import { ACTION } from '@/lib/config/constants';
+import type { ParsedStudent } from '@/services/student-management.service';
 
 type FlexBubble = messagingApi.FlexBubble;
+type FlexComponent = messagingApi.FlexComponent;
 
-export function addStudentConfirmCard(
-  name: string,
-  hours: number,
-  price: number
-): FlexBubble {
+export function addStudentConfirmCard(parsed: ParsedStudent): FlexBubble {
+  const detailItems: FlexComponent[] = [
+    {
+      type: 'text',
+      text: `姓名：${parsed.name}`,
+      size: 'md',
+      weight: 'bold',
+    },
+  ];
+
+  let postbackData: string;
+
+  if (parsed.type === '單堂') {
+    detailItems.push(
+      {
+        type: 'text',
+        text: '收費方式：單堂',
+        size: 'sm',
+        color: '#555555',
+        margin: 'sm',
+      },
+      {
+        type: 'text',
+        text: `單堂費用：${parsed.perSessionFee} 元`,
+        size: 'sm',
+        color: '#555555',
+        margin: 'sm',
+      },
+    );
+    postbackData = `${ACTION.ADD_STUDENT_CONFIRM}:${encodeURIComponent(parsed.name)}:1:${parsed.perSessionFee}`;
+  } else {
+    detailItems.push(
+      {
+        type: 'text',
+        text: `購買時數：${parsed.hours} 小時`,
+        size: 'sm',
+        color: '#555555',
+        margin: 'sm',
+      },
+      {
+        type: 'text',
+        text: `每小時單價：${parsed.price} 元`,
+        size: 'sm',
+        color: '#555555',
+        margin: 'sm',
+      },
+    );
+    postbackData = `${ACTION.ADD_STUDENT_CONFIRM}:${encodeURIComponent(parsed.name)}:${parsed.hours}:${parsed.price}`;
+  }
+
   return {
     type: 'bubble',
     size: 'mega',
@@ -29,28 +76,7 @@ export function addStudentConfirmCard(
     body: {
       type: 'box',
       layout: 'vertical',
-      contents: [
-        {
-          type: 'text',
-          text: `姓名：${name}`,
-          size: 'md',
-          weight: 'bold',
-        },
-        {
-          type: 'text',
-          text: `購買時數：${hours} 小時`,
-          size: 'sm',
-          color: '#555555',
-          margin: 'sm',
-        },
-        {
-          type: 'text',
-          text: `每小時單價：${price} 元`,
-          size: 'sm',
-          color: '#555555',
-          margin: 'sm',
-        },
-      ],
+      contents: detailItems,
       paddingAll: '20px',
     },
     footer: {
@@ -62,7 +88,7 @@ export function addStudentConfirmCard(
           action: {
             type: 'postback',
             label: '確認新增',
-            data: `${ACTION.ADD_STUDENT_CONFIRM}:${encodeURIComponent(name)}:${hours}:${price}`,
+            data: postbackData,
           },
           style: 'primary',
           color: '#2D6A4F',
@@ -77,7 +103,7 @@ export function addStudentConfirmCard(
           style: 'secondary',
           margin: 'sm',
         },
-      ] as messagingApi.FlexComponent[],
+      ] as FlexComponent[],
       paddingAll: '16px',
       spacing: 'sm',
     },

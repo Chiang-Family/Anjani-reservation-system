@@ -246,7 +246,7 @@ async function handleCoachMessage(
           {
             type: 'flex',
             altText: '確認新增學員',
-            contents: addStudentConfirmCard(parsed.name, parsed.hours, parsed.price),
+            contents: addStudentConfirmCard(parsed),
           },
         ]);
         return;

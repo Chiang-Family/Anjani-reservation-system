@@ -88,7 +88,10 @@ export async function handlePostback(event: PostbackEvent): Promise<void> {
         const studentName = decodeURIComponent(id);
         const hours = parseFloat(extra);
         const price = parseInt(parts[3], 10);
-        const msg = await executeAddStudent(lineUserId, studentName, hours, price);
+        const parsed = hours === 1
+          ? { name: studentName, type: '單堂' as const, perSessionFee: price }
+          : { name: studentName, type: '多堂' as const, hours, price };
+        const msg = await executeAddStudent(lineUserId, parsed);
         const qr = coachQuickReply();
         await replyMessages(event.replyToken, [
           { type: 'text', text: msg, quickReply: { items: qr } },

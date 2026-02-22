@@ -7,6 +7,10 @@ import { pushText } from '@/lib/line/push';
 import { paymentPeriodChoiceCard } from '@/templates/flex/payment-confirm';
 import type { messagingApi } from '@line/bot-sdk';
 
+export type ParsedStudent =
+  | { name: string; type: '多堂'; hours: number; price: number }
+  | { name: string; type: '單堂'; perSessionFee: number };
+
 /** 開始新增學員流程（無狀態） */
 export async function startAddStudent(coachLineUserId: string): Promise<string> {
   const coach = await findCoachByLineId(coachLineUserId);
@@ -15,17 +19,16 @@ export async function startAddStudent(coachLineUserId: string): Promise<string> 
   return [
     '請依照以下格式輸入學員資料：',
     '',
-    '姓名 購買時數 每小時單價',
-    '',
+    '多堂：姓名 購買時數 每小時單價',
     '範例：王大明 10 1400',
-    '範例：Tom 5 1600',
+    '',
+    '單堂：姓名 1 單堂費用',
+    '範例：李小花 1 700',
   ].join('\n');
 }
 
 /** 解析新增學員輸入格式，回傳解析結果或錯誤訊息 */
-export function parseAddStudentInput(text: string): {
-  name: string; hours: number; price: number;
-} | null {
+export function parseAddStudentInput(text: string): ParsedStudent | null {
   const parts = text.trim().split(/\s+/);
   if (parts.length < 3) return null;
 
@@ -34,35 +37,57 @@ export function parseAddStudentInput(text: string): {
   const name = parts.slice(0, -2).join(' ');
 
   if (!name || isNaN(hours) || hours <= 0 || isNaN(price) || price <= 0) return null;
-  return { name, hours, price };
+
+  if (hours === 1) {
+    return { name, type: '單堂', perSessionFee: price };
+  }
+  return { name, type: '多堂', hours, price };
 }
 
 /** 執行新增學員（由 postback 觸發） */
 export async function executeAddStudent(
   coachLineUserId: string,
-  name: string,
-  hours: number,
-  price: number
+  parsed: ParsedStudent
 ): Promise<string> {
   const coach = await findCoachByLineId(coachLineUserId);
   if (!coach) return '找不到教練資料。';
 
-  const existing = await findStudentByName(name);
-  if (existing) return `「${name}」已存在，無法建立。`;
+  const existing = await findStudentByName(parsed.name);
+  if (existing) return `「${parsed.name}」已存在，無法建立。`;
+
+  if (parsed.type === '單堂') {
+    const student = await createStudent({
+      name: parsed.name,
+      coachId: coach.id,
+      paymentType: '單堂',
+      perSessionFee: parsed.perSessionFee,
+    });
+
+    return [
+      '學員建立成功！',
+      '',
+      `姓名：${student.name}`,
+      `收費方式：單堂`,
+      `單堂費用：${parsed.perSessionFee} 元`,
+      '',
+      '學員加入 LINE 好友後，輸入姓名即可完成綁定。',
+    ].join('\n');
+  }
 
   const student = await createStudent({
-    name,
+    name: parsed.name,
     coachId: coach.id,
+    paymentType: '多堂',
   });
 
-  const totalAmount = hours * price;
+  const totalAmount = parsed.hours * parsed.price;
 
   await createPaymentRecord({
     studentId: student.id,
     studentName: student.name,
     coachId: coach.id,
-    purchasedHours: hours,
-    pricePerHour: price,
+    purchasedHours: parsed.hours,
+    pricePerHour: parsed.price,
     status: '已繳費',
     paidAmount: totalAmount,
   });
@@ -71,8 +96,8 @@ export async function executeAddStudent(
     '學員建立成功！',
     '',
     `姓名：${student.name}`,
-    `購買時數：${hours} 小時`,
-    `每小時單價：${price} 元`,
+    `購買時數：${parsed.hours} 小時`,
+    `每小時單價：${parsed.price} 元`,
     `繳費金額：$${totalAmount.toLocaleString()}`,
     '',
     '學員加入 LINE 好友後，輸入姓名即可完成綁定。',
