@@ -286,7 +286,8 @@ async function handleCoachMessage(
           const summaries = await pMap(matched, async (s) => {
             const summary = await getStudentHoursSummary(s.id);
             let monthlyCheckinCount: number | undefined;
-            let unpaidCount: number | undefined;
+            let monthlyUnpaidCount: number | undefined;
+            let historicalUnpaidCount: number | undefined;
             if (s.paymentType === '單堂') {
               const [checkins, payments] = await Promise.all([
                 getCheckinsByStudent(s.id),
@@ -295,16 +296,19 @@ async function handleCoachMessage(
               const paidDates = new Set(
                 payments.filter(p => p.isSessionPayment).map(p => p.actualDate)
               );
-              monthlyCheckinCount = checkins.filter(c => c.classDate.startsWith(currentMonth)).length;
-              unpaidCount = checkins.filter(c => !paidDates.has(c.classDate)).length;
+              const monthCheckins = checkins.filter(c => c.classDate.startsWith(currentMonth));
+              monthlyCheckinCount = monthCheckins.length;
+              monthlyUnpaidCount = monthCheckins.filter(c => !paidDates.has(c.classDate)).length;
+              historicalUnpaidCount = checkins.filter(c => !c.classDate.startsWith(currentMonth) && !paidDates.has(c.classDate)).length;
             }
-            return { summary, monthlyCheckinCount, unpaidCount };
+            return { summary, monthlyCheckinCount, monthlyUnpaidCount, historicalUnpaidCount };
           });
           const withSummary = matched.map((s, i) => ({
             ...s,
             summary: summaries[i].summary,
             monthlyCheckinCount: summaries[i].monthlyCheckinCount,
-            unpaidCount: summaries[i].unpaidCount,
+            monthlyUnpaidCount: summaries[i].monthlyUnpaidCount,
+            historicalUnpaidCount: summaries[i].historicalUnpaidCount,
           }));
           const bubbles = studentMgmtList(withSummary);
           await replyMessages(replyToken, [

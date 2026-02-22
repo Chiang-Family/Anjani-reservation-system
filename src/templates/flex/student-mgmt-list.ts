@@ -6,18 +6,22 @@ import { formatHours } from '@/lib/utils/date';
 type FlexBubble = messagingApi.FlexBubble;
 type FlexComponent = messagingApi.FlexComponent;
 
-export function studentMgmtList(students: Array<Student & { summary: StudentHoursSummary; monthlyCheckinCount?: number; unpaidCount?: number }>): FlexBubble[] {
+export function studentMgmtList(students: Array<Student & { summary: StudentHoursSummary; monthlyCheckinCount?: number; monthlyUnpaidCount?: number; historicalUnpaidCount?: number }>): FlexBubble[] {
   return students.map((student) => {
     const { summary } = student;
     const isPerSession = student.paymentType === '單堂';
 
-    const unpaidCount = student.unpaidCount ?? 0;
+    const monthlyUnpaid = student.monthlyUnpaidCount ?? 0;
+    const historicalUnpaid = student.historicalUnpaidCount ?? 0;
     const bodyContents: FlexComponent[] = isPerSession
       ? [
           infoRow('單堂費用', `$${(student.perSessionFee ?? 0).toLocaleString()}`),
           infoRow('當月上課', `${student.monthlyCheckinCount ?? 0} 堂`),
-          ...(unpaidCount > 0
-            ? [infoRow('欠費', `${unpaidCount} 堂`, '#e74c3c')]
+          ...(monthlyUnpaid > 0
+            ? [infoRow('當月欠費', `${monthlyUnpaid} 堂`, '#e74c3c')]
+            : []),
+          ...(historicalUnpaid > 0
+            ? [infoRow('歷史欠費', `${historicalUnpaid} 堂`, '#e74c3c')]
             : []),
         ]
       : [
