@@ -300,10 +300,11 @@ export async function getCoachMonthlyStats(
     const cycles = findRenewalCycles(buckets, overflowCheckins, studentFutureEvents, studentPayments);
 
     for (const cycle of cycles) {
-      // 已繳費→按繳費日歸月；未繳費→按到期日歸月
+      // 已繳費→按繳費日歸月；未繳費→到期日或應繳日任一在本月
       const inMonth = cycle.isPaid
         ? cycle.dueDate.startsWith(monthPrefix)
-        : cycle.expiryDate.startsWith(monthPrefix);
+        : (cycle.expiryDate.startsWith(monthPrefix) ||
+           (cycle.dueDate !== '' && cycle.dueDate.startsWith(monthPrefix)));
       if (!inMonth) continue;
 
       renewalStudents.push({
