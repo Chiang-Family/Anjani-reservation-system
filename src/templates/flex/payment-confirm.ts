@@ -32,7 +32,7 @@ export function paymentPeriodChoiceCard(
       displayText: '新的一期',
     },
     style: 'primary',
-    color: '#3A6B5A',
+    color: '#4A8A6A',
     height: 'sm',
     margin: 'sm',
   };
@@ -76,7 +76,7 @@ export function paymentPeriodChoiceCard(
         },
       ],
       paddingAll: '20px',
-      backgroundColor: '#243447',
+      backgroundColor: '#3E6B8A',
     },
     body: {
       type: 'box',

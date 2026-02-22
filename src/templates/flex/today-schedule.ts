@@ -22,7 +22,7 @@ export function scheduleList(items: ScheduleItem[], dateStr: string, mode: Sched
   const rows: FlexComponent[] = items.length > 0
     ? items.map((item) => {
       const statusText = item.isCheckedIn ? '✅ 已打卡' : '⏳ 未打卡';
-      const statusColor = item.isCheckedIn ? '#2E7D5B' : '#C67B35';
+      const statusColor = item.isCheckedIn ? '#3D8D65' : '#C68540';
 
       const statusItems: FlexComponent[] = [
         {
@@ -36,7 +36,7 @@ export function scheduleList(items: ScheduleItem[], dateStr: string, mode: Sched
       // 單堂學員顯示繳費狀態
       if (item.isPerSession) {
         const payText = item.isPaidForSession ? '💰 已繳費' : '💸 未繳費';
-        const payColor = item.isPaidForSession ? '#2E7D5B' : '#e74c3c';
+        const payColor = item.isPaidForSession ? '#3D8D65' : '#D4524A';
         statusItems.push({
           type: 'text',
           text: payText,
@@ -95,7 +95,7 @@ export function scheduleList(items: ScheduleItem[], dateStr: string, mode: Sched
             displayText: `幫 ${item.studentName} 打卡`,
           },
           style: 'primary',
-          color: '#3A6B5A',
+          color: '#4A8A6A',
           height: 'sm',
           flex: 1,
         } as FlexComponent);
@@ -111,7 +111,7 @@ export function scheduleList(items: ScheduleItem[], dateStr: string, mode: Sched
             displayText: `幫 ${item.studentName} 繳費`,
           },
           style: 'primary',
-          color: '#3B5F8A',
+          color: '#4D80A8',
           height: 'sm',
           flex: 1,
         } as FlexComponent);
@@ -175,7 +175,7 @@ export function scheduleList(items: ScheduleItem[], dateStr: string, mode: Sched
         },
       ],
       paddingAll: '20px',
-      backgroundColor: mode === 'checkin' ? '#1E352D' : '#243447',
+      backgroundColor: mode === 'checkin' ? '#3A6B55' : '#3E6B8A',
     },
     body: {
       type: 'box',

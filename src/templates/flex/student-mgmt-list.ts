@@ -18,10 +18,10 @@ export function studentMgmtList(students: Array<Student & { summary: StudentHour
           infoRow('單堂費用', `$${(student.perSessionFee ?? 0).toLocaleString()}`),
           infoRow('當月上課', `${student.monthlyCheckinCount ?? 0} 堂`),
           ...(monthlyUnpaid > 0
-            ? [infoRow('當月欠費', `${monthlyUnpaid} 堂`, '#e74c3c')]
+            ? [infoRow('當月欠費', `${monthlyUnpaid} 堂`, '#D4524A')]
             : []),
           ...(historicalUnpaid > 0
-            ? [infoRow('歷史欠費', `${historicalUnpaid} 堂`, '#e74c3c')]
+            ? [infoRow('歷史欠費', `${historicalUnpaid} 堂`, '#D4524A')]
             : []),
         ]
       : [
@@ -46,7 +46,7 @@ export function studentMgmtList(students: Array<Student & { summary: StudentHour
           },
         ],
         paddingAll: '16px',
-        backgroundColor: '#243447',
+        backgroundColor: '#3E6B8A',
       },
       body: {
         type: 'box',
@@ -70,7 +70,7 @@ export function studentMgmtList(students: Array<Student & { summary: StudentHour
                 : `為 ${student.name} 收款/加值`,
             },
             style: 'primary',
-            color: '#3A6B5A',
+            color: '#4A8A6A',
             height: 'sm',
           },
           {
@@ -82,7 +82,7 @@ export function studentMgmtList(students: Array<Student & { summary: StudentHour
               displayText: `查看 ${student.name} 的上課紀錄`,
             },
             style: 'primary',
-            color: '#3B5F8A',
+            color: '#4D80A8',
             height: 'sm',
           },
           ...(!isPerSession
@@ -95,7 +95,7 @@ export function studentMgmtList(students: Array<Student & { summary: StudentHour
                 displayText: `查看 ${student.name} 的繳費紀錄`,
               },
               style: 'primary',
-              color: '#5A4A6A',
+              color: '#6D5D85',
               height: 'sm',
             } as FlexComponent]
             : []),
