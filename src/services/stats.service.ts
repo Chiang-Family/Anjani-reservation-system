@@ -39,6 +39,19 @@ export interface CoachMonthlyStats {
 }
 
 /**
+ * Walk future events consuming remainingHours, return the date when hours reach zero.
+ */
+function computeExpiryFromFutureEvents(remainingHours: number, futureEvents: CalendarEvent[]): string {
+  let remainingMin = remainingHours * 60;
+  for (const evt of futureEvents) {
+    const durMin = computeDurationMinutes(evt.startTime, evt.endTime);
+    remainingMin -= durMin;
+    if (remainingMin <= 0) return evt.date;
+  }
+  return '';
+}
+
+/**
  * Filter calendar events by student names (in-memory, no Notion call)
  */
 function filterEventsByStudentNames(events: CalendarEvent[], studentNames: Set<string>): CalendarEvent[] {
@@ -309,7 +322,7 @@ export async function getCoachMonthlyStats(
         expectedRenewalAmount: cycle.expectedAmount,
         paidAmount: Math.round(cycle.paidAmount),
         expiryDate: cycle.isPaid
-          ? (studentFutureEvents[0]?.date ?? cycle.expiryDate)
+          ? (computeExpiryFromFutureEvents(summary.remainingHours, studentFutureEvents) || cycle.expiryDate)
           : cycle.expiryDate,
         renewalDate: cycle.renewalDate,
         isPaid: cycle.isPaid,
