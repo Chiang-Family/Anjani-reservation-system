@@ -216,8 +216,8 @@ export async function recordSessionPayment(
   return {
     success: true,
     message: [
-      `💰 已為 ${student.name} 記錄繳費！${datePrefix}`,
-      ...(timeSlot ? [`📅 課程時段：${timeSlot}`] : []),
+      `💰 已為 ${student.name} 記錄繳費！`,
+      `📅 課程時段：${targetDate} ${timeSlot}`.trim(),
       `💵 金額：$${fee}`,
     ].join('\n'),
   };
