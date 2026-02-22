@@ -32,7 +32,7 @@ import { studentScheduleCard } from '@/templates/flex/student-schedule';
 import { monthlyStatsCard } from '@/templates/flex/monthly-stats';
 import { studentMgmtList } from '@/templates/flex/student-mgmt-list';
 import { classHistoryCard, sessionMonthlyCard } from '@/templates/flex/class-history';
-import { studentQuickReply, coachQuickReply } from '@/templates/quick-reply';
+import { studentQuickReply, coachQuickReply, menuQuickReply } from '@/templates/quick-reply';
 import { addStudentConfirmCard } from '@/templates/flex/add-student-confirm';
 
 export async function handleMessage(event: MessageEvent): Promise<void> {
@@ -51,7 +51,7 @@ export async function handleMessage(event: MessageEvent): Promise<void> {
       try {
         const result = await handleCollectAndAddStep(lineUserId, text);
         if (result.flex) {
-          await replyFlex(event.replyToken, result.flex.title, result.flex.content);
+          await replyFlex(event.replyToken, result.flex.title, result.flex.content, coachQuickReply());
         } else {
           const qr = coachQuickReply();
           await replyMessages(event.replyToken, [
@@ -60,7 +60,7 @@ export async function handleMessage(event: MessageEvent): Promise<void> {
         }
       } catch (error) {
         console.error('Collect and add step error:', error);
-        await replyText(event.replyToken, TEXT.ERROR);
+        await replyText(event.replyToken, TEXT.ERROR, coachQuickReply());
       }
       return;
     }
@@ -76,19 +76,19 @@ export async function handleMessage(event: MessageEvent): Promise<void> {
           const student = await getStudentInfo(lineUserId);
           if (student) {
             const coach = student.coachId ? await getCoachById(student.coachId) : null;
-            await replyFlex(event.replyToken, '安傑力課程管理系統', studentMenu(student.name, coach?.lineUrl, student.paymentType));
+            await replyFlex(event.replyToken, '安傑力課程管理系統', studentMenu(student.name, coach?.lineUrl, student.paymentType), studentQuickReply(student.paymentType));
             return;
           }
           const coach = await findCoachByLineId(lineUserId);
           if (coach) {
-            await replyFlex(event.replyToken, '安傑力教練管理系統', coachMenu(coach.name));
+            await replyFlex(event.replyToken, '安傑力教練管理系統', coachMenu(coach.name), coachQuickReply());
             return;
           }
         }
-        await replyText(event.replyToken, result.message);
+        await replyText(event.replyToken, result.message, menuQuickReply());
       } catch (error) {
         console.error('Binding error:', error);
-        await replyText(event.replyToken, TEXT.ERROR);
+        await replyText(event.replyToken, TEXT.ERROR, menuQuickReply());
       }
       return;
     }
@@ -107,7 +107,7 @@ export async function handleMessage(event: MessageEvent): Promise<void> {
     }
   } catch (error) {
     console.error('Message handler error:', error);
-    await replyText(event.replyToken, TEXT.ERROR);
+    await replyText(event.replyToken, TEXT.ERROR, menuQuickReply());
   }
 }
 
@@ -144,17 +144,17 @@ async function handleStudentMessage(
           .map(c => ({ ...c, isPaid: paidDates.has(c.classDate) }));
         const historicalUnpaid = checkins
           .filter(c => !c.classDate.startsWith(currentMonth) && !paidDates.has(c.classDate));
-        await replyFlex(replyToken, '當月上課紀錄', sessionMonthlyCard(student.name, monthRecords, historicalUnpaid));
+        await replyFlex(replyToken, '當月上課紀錄', sessionMonthlyCard(student.name, monthRecords, historicalUnpaid), studentQuickReply(student.paymentType));
         return;
       }
 
       const { summary, overflow } = await getStudentOverflowInfo(student.id);
       if (overflow.hasOverflow) {
         const unpaidDesc = [...overflow.unpaidCheckins].reverse();
-        await replyFlex(replyToken, '當期上課紀錄', classHistoryCard(student.name, unpaidDesc, summary.remainingHours, '未繳費'));
+        await replyFlex(replyToken, '當期上課紀錄', classHistoryCard(student.name, unpaidDesc, summary.remainingHours, '未繳費'), studentQuickReply(student.paymentType));
       } else {
         const paidDesc = [...overflow.paidCheckins].reverse();
-        await replyFlex(replyToken, '當期上課紀錄', classHistoryCard(student.name, paidDesc, summary.remainingHours));
+        await replyFlex(replyToken, '當期上課紀錄', classHistoryCard(student.name, paidDesc, summary.remainingHours), studentQuickReply(student.paymentType));
       }
       return;
     }
@@ -184,15 +184,15 @@ async function handleStudentMessage(
           .map(c => ({ ...c, isPaid: paidDates.has(c.classDate) }));
         const historicalUnpaid = checkins
           .filter(c => !c.classDate.startsWith(currentMonth) && !paidDates.has(c.classDate));
-        await replyFlex(replyToken, '當月上課紀錄', sessionMonthlyCard(student.name, monthRecords, historicalUnpaid));
+        await replyFlex(replyToken, '當月上課紀錄', sessionMonthlyCard(student.name, monthRecords, historicalUnpaid), studentQuickReply(student.paymentType));
         return;
       }
 
       const { summary, overflow, payments } = await getStudentOverflowInfo(student.id);
       if (payments.length > 0) {
-        await replyFlex(replyToken, '繳費紀錄', paymentPeriodSelector(student.name, payments, student.id, summary.remainingHours, overflow.hasOverflow));
+        await replyFlex(replyToken, '繳費紀錄', paymentPeriodSelector(student.name, payments, student.id, summary.remainingHours, overflow.hasOverflow), studentQuickReply(student.paymentType));
       } else {
-        await replyFlex(replyToken, '繳費紀錄', paymentHistoryCard(student.name, payments, summary));
+        await replyFlex(replyToken, '繳費紀錄', paymentHistoryCard(student.name, payments, summary), studentQuickReply(student.paymentType));
       }
       return;
     }
@@ -214,7 +214,7 @@ async function handleStudentMessage(
       const nextSun = addDays(nextMon, 6);
       const events = await getEventsForDateRange(nextMon, nextSun);
       const matched = events.filter((e) => e.summary.trim() === student.name);
-      await replyFlex(replyToken, '下週課程', studentScheduleCard(student.name, matched, nextMon, nextSun));
+      await replyFlex(replyToken, '下週課程', studentScheduleCard(student.name, matched, nextMon, nextSun), studentQuickReply(student.paymentType));
       return;
     }
 
@@ -222,7 +222,7 @@ async function handleStudentMessage(
     default: {
       const student = await findStudentByLineId(lineUserId);
       const coach = student?.coachId ? await getCoachById(student.coachId) : null;
-      await replyFlex(replyToken, '安傑力課程管理系統', studentMenu(name, coach?.lineUrl, student?.paymentType));
+      await replyFlex(replyToken, '安傑力課程管理系統', studentMenu(name, coach?.lineUrl, student?.paymentType), studentQuickReply(student?.paymentType));
     }
   }
 }
@@ -246,14 +246,14 @@ async function handleCoachMessage(
         return;
       }
       const checkinCount = schedule.items.filter(i => i.studentNotionId).length;
-      await replyFlex(replyToken, `每日課表（共 ${checkinCount} 堂）`, scheduleList(schedule.items, today));
+      await replyFlex(replyToken, `每日課表（共 ${checkinCount} 堂）`, scheduleList(schedule.items, today), coachQuickReply());
       return;
     }
 
 
     case KEYWORD.ADD_STUDENT: {
       const msg = await startAddStudent(lineUserId);
-      await replyText(replyToken, msg);
+      await replyText(replyToken, msg, coachQuickReply());
       return;
     }
 
@@ -272,12 +272,12 @@ async function handleCoachMessage(
         ]);
         return;
       }
-      await replyFlex(replyToken, `${stats.year}/${stats.month} 月度統計`, monthlyStatsCard(stats));
+      await replyFlex(replyToken, `${stats.year}/${stats.month} 月度統計`, monthlyStatsCard(stats), coachQuickReply());
       return;
     }
 
     case KEYWORD.MENU: {
-      await replyFlex(replyToken, '安傑力教練管理系統', coachMenu(name));
+      await replyFlex(replyToken, '安傑力教練管理系統', coachMenu(name), coachQuickReply());
       return;
     }
 
@@ -339,12 +339,13 @@ async function handleCoachMessage(
               contents: bubbles.length === 1
                 ? bubbles[0]
                 : { type: 'carousel', contents: bubbles.slice(0, 12) },
+              quickReply: { items: coachQuickReply() },
             },
           ]);
           return;
         }
       }
-      await replyFlex(replyToken, '安傑力教練管理系統', coachMenu(name));
+      await replyFlex(replyToken, '安傑力教練管理系統', coachMenu(name), coachQuickReply());
     }
   }
 }

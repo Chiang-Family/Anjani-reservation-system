@@ -66,7 +66,7 @@ export async function handlePostback(event: PostbackEvent): Promise<void> {
           return;
         }
         const label = formatDateLabel(dateStr);
-        await replyFlex(event.replyToken, `${label} 課表`, scheduleList(schedule.items, dateStr));
+        await replyFlex(event.replyToken, `${label} 課表`, scheduleList(schedule.items, dateStr), menuQuickReply());
         return;
       }
 
@@ -81,7 +81,7 @@ export async function handlePostback(event: PostbackEvent): Promise<void> {
         }
         const unchecked = schedule.items.filter((item) => !item.isCheckedIn && item.studentNotionId);
         const label = formatDateLabel(dateStr);
-        await replyFlex(event.replyToken, `${label} 打卡清單`, scheduleList(unchecked, dateStr, 'checkin'));
+        await replyFlex(event.replyToken, `${label} 打卡清單`, scheduleList(unchecked, dateStr, 'checkin'), menuQuickReply());
         return;
       }
 
@@ -104,9 +104,9 @@ export async function handlePostback(event: PostbackEvent): Promise<void> {
       case ACTION.COLLECT_AND_ADD: {
         const collectResult = await startCollectAndAdd(id, lineUserId);
         if (collectResult.type === 'flex') {
-          await replyFlex(event.replyToken, collectResult.title, collectResult.content);
+          await replyFlex(event.replyToken, collectResult.title, collectResult.content, menuQuickReply());
         } else {
-          await replyText(event.replyToken, collectResult.message);
+          await replyText(event.replyToken, collectResult.message, menuQuickReply());
         }
         return;
       }
@@ -138,7 +138,7 @@ export async function handlePostback(event: PostbackEvent): Promise<void> {
         const studentName = student?.name ?? '';
         const checkinsDesc = [...bucket.checkins].reverse();
         await replyFlex(event.replyToken, `${studentName} 上課紀錄`,
-          classHistoryCard(studentName, checkinsDesc, hoursSummary.remainingHours));
+          classHistoryCard(studentName, checkinsDesc, hoursSummary.remainingHours), menuQuickReply());
         return;
       }
 
@@ -157,7 +157,7 @@ export async function handlePostback(event: PostbackEvent): Promise<void> {
           return;
         }
         await replyFlex(event.replyToken, `${student.name} 繳費明細`,
-          paymentDetailCard(student.name, detailDate, periodPayments, id));
+          paymentDetailCard(student.name, detailDate, periodPayments, id), menuQuickReply());
         return;
       }
 
@@ -184,7 +184,7 @@ export async function handlePostback(event: PostbackEvent): Promise<void> {
           const historicalUnpaid = checkins
             .filter(c => !c.classDate.startsWith(currentMonth) && !paidDates.has(c.classDate));
           await replyFlex(event.replyToken, `${student.name} 當月上課紀錄`,
-            sessionMonthlyCard(student.name, monthRecords, historicalUnpaid));
+            sessionMonthlyCard(student.name, monthRecords, historicalUnpaid), menuQuickReply());
           return;
         }
 
@@ -193,11 +193,11 @@ export async function handlePostback(event: PostbackEvent): Promise<void> {
         if (overflow.hasOverflow) {
           const unpaidDesc = [...overflow.unpaidCheckins].reverse();
           await replyFlex(event.replyToken, `${student.name} 上課紀錄`,
-            classHistoryCard(student.name, unpaidDesc, summary.remainingHours, '未繳費'));
+            classHistoryCard(student.name, unpaidDesc, summary.remainingHours, '未繳費'), menuQuickReply());
         } else {
           const paidDesc = [...overflow.paidCheckins].reverse();
           await replyFlex(event.replyToken, `${student.name} 上課紀錄`,
-            classHistoryCard(student.name, paidDesc, summary.remainingHours));
+            classHistoryCard(student.name, paidDesc, summary.remainingHours), menuQuickReply());
         }
         return;
       }
@@ -216,7 +216,7 @@ export async function handlePostback(event: PostbackEvent): Promise<void> {
         }
         const unpaidDesc = [...overflowInfo.unpaidCheckins].reverse();
         await replyFlex(event.replyToken, `${student.name} 未繳費上課紀錄`,
-          classHistoryCard(student.name, unpaidDesc, overflowSummary.remainingHours, '未繳費'));
+          classHistoryCard(student.name, unpaidDesc, overflowSummary.remainingHours, '未繳費'), menuQuickReply());
         return;
       }
 
@@ -233,7 +233,7 @@ export async function handlePostback(event: PostbackEvent): Promise<void> {
           return;
         }
         await replyFlex(event.replyToken, `${student.name} 繳費紀錄`,
-          paymentPeriodSelector(student.name, payments, id, summary.remainingHours, overflow.hasOverflow));
+          paymentPeriodSelector(student.name, payments, id, summary.remainingHours, overflow.hasOverflow), menuQuickReply());
         return;
       }
 
@@ -252,7 +252,7 @@ export async function handlePostback(event: PostbackEvent): Promise<void> {
         const title = showPaid ? '✅ 已繳費學員' : '❌ 未繳費學員';
         const color = showPaid ? '#2ecc71' : '#e74c3c';
         await replyFlex(event.replyToken, title,
-          renewalStudentListCard(title, filtered, color));
+          renewalStudentListCard(title, filtered, color), menuQuickReply());
         return;
       }
 

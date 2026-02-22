@@ -3,11 +3,20 @@ import type { messagingApi } from '@line/bot-sdk';
 
 type Message = messagingApi.Message;
 type FlexContainer = messagingApi.FlexContainer;
+type QuickReplyItem = messagingApi.QuickReplyItem;
 
-export async function replyText(replyToken: string, text: string): Promise<void> {
+export async function replyText(
+  replyToken: string,
+  text: string,
+  quickReplyItems?: QuickReplyItem[]
+): Promise<void> {
   await getLineClient().replyMessage({
     replyToken,
-    messages: [{ type: 'text', text }],
+    messages: [{
+      type: 'text',
+      text,
+      ...(quickReplyItems && { quickReply: { items: quickReplyItems } }),
+    }],
   });
 }
 
@@ -24,7 +33,8 @@ export async function replyMessages(
 export async function replyFlex(
   replyToken: string,
   altText: string,
-  contents: FlexContainer
+  contents: FlexContainer,
+  quickReplyItems?: QuickReplyItem[]
 ): Promise<void> {
   await getLineClient().replyMessage({
     replyToken,
@@ -33,6 +43,7 @@ export async function replyFlex(
         type: 'flex',
         altText,
         contents,
+        ...(quickReplyItems && { quickReply: { items: quickReplyItems } }),
       },
     ],
   });
