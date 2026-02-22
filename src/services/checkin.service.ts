@@ -154,7 +154,7 @@ export async function recordSessionPayment(
 
   // 檢查是否已有當日繳費紀錄（防重複）
   const existingPayments = await getPaymentsByDate(targetDate);
-  const alreadyPaid = existingPayments.some(p => p.studentId === student.id);
+  const alreadyPaid = existingPayments.some(p => p.studentId === student.id && p.isSessionPayment);
   if (alreadyPaid) {
     return { success: false, message: `${student.name} 在 ${targetDate} 已有繳費紀錄。` };
   }

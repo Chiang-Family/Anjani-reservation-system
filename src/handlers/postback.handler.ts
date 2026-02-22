@@ -100,8 +100,12 @@ export async function handlePostback(event: PostbackEvent): Promise<void> {
       }
 
       case ACTION.COLLECT_AND_ADD: {
-        const msg = await startCollectAndAdd(id, lineUserId);
-        await replyText(event.replyToken, msg);
+        const collectResult = await startCollectAndAdd(id, lineUserId);
+        if (collectResult.type === 'flex') {
+          await replyFlex(event.replyToken, collectResult.title, collectResult.content);
+        } else {
+          await replyText(event.replyToken, collectResult.message);
+        }
         return;
       }
 

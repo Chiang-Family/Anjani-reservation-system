@@ -1,10 +1,12 @@
 import { createStudent, findStudentByName, bindStudentLineId, getStudentById } from '@/lib/notion/students';
 import { findCoachByLineId, findCoachByName, bindCoachLineId } from '@/lib/notion/coaches';
-import { createPaymentRecord, getLatestPaymentByStudent } from '@/lib/notion/payments';
+import { createPaymentRecord, getLatestPaymentByStudent, getPaymentsByStudent } from '@/lib/notion/payments';
+import { getCheckinsByStudent } from '@/lib/notion/checkins';
 import { getStudentHoursSummary, getStudentOverflowInfo } from '@/lib/notion/hours';
 import { formatHours, formatDateTime, nowTaipei } from '@/lib/utils/date';
 import { pushText } from '@/lib/line/push';
 import { paymentPeriodChoiceCard } from '@/templates/flex/payment-confirm';
+import { unpaidSessionDatesCard } from '@/templates/flex/unpaid-session-dates';
 import type { messagingApi } from '@line/bot-sdk';
 
 export type ParsedStudent =
@@ -119,9 +121,33 @@ export function getCollectAndAddState(lineUserId: string): CollectAndAddState | 
   return collectAndAddStates.get(lineUserId);
 }
 
-export async function startCollectAndAdd(studentId: string, lineUserId: string): Promise<string> {
+export type StartCollectResult =
+  | { type: 'text'; message: string }
+  | { type: 'flex'; title: string; content: messagingApi.FlexBubble };
+
+export async function startCollectAndAdd(studentId: string, lineUserId: string): Promise<StartCollectResult> {
   const student = await getStudentById(studentId);
-  if (!student) return '找不到該學員資料。';
+  if (!student) return { type: 'text', message: '找不到該學員資料。' };
+
+  // 單堂學員：顯示未繳費課程日期
+  if (student.paymentType === '單堂') {
+    const [checkins, payments] = await Promise.all([
+      getCheckinsByStudent(studentId),
+      getPaymentsByStudent(studentId),
+    ]);
+    const paidDates = new Set(
+      payments.filter(p => p.isSessionPayment).map(p => p.actualDate)
+    );
+    const unpaidCheckins = checkins.filter(c => !paidDates.has(c.classDate));
+    if (unpaidCheckins.length === 0) {
+      return { type: 'text', message: `${student.name} 目前沒有未繳費的上課紀錄。` };
+    }
+    return {
+      type: 'flex',
+      title: `${student.name} 未繳費課程`,
+      content: unpaidSessionDatesCard(student.name, studentId, student.perSessionFee ?? 0, unpaidCheckins),
+    };
+  }
 
   const latestPayment = await getLatestPaymentByStudent(studentId);
   const pricePerHour = latestPayment?.pricePerHour ?? null;
@@ -136,20 +162,26 @@ export async function startCollectAndAdd(studentId: string, lineUserId: string):
 
   if (pricePerHour) {
     const summary = await getStudentHoursSummary(studentId);
-    return [
-      `${student.name}`,
-      `目前單價：$${pricePerHour.toLocaleString()}/hr`,
-      `剩餘時數：${formatHours(summary.remainingHours)}`,
-      '',
-      '請輸入收款金額（或輸入「取消」放棄）：',
-    ].join('\n');
+    return {
+      type: 'text',
+      message: [
+        `${student.name}`,
+        `目前單價：$${pricePerHour.toLocaleString()}/hr`,
+        `剩餘時數：${formatHours(summary.remainingHours)}`,
+        '',
+        '請輸入收款金額（或輸入「取消」放棄）：',
+      ].join('\n'),
+    };
   }
 
-  return [
-    `${student.name} 目前沒有繳費紀錄。`,
-    '',
-    '請輸入每小時單價（數字）：',
-  ].join('\n');
+  return {
+    type: 'text',
+    message: [
+      `${student.name} 目前沒有繳費紀錄。`,
+      '',
+      '請輸入每小時單價（數字）：',
+    ].join('\n'),
+  };
 }
 
 export interface CollectStepResult {
