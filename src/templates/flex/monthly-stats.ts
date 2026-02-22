@@ -143,7 +143,7 @@ export function renewalStudentListCard(
     } else {
       bodyContents.push(
         detailRow('到期日', fmtDate(s.expiryDate)),
-        detailRow('續約日', fmtDate(s.dueDate)),
+        detailRow('續約日', fmtDate(s.renewalDate)),
         detailRow('續約時數', `${s.expectedRenewalHours} hr`),
         detailRow('金額', `$${s.expectedRenewalAmount.toLocaleString()}`),
       );

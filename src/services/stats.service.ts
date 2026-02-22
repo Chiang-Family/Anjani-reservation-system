@@ -15,9 +15,9 @@ export interface RenewalStudent {
   expectedRenewalAmount: number;
   paidAmount: number;
   expiryDate: string;           // yyyy-MM-dd: 時數歸零的日期
-  dueDate: string;              // yyyy-MM-dd: 已繳費→繳費日；未繳費→到期後下一堂課日期；'' = 行事曆不足
+  renewalDate: string;              // yyyy-MM-dd: 已繳費→繳費日；未繳費→到期後下一堂課日期；'' = 行事曆不足
   isPaid: boolean;              // true if renewed and fully paid
-  insufficientData: boolean;    // true when calendar data insufficient to determine dueDate
+  insufficientData: boolean;    // true when calendar data insufficient to determine renewalDate
 }
 
 export interface RenewalForecast {
@@ -56,7 +56,7 @@ function filterEventsByStudentNames(events: CalendarEvent[], studentNames: Set<s
 
 interface RenewalCycle {
   expiryDate: string;        // 時數歸零的日期
-  dueDate: string;           // 已繳費→繳費日；未繳費→到期後下一堂課日期；'' = 行事曆不足
+  renewalDate: string;           // 已繳費→繳費日；未繳費→到期後下一堂課日期；'' = 行事曆不足
   isPaid: boolean;           // 是否已續約且全額繳費
   expectedHours: number;     // 已繳費→實際購買時數；未繳費→預估（同上期）
   expectedAmount: number;    // 已繳費→實際金額；未繳費→預估
@@ -105,7 +105,7 @@ function findRenewalCycles(
     const nextInfo = getBucketInfo(i + 1);
     cycles.push({
       expiryDate: buckets[i].checkins[buckets[i].checkins.length - 1].classDate,
-      dueDate: nextInfo.actualDate,
+      renewalDate: nextInfo.actualDate,
       isPaid: nextInfo.paidAmount >= nextInfo.totalAmount,
       expectedHours: nextInfo.purchasedHours,
       expectedAmount: nextInfo.totalAmount,
@@ -134,7 +134,7 @@ function findRenewalCycles(
           const nextInfo = getBucketInfo(nextIdx);
           cycles.push({
             expiryDate,
-            dueDate: nextInfo.actualDate,
+            renewalDate: evtIdx < futureEvents.length ? futureEvents[evtIdx].date : '',
             isPaid: nextInfo.paidAmount >= nextInfo.totalAmount,
             expectedHours: nextInfo.purchasedHours,
             expectedAmount: nextInfo.totalAmount,
@@ -147,7 +147,7 @@ function findRenewalCycles(
           const curInfo = getBucketInfo(currentIdx);
           cycles.push({
             expiryDate,
-            dueDate: evtIdx < futureEvents.length ? futureEvents[evtIdx].date : '',
+            renewalDate: evtIdx < futureEvents.length ? futureEvents[evtIdx].date : '',
             isPaid: false,
             expectedHours: curInfo.purchasedHours,
             expectedAmount: Math.round(curInfo.purchasedHours * curInfo.pricePerHour),
@@ -172,7 +172,7 @@ function findRenewalCycles(
       const lastInfo = getBucketInfo(buckets.length - 1);
       cycles.push({
         expiryDate: lastCheckin.classDate,
-        dueDate: futureEvents.length > 0 ? futureEvents[0].date : '',
+        renewalDate: futureEvents.length > 0 ? futureEvents[0].date : '',
         isPaid: false,
         expectedHours: lastInfo.purchasedHours,
         expectedAmount: Math.round(lastInfo.purchasedHours * lastInfo.pricePerHour),
@@ -300,11 +300,9 @@ export async function getCoachMonthlyStats(
     const cycles = findRenewalCycles(buckets, overflowCheckins, studentFutureEvents, studentPayments);
 
     for (const cycle of cycles) {
-      // 已繳費→按繳費日歸月；未繳費→到期日或應繳日任一在本月
-      const inMonth = cycle.isPaid
-        ? cycle.dueDate.startsWith(monthPrefix)
-        : (cycle.expiryDate.startsWith(monthPrefix) ||
-           (cycle.dueDate !== '' && cycle.dueDate.startsWith(monthPrefix)));
+      // 到期日或續約日任一在本月即列入
+      const inMonth = cycle.expiryDate.startsWith(monthPrefix) ||
+        (cycle.renewalDate !== '' && cycle.renewalDate.startsWith(monthPrefix));
       if (!inMonth) continue;
 
       renewalStudents.push({
@@ -314,9 +312,9 @@ export async function getCoachMonthlyStats(
         expectedRenewalAmount: cycle.expectedAmount,
         paidAmount: Math.round(cycle.paidAmount),
         expiryDate: cycle.expiryDate,
-        dueDate: cycle.dueDate,
+        renewalDate: cycle.renewalDate,
         isPaid: cycle.isPaid,
-        insufficientData: !cycle.isPaid && cycle.dueDate === '',
+        insufficientData: !cycle.isPaid && cycle.renewalDate === '',
       });
     }
   }
