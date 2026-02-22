@@ -90,10 +90,12 @@ export async function createPaymentRecord(params: {
   status: '已繳費' | '部分繳費' | '未繳費';
   paidAmount?: number;
   periodDate?: string;
+  /** 覆寫建立日期（用於單堂補繳，讓日期對齊課程日期） */
+  overrideDate?: string;
 }): Promise<PaymentRecord> {
   const notion = getNotionClient();
   const now = nowTaipei();
-  const actualDateStr = format(now, 'yyyy-MM-dd');
+  const actualDateStr = params.overrideDate ?? format(now, 'yyyy-MM-dd');
   const titleDateStr = params.periodDate ?? actualDateStr;
   const title = `${params.studentName} - ${titleDateStr}`;
 
@@ -240,6 +242,21 @@ export async function updatePaymentHours(
       },
     } as Parameters<typeof notion.pages.update>[0]['properties'],
   });
+}
+
+export async function getPaymentsByDate(dateStr: string): Promise<PaymentRecord[]> {
+  const notion = getNotionClient();
+  const res = await notion.databases.query({
+    database_id: getEnv().NOTION_PAYMENTS_DB_ID,
+    filter: {
+      property: PAYMENT_PROPS.CREATED_AT,
+      date: { equals: dateStr },
+    },
+  });
+
+  return res.results.map((page) =>
+    extractPayment(page as unknown as Record<string, unknown>)
+  );
 }
 
 export async function getLatestUnpaidPayment(studentId: string): Promise<PaymentRecord | null> {

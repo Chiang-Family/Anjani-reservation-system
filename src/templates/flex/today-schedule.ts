@@ -24,6 +24,28 @@ export function scheduleList(items: ScheduleItem[], dateStr: string, mode: Sched
       const statusText = item.isCheckedIn ? '✅ 已打卡' : '⏳ 未打卡';
       const statusColor = item.isCheckedIn ? '#27ae60' : '#e67e22';
 
+      const statusItems: FlexComponent[] = [
+        {
+          type: 'text',
+          text: statusText,
+          size: 'xs',
+          color: statusColor,
+        },
+      ];
+
+      // 單堂學員顯示繳費狀態
+      if (item.isPerSession) {
+        const payText = item.isPaidForSession ? '💰 已繳費' : '💸 未繳費';
+        const payColor = item.isPaidForSession ? '#27ae60' : '#e74c3c';
+        statusItems.push({
+          type: 'text',
+          text: payText,
+          size: 'xs',
+          color: payColor,
+          margin: 'sm',
+        });
+      }
+
       const contents: FlexComponent[] = [
         {
           type: 'box',
@@ -51,18 +73,20 @@ export function scheduleList(items: ScheduleItem[], dateStr: string, mode: Sched
               ],
             },
             {
-              type: 'text',
-              text: statusText,
-              size: 'xs',
-              color: statusColor,
+              type: 'box',
+              layout: 'horizontal',
+              contents: statusItems,
               margin: 'sm',
             },
           ],
         },
       ];
 
+      // 動作按鈕列
+      const buttons: FlexComponent[] = [];
+
       if (!item.isCheckedIn && item.studentNotionId && item.isExactMatch) {
-        contents.push({
+        buttons.push({
           type: 'button',
           action: {
             type: 'postback',
@@ -73,6 +97,32 @@ export function scheduleList(items: ScheduleItem[], dateStr: string, mode: Sched
           style: 'primary',
           color: '#27ae60',
           height: 'sm',
+          flex: 1,
+        } as FlexComponent);
+      }
+
+      if (item.isPerSession && !item.isPaidForSession && item.studentNotionId && item.isExactMatch) {
+        buttons.push({
+          type: 'button',
+          action: {
+            type: 'postback',
+            label: '繳費',
+            data: `${ACTION.SESSION_PAYMENT}:${item.studentNotionId}:${dateStr}`,
+            displayText: `幫 ${item.studentName} 繳費`,
+          },
+          style: 'primary',
+          color: '#3498db',
+          height: 'sm',
+          flex: 1,
+        } as FlexComponent);
+      }
+
+      if (buttons.length > 0) {
+        contents.push({
+          type: 'box',
+          layout: 'horizontal',
+          contents: buttons,
+          spacing: 'sm',
           margin: 'sm',
         } as FlexComponent);
       }
@@ -82,7 +132,7 @@ export function scheduleList(items: ScheduleItem[], dateStr: string, mode: Sched
         layout: 'vertical',
         contents,
         paddingAll: '12px',
-        backgroundColor: item.isCheckedIn ? '#f0fdf4' : '#ffffff',
+        backgroundColor: item.isCheckedIn && (!item.isPerSession || item.isPaidForSession) ? '#f0fdf4' : '#ffffff',
         cornerRadius: '8px',
         margin: 'sm',
       } as FlexComponent;

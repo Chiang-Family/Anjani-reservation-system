@@ -6,6 +6,8 @@ export interface Student {
   lineUserId: string;
   coachId?: string;
   status?: string;
+  paymentType?: '單堂' | '套時數';
+  perSessionFee?: number;
 }
 
 export interface PaymentRecord {

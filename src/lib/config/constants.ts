@@ -26,6 +26,7 @@ export const ACTION = {
   CONFIRM_PAYMENT: 'confirm_pay',
   VIEW_RENEWAL_UNPAID: 'renewal_unpaid',
   VIEW_RENEWAL_PAID: 'renewal_paid',
+  SESSION_PAYMENT: 'session_pay',
 } as const;
 
 // 角色

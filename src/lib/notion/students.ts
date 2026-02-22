@@ -26,15 +26,24 @@ function getRelationIds(prop: Record<string, unknown>): string[] {
   return relations?.map((r) => r.id) ?? [];
 }
 
+function getNumberValue(prop: Record<string, unknown>): number | undefined {
+  if (!prop) return undefined;
+  const val = prop.number as number | null | undefined;
+  return val ?? undefined;
+}
+
 function extractStudent(page: Record<string, unknown>): Student {
   const props = (page as { properties: Record<string, unknown> }).properties as Record<string, Record<string, unknown>>;
   const coachRelation = getRelationIds(props[STUDENT_PROPS.COACH]);
+  const paymentType = getRichTextValue(props[STUDENT_PROPS.PAYMENT_TYPE]) || undefined;
   return {
     id: (page as { id: string }).id,
     name: getRichTextValue(props[STUDENT_PROPS.NAME]),
     lineUserId: getRichTextValue(props[STUDENT_PROPS.LINE_USER_ID]),
     coachId: coachRelation[0] || undefined,
     status: getRichTextValue(props[STUDENT_PROPS.STATUS]) || undefined,
+    paymentType: paymentType === '單堂' ? '單堂' : paymentType === '套時數' ? '套時數' : undefined,
+    perSessionFee: getNumberValue(props[STUDENT_PROPS.PER_SESSION_FEE]),
   };
 }
 

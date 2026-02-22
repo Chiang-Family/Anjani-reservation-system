@@ -1,5 +1,5 @@
 import type { PostbackEvent } from '@line/bot-sdk';
-import { coachCheckinForStudent } from '@/services/checkin.service';
+import { coachCheckinForStudent, recordSessionPayment } from '@/services/checkin.service';
 import { getCoachScheduleForDate } from '@/services/coach.service';
 import { startCollectAndAdd, executeAddStudent, executeConfirmPayment } from '@/services/student-management.service';
 import { getStudentById } from '@/lib/notion/students';
@@ -36,6 +36,17 @@ export async function handlePostback(event: PostbackEvent): Promise<void> {
         // data = coach_checkin:{studentId}:{date?}
         const dateStr = extra || undefined;
         const result = await coachCheckinForStudent(lineUserId, id, dateStr);
+        const qr = coachQuickReply();
+        await replyMessages(event.replyToken, [
+          { type: 'text', text: result.message, quickReply: { items: qr } },
+        ]);
+        return;
+      }
+
+      case ACTION.SESSION_PAYMENT: {
+        // data = session_pay:{studentId}:{date?}
+        const dateStr = extra || undefined;
+        const result = await recordSessionPayment(lineUserId, id, dateStr);
         const qr = coachQuickReply();
         await replyMessages(event.replyToken, [
           { type: 'text', text: result.message, quickReply: { items: qr } },

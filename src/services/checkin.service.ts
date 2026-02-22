@@ -1,6 +1,7 @@
 import { getStudentById } from '@/lib/notion/students';
 import { findCoachByLineId } from '@/lib/notion/coaches';
 import { createCheckinRecord, findCheckinToday } from '@/lib/notion/checkins';
+import { createPaymentRecord, getPaymentsByDate } from '@/lib/notion/payments';
 import { getStudentOverflowInfo } from '@/lib/notion/hours';
 import { findStudentEventToday, findStudentEventForDate } from './calendar.service';
 import { todayDateString, formatDateTime, nowTaipei, nowTaipeiISO, computeDurationMinutes, formatHours } from '@/lib/utils/date';
@@ -126,5 +127,88 @@ export async function coachCheckinForStudent(
       `🎉 已記錄 ${durationMinutes} 分鐘，剩餘 ${formatHours(summary.remainingHours)}`,
       balanceWarning,
     ].filter(Boolean).join('\n'),
+  };
+}
+
+/** 單堂學員繳費 — 根據當日課程建立繳費紀錄 */
+export async function recordSessionPayment(
+  coachLineUserId: string,
+  studentNotionId: string,
+  dateStr?: string
+): Promise<CheckinResult> {
+  const coach = await findCoachByLineId(coachLineUserId);
+  if (!coach) {
+    return { success: false, message: '找不到教練資料。' };
+  }
+
+  const student = await getStudentById(studentNotionId);
+  if (!student) {
+    return { success: false, message: '找不到該學員資料。' };
+  }
+
+  if (student.paymentType !== '單堂' || !student.perSessionFee) {
+    return { success: false, message: `${student.name} 不是單堂收費學員，或尚未設定單堂費用。` };
+  }
+
+  const targetDate = dateStr || todayDateString();
+
+  // 檢查是否已有當日繳費紀錄（防重複）
+  const existingPayments = await getPaymentsByDate(targetDate);
+  const alreadyPaid = existingPayments.some(p => p.studentId === student.id);
+  if (alreadyPaid) {
+    return { success: false, message: `${student.name} 在 ${targetDate} 已有繳費紀錄。` };
+  }
+
+  // 查 Google Calendar 取得課程時長
+  const event = dateStr
+    ? await findStudentEventForDate(student.name, dateStr)
+    : await findStudentEventToday(student.name);
+  if (!event) {
+    return { success: false, message: `${targetDate} 沒有 ${student.name} 的課程安排。` };
+  }
+
+  const durationMinutes = computeDurationMinutes(event.startTime, event.endTime);
+  const durationHours = Math.round((durationMinutes / 60) * 10) / 10;
+  const fee = student.perSessionFee;
+  const pricePerHour = Math.round((fee / durationHours) * 100) / 100;
+
+  // 建立繳費紀錄（overrideDate 讓建立日期對齊課程日期，確保查詢正確）
+  await createPaymentRecord({
+    studentId: student.id,
+    studentName: student.name,
+    coachId: coach.id,
+    purchasedHours: durationHours,
+    pricePerHour,
+    status: '已繳費',
+    paidAmount: fee,
+    periodDate: targetDate,
+    overrideDate: targetDate,
+  });
+
+  // 推播通知學員
+  if (student.lineUserId) {
+    const now = nowTaipei();
+    const studentMsg = [
+      `💰 繳費紀錄`,
+      `📅 日期：${targetDate}`,
+      `⏱️ 課程時長：${durationMinutes} 分鐘`,
+      `💵 金額：$${fee}`,
+      `⏰ 紀錄時間：${formatDateTime(now)}`,
+    ].join('\n');
+    pushText(student.lineUserId, studentMsg).catch((err) =>
+      console.error('Push session payment notification failed:', err)
+    );
+  }
+
+  const isToday = targetDate === todayDateString();
+  const datePrefix = isToday ? '' : `（${targetDate}）`;
+
+  return {
+    success: true,
+    message: [
+      `💰 已為 ${student.name} 記錄繳費！${datePrefix}`,
+      `📅 課程時段：${event.startTime}–${event.endTime}`,
+      `💵 金額：$${fee}`,
+    ].join('\n'),
   };
 }

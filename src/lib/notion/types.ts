@@ -5,6 +5,8 @@ export const STUDENT_PROPS = {
   LINE_USER_ID: 'LINE User ID',
   COACH: '所屬教練',
   STATUS: '狀態',
+  PAYMENT_TYPE: '收費方式',
+  PER_SESSION_FEE: '單堂費用',
 } as const;
 
 export const COACH_PROPS = {
