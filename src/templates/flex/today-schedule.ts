@@ -168,7 +168,7 @@ export function scheduleList(items: ScheduleItem[], dateStr: string, mode: Sched
         },
         {
           type: 'text',
-          text: `共 ${items.filter(i => i.studentNotionId).length} 堂課`,
+          text: `共 ${items.filter(i => i.isExactMatch).length} 堂課`,
           size: 'sm',
           color: '#FFFFFFCC',
           margin: 'sm',
