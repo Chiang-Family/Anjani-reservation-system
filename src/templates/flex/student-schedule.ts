@@ -18,7 +18,8 @@ export function studentScheduleCard(
       const weekday = WEEKDAYS[d.getDay()];
       const [, m, day] = e.date.split('-');
       const rocYear = parseInt(e.date.split('-')[0], 10) - 1911;
-      const dateStr = `${rocYear}/${parseInt(m, 10)}/${parseInt(day, 10)}（${weekday}）`;
+      const isJoint = e.summary.trim() !== studentName;
+      const dateStr = `${rocYear}/${parseInt(m, 10)}/${parseInt(day, 10)}（${weekday}）${isJoint ? '(共)' : ''}`;
       return {
         type: 'box',
         layout: 'horizontal',
