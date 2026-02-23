@@ -259,7 +259,7 @@ async function handleCoachMessage(
         ]);
         return;
       }
-      const checkinCount = schedule.items.filter(i => i.studentNotionId).length;
+      const checkinCount = schedule.items.filter(i => i.isExactMatch).length;
       await replyFlex(replyToken, `每日課表（共 ${checkinCount} 堂）`, scheduleList(schedule.items, today), coachQuickReply());
       return;
     }
