@@ -40,7 +40,11 @@ export function classHistoryCard(
           type: 'text',
           text: (() => {
             const [y, m, d] = r.classDate.split('-');
-            return `${parseInt(y, 10) - 1911}-${m}-${d}`;
+            const date = `${parseInt(y, 10) - 1911}-${m}-${d}`;
+            if (r.studentName && r.studentName !== studentName) {
+              return `${date}(${r.studentName.slice(0, 1)})`;
+            }
+            return date;
           })(),
           size: 'sm',
           color: '#555555',
