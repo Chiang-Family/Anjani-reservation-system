@@ -24,6 +24,10 @@ export function classHistoryCard(
   // 取最近 10 筆，並反轉陣列（變成由遠至近，如 "第 19 堂", "第 20 堂", "第 21 堂" 往下排）
   const recent = withSequence.slice(0, 10).reverse();
 
+  // 若紀錄來自多個學員（共用時數池），每筆都顯示姓氏；否則只標示非本人的紀錄
+  const distinctNames = new Set(records.map(r => r.studentName).filter(Boolean));
+  const alwaysShowName = distinctNames.size > 1;
+
   const rows: FlexComponent[] = recent.length > 0
     ? recent.map((r) => ({
       type: 'box',
@@ -41,7 +45,7 @@ export function classHistoryCard(
           text: (() => {
             const [y, m, d] = r.classDate.split('-');
             const date = `${parseInt(y, 10) - 1911}-${m}-${d}`;
-            if (r.studentName && r.studentName !== studentName) {
+            if (r.studentName && (alwaysShowName || r.studentName !== studentName)) {
               return `${date}(${r.studentName.slice(0, 1)})`;
             }
             return date;
