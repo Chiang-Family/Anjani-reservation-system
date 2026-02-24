@@ -10,6 +10,7 @@ import type { CalendarEvent, CheckinRecord, PaymentRecord } from '@/types';
 
 export interface RenewalStudent {
   name: string;
+  partnerName?: string;      // 共用時數池的搭檔學員姓名
   remainingHours: number;
   expectedRenewalHours: number;
   expectedRenewalAmount: number;
@@ -217,6 +218,9 @@ export async function getCoachMonthlyStats(
   const futureEvents = filterEventsByStudentNames(allFutureEvents, studentNames);
   const monthCheckins = allMonthCheckins.filter(c => c.coachId === coach.id);
 
+  // ====== Lookup maps ======
+  const studentById = new Map(students.map(s => [s.id, s]));
+
   // ====== Group checkins by studentId ======
   const checkinsByStudentId = new Map<string, CheckinRecord[]>();
   for (const c of allCoachCheckins) {
@@ -236,8 +240,16 @@ export async function getCoachMonthlyStats(
   }
 
   // ====== Compute hours summary per student in-memory ======
+  // 有關聯學員時，合併雙方打卡記錄共用同一付款 bucket
   const studentBucketData = students.map(s => {
     const studentPayments = paymentsByStudentId.get(s.id) ?? [];
+    if (s.relatedStudentIds?.length) {
+      const allIds = [s.id, ...s.relatedStudentIds];
+      const combinedCheckins = allIds
+        .flatMap(id => checkinsByStudentId.get(id) ?? [])
+        .sort((a, b) => a.classDate.localeCompare(b.classDate));
+      return assignCheckinsToBuckets(studentPayments, combinedCheckins);
+    }
     const studentCheckins = checkinsByStudentId.get(s.id) ?? [];
     return assignCheckinsToBuckets(studentPayments, studentCheckins);
   });
@@ -249,11 +261,31 @@ export async function getCoachMonthlyStats(
   const scheduledClasses = events.length;
   const checkedInClasses = monthCheckins.length;
 
-  // --- Build studentName → latest pricePerHour map (payments sorted by createdAt desc) ---
+  // --- Build studentName → latest pricePerHour map (via studentId, 避免舊標題名稱不符) ---
   const priceMap = new Map<string, number>();
-  for (const p of payments) {
-    if (!priceMap.has(p.studentName)) {
-      priceMap.set(p.studentName, p.pricePerHour);
+  for (const s of students) {
+    const sp = paymentsByStudentId.get(s.id);
+    if (sp?.length) {
+      priceMap.set(s.name, sp[0].pricePerHour);
+    }
+  }
+  // 副學員（無付款）繼承主學員單價
+  for (const s of students) {
+    if (!priceMap.has(s.name) && s.relatedStudentIds?.length) {
+      for (const relatedId of s.relatedStudentIds) {
+        const related = studentById.get(relatedId);
+        if (related && priceMap.has(related.name)) {
+          priceMap.set(s.name, priceMap.get(related.name)!);
+          break;
+        }
+      }
+    }
+  }
+  // 以 studentId 為 key 的價格表（供 executedRevenue 用，避免歷史打卡標題名稱不符）
+  const priceByStudentId = new Map<string, number>();
+  for (const s of students) {
+    if (priceMap.has(s.name)) {
+      priceByStudentId.set(s.id, priceMap.get(s.name)!);
     }
   }
 
@@ -267,9 +299,10 @@ export async function getCoachMonthlyStats(
   estimatedRevenue = Math.round(estimatedRevenue);
 
   // --- 已執行收入: checked-in classes × student hourly rate ---
+  // 優先用 studentId 查（避免歷史打卡記錄標題仍是舊合名），其次用 studentName
   let executedRevenue = 0;
   for (const checkin of monthCheckins) {
-    const price = priceMap.get(checkin.studentName ?? '') ?? 0;
+    const price = priceByStudentId.get(checkin.studentId) ?? priceMap.get(checkin.studentName ?? '') ?? 0;
     executedRevenue += (checkin.durationMinutes / 60) * price;
   }
   executedRevenue = Math.round(executedRevenue);
@@ -292,11 +325,27 @@ export async function getCoachMonthlyStats(
     const { buckets, overflowCheckins } = studentBucketData[i];
     const summary = summaries[i];
     const studentPayments = paymentsByStudentId.get(student.id) ?? [];
-    const studentFutureEvents = futureEventsByStudent.get(student.name) ?? [];
 
+    // 副學員（無付款記錄）跳過，其續約由主學員代表
     if (buckets.length === 0) continue;
 
+    // 合併關聯學員的未來事件，確保時數消耗模擬完整
+    const primaryFutureEvents = futureEventsByStudent.get(student.name) ?? [];
+    const relatedFutureEvents = (student.relatedStudentIds ?? [])
+      .flatMap(id => {
+        const related = studentById.get(id);
+        return related ? (futureEventsByStudent.get(related.name) ?? []) : [];
+      });
+    const studentFutureEvents = [...primaryFutureEvents, ...relatedFutureEvents]
+      .sort((a, b) => a.date.localeCompare(b.date) || a.startTime.localeCompare(b.startTime));
+
     const cycles = findRenewalCycles(buckets, overflowCheckins, studentFutureEvents, studentPayments);
+
+    // 搭檔學員姓名（顯示用）
+    const partnerName = (student.relatedStudentIds ?? [])
+      .map(id => studentById.get(id)?.name)
+      .filter(Boolean)
+      .join('・') || undefined;
 
     for (const cycle of cycles) {
       // 只看續約日是否在本月
@@ -304,6 +353,7 @@ export async function getCoachMonthlyStats(
 
       renewalStudents.push({
         name: student.name,
+        partnerName,
         remainingHours: summary.remainingHours,
         expectedRenewalHours: cycle.expectedHours,
         expectedRenewalAmount: cycle.expectedAmount,

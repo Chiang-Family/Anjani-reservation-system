@@ -1,5 +1,5 @@
 import { getPaymentsByStudent } from './payments';
-import { getCheckinsByStudent } from './checkins';
+import { getCheckinsByStudent, getCheckinsByStudents } from './checkins';
 import type { StudentHoursSummary, OverflowInfo, CheckinRecord, PaymentRecord } from '@/types';
 
 interface CacheEntry {
@@ -100,16 +100,19 @@ export function clearStudentHoursCache(studentId: string): void {
   summaryCache.delete(studentId);
 }
 
-/** 取得學員 summary + overflow + 分桶資訊 */
-export async function getStudentOverflowInfo(studentId: string): Promise<{
+/** 取得學員 summary + overflow + 分桶資訊
+ *  @param relatedStudentIds 共用時數池的其他學員 ID（如有），打卡紀錄會合併計算
+ */
+export async function getStudentOverflowInfo(studentId: string, relatedStudentIds?: string[]): Promise<{
   summary: StudentHoursSummary;
   overflow: OverflowInfo;
   payments: PaymentRecord[];
   buckets: { paymentDate: string; purchasedHours: number; checkins: CheckinRecord[] }[];
 }> {
+  const allIds = [studentId, ...(relatedStudentIds ?? [])];
   const [payments, checkins] = await Promise.all([
     getPaymentsByStudent(studentId),
-    getCheckinsByStudent(studentId),
+    allIds.length > 1 ? getCheckinsByStudents(allIds) : getCheckinsByStudent(studentId),
   ]);
 
   const { buckets, overflowCheckins } = assignCheckinsToBuckets(payments, checkins);

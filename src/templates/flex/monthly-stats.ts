@@ -126,7 +126,7 @@ export function renewalStudentListCard(
   for (const s of students) {
     bodyContents.push({
       type: 'text',
-      text: s.name,
+      text: s.partnerName ? `${s.name}・${s.partnerName}` : s.name,
       size: 'sm',
       weight: 'bold',
       color: '#333333',

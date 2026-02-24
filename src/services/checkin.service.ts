@@ -1,7 +1,7 @@
 import { getStudentById } from '@/lib/notion/students';
 import { findCoachByLineId } from '@/lib/notion/coaches';
 import { createCheckinRecord, findCheckinToday } from '@/lib/notion/checkins';
-import { createPaymentRecord, getPaymentsByDate } from '@/lib/notion/payments';
+import { createPaymentRecord, getPaymentsByDate, getLatestPaymentByStudent } from '@/lib/notion/payments';
 import { getStudentOverflowInfo } from '@/lib/notion/hours';
 import { findStudentEventToday, findStudentEventForDate } from './calendar.service';
 import { todayDateString, formatDateTime, nowTaipei, nowTaipeiISO, computeDurationMinutes, formatHours } from '@/lib/utils/date';
@@ -49,7 +49,21 @@ export async function coachCheckinForStudent(
   const classEndTime = `${targetDate}T${event.endTime}:00+08:00`;
 
   // 打卡前先取得分桶資訊（避免 Notion 索引延遲）
-  const { summary: oldSummary, buckets } = await getStudentOverflowInfo(student.id);
+  // 若學員有關聯學員（共用時數池），需找到持有付款記錄的主學員
+  let hoursStudentId = student.id;
+  let hoursRelatedIds: string[] | undefined;
+  if (student.relatedStudentIds?.length) {
+    const latestPayment = await getLatestPaymentByStudent(student.id);
+    if (latestPayment) {
+      // 本學員是主學員，關聯學員為副
+      hoursRelatedIds = student.relatedStudentIds;
+    } else {
+      // 本學員是副學員，以第一位關聯學員為主
+      hoursStudentId = student.relatedStudentIds[0];
+      hoursRelatedIds = [student.id, ...student.relatedStudentIds.slice(1)];
+    }
+  }
+  const { summary: oldSummary, buckets } = await getStudentOverflowInfo(hoursStudentId, hoursRelatedIds);
 
   // Create checkin record with date range
   await createCheckinRecord({
@@ -113,7 +127,8 @@ export async function coachCheckinForStudent(
 
   let balanceWarning = '';
   if (!isSessionStudent && summary.remainingHours <= 1) {
-    balanceWarning = `\n⚠️ ${student.name} 剩餘時數僅剩 ${formatHours(summary.remainingHours)}`;
+    const warningLabel = hoursRelatedIds?.length ? `${student.name}（共用時數）` : student.name;
+    balanceWarning = `\n⚠️ ${warningLabel} 剩餘時數僅剩 ${formatHours(summary.remainingHours)}`;
   }
 
   const isToday = targetDate === todayDateString();
