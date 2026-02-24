@@ -2,7 +2,7 @@ import { createStudent, findStudentByName, bindStudentLineId, getStudentById } f
 import { findCoachByLineId, findCoachByName, bindCoachLineId } from '@/lib/notion/coaches';
 import { createPaymentRecord, getLatestPaymentByStudent, getPaymentsByStudent } from '@/lib/notion/payments';
 import { getCheckinsByStudent } from '@/lib/notion/checkins';
-import { getStudentHoursSummary, getStudentOverflowInfo } from '@/lib/notion/hours';
+import { getStudentOverflowInfo, resolveOverflowIds } from '@/lib/notion/hours';
 import { formatHours, formatDateTime, nowTaipei } from '@/lib/utils/date';
 import { pushText } from '@/lib/line/push';
 import { paymentPeriodChoiceCard } from '@/templates/flex/payment-confirm';
@@ -113,6 +113,7 @@ interface CollectAndAddState {
   coachId: string;
   pricePerHour: number | null; // null = 無歷史紀錄，需先問單價
   step: 'price' | 'amount';
+  relatedStudentIds?: string[];
 }
 
 const collectAndAddStates = new Map<string, CollectAndAddState>();
@@ -149,19 +150,22 @@ export async function startCollectAndAdd(studentId: string, lineUserId: string):
     };
   }
 
-  const latestPayment = await getLatestPaymentByStudent(studentId);
+  // 解析主/副學員：收款紀錄建立在主學員名下
+  const { primaryId, relatedIds } = await resolveOverflowIds(student);
+  const latestPayment = await getLatestPaymentByStudent(primaryId);
   const pricePerHour = latestPayment?.pricePerHour ?? null;
 
   collectAndAddStates.set(lineUserId, {
-    studentId,
+    studentId: primaryId,
     studentName: student.name,
     coachId: student.coachId || '',
     pricePerHour,
     step: pricePerHour ? 'amount' : 'price',
+    relatedStudentIds: relatedIds,
   });
 
   if (pricePerHour) {
-    const summary = await getStudentHoursSummary(studentId);
+    const { summary } = await getStudentOverflowInfo(primaryId, relatedIds);
     return {
       type: 'text',
       message: [
@@ -224,7 +228,7 @@ export async function handleCollectAndAddStep(
   const hours = Math.round((amount / pricePerHour) * 10) / 10;
 
   // 查詢學員繳費紀錄 + FIFO 分桶資訊
-  const { payments: existingPayments, buckets } = await getStudentOverflowInfo(state.studentId);
+  const { payments: existingPayments, buckets } = await getStudentOverflowInfo(state.studentId, state.relatedStudentIds);
 
   if (existingPayments.length > 0) {
     // 過濾掉已用罄的期數，只顯示尚有剩餘的期可補繳
@@ -274,7 +278,8 @@ export async function executeConfirmPayment(
   const hours = Math.round((amount / pricePerHour) * 10) / 10;
 
   // 先取得目前剩餘時數（在 Notion 建立紀錄前）
-  const oldSummary = await getStudentHoursSummary(studentId);
+  const { primaryId: ecpPrimaryId, relatedIds: ecpRelatedIds } = await resolveOverflowIds(student);
+  const { summary: oldSummary } = await getStudentOverflowInfo(ecpPrimaryId, ecpRelatedIds);
 
   await createPaymentRecord({
     studentId,
@@ -398,7 +403,8 @@ export async function handleBinding(
   await bindStudentLineId(student.id, lineUserId);
   bindingStates.delete(lineUserId);
 
-  const summary = await getStudentHoursSummary(student.id);
+  const { primaryId: hbPrimaryId, relatedIds: hbRelatedIds } = await resolveOverflowIds(student);
+  const { summary } = await getStudentOverflowInfo(hbPrimaryId, hbRelatedIds);
 
   return {
     success: true,

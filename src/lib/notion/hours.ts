@@ -1,4 +1,4 @@
-import { getPaymentsByStudent } from './payments';
+import { getPaymentsByStudent, getLatestPaymentByStudent } from './payments';
 import { getCheckinsByStudent, getCheckinsByStudents } from './checkins';
 import type { StudentHoursSummary, OverflowInfo, CheckinRecord, PaymentRecord } from '@/types';
 
@@ -103,6 +103,21 @@ export function clearStudentHoursCache(studentId: string): void {
 /** 取得學員 summary + overflow + 分桶資訊
  *  @param relatedStudentIds 共用時數池的其他學員 ID（如有），打卡紀錄會合併計算
  */
+/** 解析學員主/副關係，返回正確的 primaryId 與 relatedIds，用於 getStudentOverflowInfo */
+export async function resolveOverflowIds(student: { id: string; relatedStudentIds?: string[] }): Promise<{ primaryId: string; relatedIds?: string[] }> {
+  if (!student.relatedStudentIds?.length) {
+    return { primaryId: student.id };
+  }
+  const latestPayment = await getLatestPaymentByStudent(student.id);
+  if (latestPayment) {
+    return { primaryId: student.id, relatedIds: student.relatedStudentIds };
+  }
+  return {
+    primaryId: student.relatedStudentIds[0],
+    relatedIds: [student.id, ...student.relatedStudentIds.slice(1)],
+  };
+}
+
 export async function getStudentOverflowInfo(studentId: string, relatedStudentIds?: string[]): Promise<{
   summary: StudentHoursSummary;
   overflow: OverflowInfo;

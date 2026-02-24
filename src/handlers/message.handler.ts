@@ -7,7 +7,7 @@ import { findCoachByLineId, getCoachById } from '@/lib/notion/coaches';
 import { findStudentByLineId, getAllStudentIds, getStudentById } from '@/lib/notion/students';
 import { getCheckinsByStudent, getCheckinsByStudents } from '@/lib/notion/checkins';
 import { getPaymentsByStudent, getPaymentsByStudents } from '@/lib/notion/payments';
-import { getStudentHoursSummary, getStudentOverflowInfo } from '@/lib/notion/hours';
+import { getStudentOverflowInfo, resolveOverflowIds } from '@/lib/notion/hours';
 import { paymentPeriodSelector } from '@/templates/flex/class-history';
 import {
   startAddStudent,
@@ -149,7 +149,8 @@ async function handleStudentMessage(
         return;
       }
 
-      const { summary, overflow } = await getStudentOverflowInfo(student.id);
+      const { primaryId: classHistPrimaryId, relatedIds: classHistRelatedIds } = await resolveOverflowIds(student);
+      const { summary, overflow } = await getStudentOverflowInfo(classHistPrimaryId, classHistRelatedIds);
       if (overflow.hasOverflow) {
         const unpaidDesc = [...overflow.unpaidCheckins].reverse();
         await replyFlex(replyToken, '當期上課紀錄', classHistoryCard(student.name, unpaidDesc, summary.remainingHours, '未繳費'), studentQuickReply(student.paymentType));
@@ -190,11 +191,12 @@ async function handleStudentMessage(
         return;
       }
 
-      const { summary, overflow, payments } = await getStudentOverflowInfo(student.id);
+      const { primaryId: payHistPrimaryId, relatedIds: payHistRelatedIds } = await resolveOverflowIds(student);
+      const { summary: paySummary, overflow: payOverflow, payments } = await getStudentOverflowInfo(payHistPrimaryId, payHistRelatedIds);
       if (payments.length > 0) {
-        await replyFlex(replyToken, '繳費紀錄', paymentPeriodSelector(student.name, payments, student.id, summary.remainingHours, overflow.hasOverflow), studentQuickReply(student.paymentType));
+        await replyFlex(replyToken, '繳費紀錄', paymentPeriodSelector(student.name, payments, payHistPrimaryId, paySummary.remainingHours, payOverflow.hasOverflow), studentQuickReply(student.paymentType));
       } else {
-        await replyFlex(replyToken, '繳費紀錄', paymentHistoryCard(student.name, payments, summary), studentQuickReply(student.paymentType));
+        await replyFlex(replyToken, '繳費紀錄', paymentHistoryCard(student.name, payments, paySummary), studentQuickReply(student.paymentType));
       }
       return;
     }
@@ -319,7 +321,8 @@ async function handleCoachMessage(
         if (matched.length > 0) {
           const currentMonth = todayDateString().slice(0, 7);
           const summaries = await pMap(matched, async (s) => {
-            const summary = await getStudentHoursSummary(s.id);
+            const { primaryId, relatedIds } = await resolveOverflowIds(s);
+            const { summary } = await getStudentOverflowInfo(primaryId, relatedIds);
             let monthlyCheckinCount: number | undefined;
             let monthlyUnpaidCount: number | undefined;
             let historicalUnpaidCount: number | undefined;

@@ -4,7 +4,7 @@ import { getCoachScheduleForDate } from '@/services/coach.service';
 import { startCollectAndAdd, executeAddStudent, executeConfirmPayment } from '@/services/student-management.service';
 import { getStudentById } from '@/lib/notion/students';
 import { getCheckinsByStudent } from '@/lib/notion/checkins';
-import { getStudentOverflowInfo } from '@/lib/notion/hours';
+import { getStudentOverflowInfo, resolveOverflowIds } from '@/lib/notion/hours';
 import { replyText, replyFlex, replyMessages } from '@/lib/line/reply';
 import { ACTION } from '@/lib/config/constants';
 import { TEXT } from '@/templates/text-messages';
@@ -127,15 +127,15 @@ export async function handlePostback(event: PostbackEvent): Promise<void> {
       case ACTION.VIEW_CLASS_BY_PAYMENT: {
         // data = view_class_pay:{studentId}:{bucketDate}
         const bucketDate = extra;
-        const { summary: hoursSummary, buckets } = await getStudentOverflowInfo(id);
+        const student = await getStudentById(id);
+        const studentName = student?.name ?? '';
+        const { primaryId: vcbPrimaryId, relatedIds: vcbRelatedIds } = await resolveOverflowIds(student ?? { id });
+        const { summary: hoursSummary, buckets } = await getStudentOverflowInfo(vcbPrimaryId, vcbRelatedIds);
         const bucket = buckets.find(b => b.paymentDate === bucketDate);
         if (!bucket) {
           await replyTextWithMenu(event.replyToken, '找不到該繳費紀錄。');
           return;
         }
-
-        const student = await getStudentById(id);
-        const studentName = student?.name ?? '';
         const checkinsDesc = [...bucket.checkins].reverse();
         await replyFlex(event.replyToken, `${studentName} 上課紀錄`,
           classHistoryCard(studentName, checkinsDesc, hoursSummary.remainingHours), menuQuickReply());
@@ -150,7 +150,8 @@ export async function handlePostback(event: PostbackEvent): Promise<void> {
           await replyTextWithMenu(event.replyToken, '找不到該學員資料。');
           return;
         }
-        const { payments: allPayments } = await getStudentOverflowInfo(id);
+        const { primaryId: vpPrimaryId, relatedIds: vpRelatedIds } = await resolveOverflowIds(student);
+        const { payments: allPayments } = await getStudentOverflowInfo(vpPrimaryId, vpRelatedIds);
         const periodPayments = allPayments.filter(p => p.createdAt === detailDate);
         if (periodPayments.length === 0) {
           await replyTextWithMenu(event.replyToken, '找不到該期繳費紀錄。');
@@ -189,7 +190,8 @@ export async function handlePostback(event: PostbackEvent): Promise<void> {
         }
 
         // 多堂學員：顯示最新一期的上課紀錄（有 overflow 時顯示未繳費期）
-        const { summary, overflow } = await getStudentOverflowInfo(id);
+        const { primaryId: vshPrimaryId, relatedIds: vshRelatedIds } = await resolveOverflowIds(student);
+        const { summary, overflow } = await getStudentOverflowInfo(vshPrimaryId, vshRelatedIds);
         if (overflow.hasOverflow) {
           const unpaidDesc = [...overflow.unpaidCheckins].reverse();
           await replyFlex(event.replyToken, `${student.name} 上課紀錄`,
@@ -209,7 +211,8 @@ export async function handlePostback(event: PostbackEvent): Promise<void> {
           await replyTextWithMenu(event.replyToken, '找不到該學員資料。');
           return;
         }
-        const { summary: overflowSummary, overflow: overflowInfo } = await getStudentOverflowInfo(id);
+        const { primaryId: vuoPrimaryId, relatedIds: vuoRelatedIds } = await resolveOverflowIds(student);
+        const { summary: overflowSummary, overflow: overflowInfo } = await getStudentOverflowInfo(vuoPrimaryId, vuoRelatedIds);
         if (!overflowInfo.hasOverflow) {
           await replyTextWithMenu(event.replyToken, `${student.name} 目前沒有未繳費的上課紀錄。`);
           return;
@@ -227,13 +230,14 @@ export async function handlePostback(event: PostbackEvent): Promise<void> {
           await replyTextWithMenu(event.replyToken, '找不到該學員資料。');
           return;
         }
-        const { summary, overflow, payments } = await getStudentOverflowInfo(id);
+        const { primaryId: vphPrimaryId, relatedIds: vphRelatedIds } = await resolveOverflowIds(student);
+        const { summary, overflow, payments } = await getStudentOverflowInfo(vphPrimaryId, vphRelatedIds);
         if (payments.length === 0) {
           await replyTextWithMenu(event.replyToken, `${student.name} 目前沒有繳費紀錄。`);
           return;
         }
         await replyFlex(event.replyToken, `${student.name} 繳費紀錄`,
-          paymentPeriodSelector(student.name, payments, id, summary.remainingHours, overflow.hasOverflow), menuQuickReply());
+          paymentPeriodSelector(student.name, payments, vphPrimaryId, summary.remainingHours, overflow.hasOverflow), menuQuickReply());
         return;
       }
 
