@@ -45,7 +45,7 @@ function filterEventsByStudentNames(events: CalendarEvent[], studentNames: Set<s
   return events.filter((event) => {
     const summary = event.summary.trim();
     for (const name of studentNames) {
-      if (summary === name || summary.includes(name) || name.includes(summary)) {
+      if (summary === name) {
         return true;
       }
     }
