@@ -109,8 +109,10 @@ export async function coachCheckinForStudent(
     }
   }
 
+  const isSessionStudent = student.paymentType === '單堂';
+
   let balanceWarning = '';
-  if (summary.remainingHours <= 1) {
+  if (!isSessionStudent && summary.remainingHours <= 1) {
     balanceWarning = `\n⚠️ ${student.name} 剩餘時數僅剩 ${formatHours(summary.remainingHours)}`;
   }
 
@@ -124,7 +126,9 @@ export async function coachCheckinForStudent(
       `📅 課程時段：${event.startTime}–${event.endTime}`,
       `⏰ 打卡時間：${formatDateTime(now)}`,
       '',
-      `🎉 已記錄 ${durationMinutes} 分鐘，剩餘 ${formatHours(summary.remainingHours)}`,
+      isSessionStudent
+        ? `🎉 已記錄 ${durationMinutes} 分鐘`
+        : `🎉 已記錄 ${durationMinutes} 分鐘，剩餘 ${formatHours(summary.remainingHours)}`,
       balanceWarning,
     ].filter(Boolean).join('\n'),
   };
@@ -207,9 +211,6 @@ export async function recordSessionPayment(
       console.error('Push session payment notification failed:', err)
     );
   }
-
-  const isToday = targetDate === todayDateString();
-  const datePrefix = isToday ? '' : `（${targetDate}）`;
 
   const timeSlot = checkin?.classTimeSlot ?? '';
 
