@@ -75,6 +75,8 @@ handleEvent() 事件分發
 > **收費方式**：`套時數`（預先購買時數包，FIFO 消耗）或 `單堂`（每次上課單獨計費，逐堂繳費）。
 >
 > **關聯學員**：支援合課場景。例如 A 和 B 有時個別上課、有時以「AB」名義合課，透過關聯學員欄位連結三筆記錄，學員查詢時會同時顯示個人與合課紀錄，合課日期旁標示「(共)」。
+>
+> **共用時數池**：兩位學員可設定為共用同一個繳費時數桶。系統透過 `resolveOverflowIds()` 自動判斷主/副學員（有繳費紀錄者為主），所有時數計算皆以主學員為基準合併計算。上課紀錄中，共用池的每筆記錄會在日期後標示學員姓氏首字（如 `115-02-10(黃)`）。
 
 ### 教練 (Coaches)
 
@@ -326,16 +328,21 @@ paymentPeriodSelector()
 
 > 每日課表的堂數統計僅計算精確名稱比對的學員，模糊比對（名稱包含關係）的學員會顯示但不列入計數，也不顯示打卡按鈕。
 
-### Notion API Rate Limit
+### Notion API Rate Limit & 分頁
 
 - Notion API 限制約 3 req/s
 - `pMap` 工具預設 concurrency=1 + 350ms delay
 - 批次查詢 + 記憶體比對，減少 API 呼叫次數
 - `getStudentHoursSummary` 有 1 分鐘 cache
+- **分頁處理**：Notion 每次最多回傳 100 筆，`getCheckinsByCoach` / `getCheckinsByStudent` / `getCheckinsByStudents` 均實作 `do-while` 分頁迴圈，確保不遺漏任何記錄
 
 ### Eventual Consistency 處理
 
 Notion 新建紀錄後立即查詢可能找不到。解法：在建立紀錄**之前**先取得舊資料，建立後直接用已知數值計算新結果，不重新查詢。
+
+### 月度統計打卡堂數計算
+
+月度統計的「已打卡堂數」使用教練的全量打卡記錄（`getCheckinsByCoach`），在記憶體中依 `classDate`（`CLASS_TIME_SLOT` 的日期）篩選本月資料，而非依 `CHECKIN_TIME`（打卡動作時間）。這確保跨月補打卡或延遲打卡不會影響統計準確性。
 
 ---
 
