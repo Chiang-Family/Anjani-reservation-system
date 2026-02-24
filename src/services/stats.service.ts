@@ -2,7 +2,7 @@ import { findCoachByLineId } from '@/lib/notion/coaches';
 import { getStudentsByCoachId } from '@/lib/notion/students';
 import { getPaymentsByCoachStudents } from '@/lib/notion/payments';
 import { assignCheckinsToBuckets, computeSummaryFromBuckets } from '@/lib/notion/hours';
-import { getCheckinsByDateRange, getCheckinsByCoach } from '@/lib/notion/checkins';
+import { getCheckinsByCoach } from '@/lib/notion/checkins';
 import { getMonthEvents, getEventsForDateRange } from '@/lib/google/calendar';
 import { nowTaipei, computeDurationMinutes, todayDateString } from '@/lib/utils/date';
 import { format, addMonths, addDays, parseISO } from 'date-fns';
@@ -203,12 +203,11 @@ export async function getCoachMonthlyStats(
   const futureEnd = format(addMonths(now, 4), 'yyyy-MM-dd');
 
   // ====== Batch load ALL data in parallel (fixed number of API calls) ======
-  const [allMonthEvents, allFutureEvents, payments, students, allMonthCheckins, allCoachCheckins] = await Promise.all([
+  const [allMonthEvents, allFutureEvents, payments, students, allCoachCheckins] = await Promise.all([
     getMonthEvents(year, month),                    // 1 Google Calendar call
     getEventsForDateRange(today, futureEnd),         // 1 Google Calendar call
     getPaymentsByCoachStudents(coach.id),            // 1 Notion call
     getStudentsByCoachId(coach.id),                  // 1 Notion call
-    getCheckinsByDateRange(monthStart, monthEnd),    // 1 Notion call
     getCheckinsByCoach(coach.id),                    // 1 Notion call
   ]);
 
@@ -216,7 +215,8 @@ export async function getCoachMonthlyStats(
   const studentNames = new Set(students.map(s => s.name));
   const events = filterEventsByStudentNames(allMonthEvents, studentNames);
   const futureEvents = filterEventsByStudentNames(allFutureEvents, studentNames);
-  const monthCheckins = allMonthCheckins.filter(c => c.coachId === coach.id);
+  // 依上課日期（CLASS_TIME_SLOT）過濾本月打卡，而非打卡時間（CHECKIN_TIME）
+  const monthCheckins = allCoachCheckins.filter(c => c.classDate.startsWith(monthPrefix));
 
   // ====== Lookup maps ======
   const studentById = new Map(students.map(s => [s.id, s]));

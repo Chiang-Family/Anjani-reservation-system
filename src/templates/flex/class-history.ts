@@ -24,6 +24,10 @@ export function classHistoryCard(
   // 取最近 10 筆，並反轉陣列（變成由遠至近，如 "第 19 堂", "第 20 堂", "第 21 堂" 往下排）
   const recent = withSequence.slice(0, 10).reverse();
 
+  // 共用時數池判斷：全部紀錄中出現多於一位學員時，每筆都標示姓氏首字
+  const allNames = new Set(records.map(r => r.studentName).filter(Boolean));
+  const isSharedPool = allNames.size > 1;
+
   const rows: FlexComponent[] = recent.length > 0
     ? recent.map((r) => ({
       type: 'box',
@@ -41,8 +45,8 @@ export function classHistoryCard(
           text: (() => {
             const [y, m, d] = r.classDate.split('-');
             const date = `${parseInt(y, 10) - 1911}-${m}-${d}`;
-            // 若紀錄屬於另一位學員（包含舊合併名稱如「黃筆軍鄒鴻陵」視為本人），標示姓氏首字
-            if (r.studentName && !r.studentName.includes(studentName)) {
+            // 共用時數池時，標示每筆紀錄的上課學員姓氏首字
+            if (r.studentName && isSharedPool) {
               return `${date}(${r.studentName.slice(0, 1)})`;
             }
             return date;

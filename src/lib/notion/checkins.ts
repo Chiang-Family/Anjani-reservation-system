@@ -148,20 +148,30 @@ export async function getCheckinsByDate(classDate: string): Promise<CheckinRecor
 
 export async function getCheckinsByStudent(studentId: string): Promise<CheckinRecord[]> {
   const notion = getNotionClient();
-  const res = await notion.databases.query({
-    database_id: getEnv().NOTION_CHECKIN_DB_ID,
-    filter: {
-      property: CHECKIN_PROPS.STUDENT,
-      relation: { contains: studentId },
-    },
-    sorts: [
-      { property: CHECKIN_PROPS.CLASS_TIME_SLOT, direction: 'descending' },
-    ],
-  });
+  const results: CheckinRecord[] = [];
+  let cursor: string | undefined;
 
-  return res.results.map((page) =>
-    extractCheckin(page as unknown as Record<string, unknown>)
-  );
+  do {
+    const res = await notion.databases.query({
+      database_id: getEnv().NOTION_CHECKIN_DB_ID,
+      filter: {
+        property: CHECKIN_PROPS.STUDENT,
+        relation: { contains: studentId },
+      },
+      sorts: [
+        { property: CHECKIN_PROPS.CLASS_TIME_SLOT, direction: 'descending' },
+      ],
+      page_size: 100,
+      start_cursor: cursor,
+    });
+
+    for (const page of res.results) {
+      results.push(extractCheckin(page as unknown as Record<string, unknown>));
+    }
+    cursor = res.has_more ? (res.next_cursor ?? undefined) : undefined;
+  } while (cursor);
+
+  return results;
 }
 
 export async function getCheckinsByStudents(studentIds: string[]): Promise<CheckinRecord[]> {
@@ -169,40 +179,60 @@ export async function getCheckinsByStudents(studentIds: string[]): Promise<Check
   if (studentIds.length === 1) return getCheckinsByStudent(studentIds[0]);
 
   const notion = getNotionClient();
-  const res = await notion.databases.query({
-    database_id: getEnv().NOTION_CHECKIN_DB_ID,
-    filter: {
-      or: studentIds.map((id) => ({
-        property: CHECKIN_PROPS.STUDENT,
-        relation: { contains: id },
-      })),
-    } as NotionFilter,
-    sorts: [
-      { property: CHECKIN_PROPS.CLASS_TIME_SLOT, direction: 'descending' },
-    ],
-  });
+  const results: CheckinRecord[] = [];
+  let cursor: string | undefined;
 
-  return res.results.map((page) =>
-    extractCheckin(page as unknown as Record<string, unknown>)
-  );
+  do {
+    const res = await notion.databases.query({
+      database_id: getEnv().NOTION_CHECKIN_DB_ID,
+      filter: {
+        or: studentIds.map((id) => ({
+          property: CHECKIN_PROPS.STUDENT,
+          relation: { contains: id },
+        })),
+      } as NotionFilter,
+      sorts: [
+        { property: CHECKIN_PROPS.CLASS_TIME_SLOT, direction: 'descending' },
+      ],
+      page_size: 100,
+      start_cursor: cursor,
+    });
+
+    for (const page of res.results) {
+      results.push(extractCheckin(page as unknown as Record<string, unknown>));
+    }
+    cursor = res.has_more ? (res.next_cursor ?? undefined) : undefined;
+  } while (cursor);
+
+  return results;
 }
 
 export async function getCheckinsByCoach(coachId: string): Promise<CheckinRecord[]> {
   const notion = getNotionClient();
-  const res = await notion.databases.query({
-    database_id: getEnv().NOTION_CHECKIN_DB_ID,
-    filter: {
-      property: CHECKIN_PROPS.COACH,
-      relation: { contains: coachId },
-    },
-    sorts: [
-      { property: CHECKIN_PROPS.CLASS_TIME_SLOT, direction: 'descending' },
-    ],
-  });
+  const results: CheckinRecord[] = [];
+  let cursor: string | undefined;
 
-  return res.results.map((page) =>
-    extractCheckin(page as unknown as Record<string, unknown>)
-  );
+  do {
+    const res = await notion.databases.query({
+      database_id: getEnv().NOTION_CHECKIN_DB_ID,
+      filter: {
+        property: CHECKIN_PROPS.COACH,
+        relation: { contains: coachId },
+      },
+      sorts: [
+        { property: CHECKIN_PROPS.CLASS_TIME_SLOT, direction: 'descending' },
+      ],
+      page_size: 100,
+      start_cursor: cursor,
+    });
+
+    for (const page of res.results) {
+      results.push(extractCheckin(page as unknown as Record<string, unknown>));
+    }
+    cursor = res.has_more ? (res.next_cursor ?? undefined) : undefined;
+  } while (cursor);
+
+  return results;
 }
 
 export async function getCheckinsByDateRange(
