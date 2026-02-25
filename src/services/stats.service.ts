@@ -356,6 +356,24 @@ export async function getCoachMonthlyStats(
 
     const cycles = findRenewalCycles(buckets, overflowCheckins, studentFutureEvents, studentPayments);
 
+    // 補充：若學員有付款紀錄的 actualDate 在本月，但尚未被 cycle 邏輯捕捉（例如當前活躍桶本身就是本月付款）
+    const capturedRenewalDates = new Set(cycles.map(c => c.renewalDate));
+    for (const p of studentPayments) {
+      if (!p.actualDate.startsWith(monthPrefix)) continue;
+      if (capturedRenewalDates.has(p.actualDate)) continue;
+      // 找同一 createdAt 的所有付款（合併計算）
+      const sameDatePayments = studentPayments.filter(sp => sp.createdAt === p.createdAt);
+      cycles.push({
+        expiryDate: '',
+        renewalDate: p.actualDate,
+        isPaid: true,
+        expectedHours: sameDatePayments.reduce((s, sp) => s + sp.purchasedHours, 0),
+        expectedAmount: sameDatePayments.reduce((s, sp) => s + sp.totalAmount, 0),
+        paidAmount: sameDatePayments.reduce((s, sp) => s + sp.paidAmount, 0),
+      });
+      capturedRenewalDates.add(p.actualDate);
+    }
+
     // 搭檔學員姓名（顯示用）
     const partnerName = (student.relatedStudentIds ?? [])
       .map(id => studentById.get(id)?.name)
