@@ -1,6 +1,6 @@
 import { findCoachByLineId } from '@/lib/notion/coaches';
 import { getStudentsByCoachId } from '@/lib/notion/students';
-import { getPaymentsByCoachStudents } from '@/lib/notion/payments';
+import { getPaymentsByStudents } from '@/lib/notion/payments';
 import { assignCheckinsToBuckets, computeSummaryFromBuckets } from '@/lib/notion/hours';
 import { getCheckinsByCoach } from '@/lib/notion/checkins';
 import { getMonthEvents, getEventsForDateRange } from '@/lib/google/calendar';
@@ -203,13 +203,14 @@ export async function getCoachMonthlyStats(
   const futureEnd = format(addMonths(now, 4), 'yyyy-MM-dd');
 
   // ====== Batch load ALL data in parallel (fixed number of API calls) ======
-  const [allMonthEvents, allFutureEvents, payments, students, allCoachCheckins] = await Promise.all([
+  // 先取學員清單，以學員 ID 查付款（避免付款紀錄未填教練欄位被漏掉）
+  const [students, allMonthEvents, allFutureEvents, allCoachCheckins] = await Promise.all([
+    getStudentsByCoachId(coach.id),                  // 1 Notion call
     getMonthEvents(year, month),                    // 1 Google Calendar call
     getEventsForDateRange(today, futureEnd),         // 1 Google Calendar call
-    getPaymentsByCoachStudents(coach.id),            // 1 Notion call
-    getStudentsByCoachId(coach.id),                  // 1 Notion call
     getCheckinsByCoach(coach.id),                    // 1 Notion call
   ]);
+  const payments = await getPaymentsByStudents(students.map(s => s.id)); // 1 Notion call
 
   // ====== In-memory filtering ======
   const studentNames = new Set(students.map(s => s.name));
