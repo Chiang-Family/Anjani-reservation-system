@@ -72,7 +72,12 @@ export function computeDurationMinutes(startTime: string, endTime: string): numb
   return (endH * 60 + endM) - (startH * 60 + startM);
 }
 
-/** 格式化小時數為中文顯示（如 7.5 小時） */
+/** 格式化小時數為中文顯示（如 7 小時 30 分） */
 export function formatHours(hours: number): string {
-  return `${Math.round(hours * 10) / 10} 小時`;
+  const totalMinutes = Math.round(hours * 60);
+  const h = Math.floor(totalMinutes / 60);
+  const m = totalMinutes % 60;
+  if (h === 0) return `${m} 分`;
+  if (m === 0) return `${h} 小時`;
+  return `${h} 小時 ${m} 分`;
 }
