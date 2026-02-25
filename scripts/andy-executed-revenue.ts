@@ -10,7 +10,7 @@ import { getStudentsByCoachId } from '../src/lib/notion/students';
 import { getPaymentsByStudents } from '../src/lib/notion/payments';
 import { getCheckinsByCoach } from '../src/lib/notion/checkins';
 import { nowTaipei, computeDurationMinutes } from '../src/lib/utils/date';
-import type { StudentRecord, PaymentRecord, CheckinRecord } from '../src/types';
+import type { Student, PaymentRecord, CheckinRecord } from '../src/types';
 
 async function main() {
   const now = nowTaipei();
@@ -31,7 +31,7 @@ async function main() {
   ]);
 
   // 3. 建立 lookup maps
-  const studentById = new Map<string, StudentRecord>(students.map(s => [s.id, s]));
+  const studentById = new Map<string, Student>(students.map(s => [s.id, s]));
 
   const paymentsByStudentId = new Map<string, PaymentRecord[]>();
   for (const p of payments) {

@@ -10,7 +10,7 @@ import { getStudentsByCoachId } from '../src/lib/notion/students';
 import { getPaymentsByCoachStudents } from '../src/lib/notion/payments';
 import { getMonthEvents } from '../src/lib/google/calendar';
 import { nowTaipei, computeDurationMinutes } from '../src/lib/utils/date';
-import type { StudentRecord, PaymentRecord } from '../src/types';
+import type { Student, PaymentRecord } from '../src/types';
 
 async function main() {
   const now = nowTaipei();
@@ -33,7 +33,7 @@ async function main() {
   ]);
 
   // 3. 建立 studentById 和 paymentsByStudentId
-  const studentById = new Map<string, StudentRecord>(students.map(s => [s.id, s]));
+  const studentById = new Map<string, Student>(students.map(s => [s.id, s]));
   const paymentsByStudentId = new Map<string, PaymentRecord[]>();
   for (const p of payments) {
     if (!paymentsByStudentId.has(p.studentId)) {
