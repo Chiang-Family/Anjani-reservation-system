@@ -294,8 +294,8 @@ export async function executeConfirmPayment(
 
   // 直接計算新的剩餘時數，避免 Notion 尚未索引新紀錄的問題
   // FIFO：新繳費加入佇列，剩餘 = 舊剩餘 + 新時數
-  const newRemainingHours = Math.round((hours + oldSummary.remainingHours) * 10) / 10;
-  const newPurchasedHours = Math.round((hours + oldSummary.purchasedHours) * 10) / 10;
+  const newRemainingHours = hours + oldSummary.remainingHours;
+  const newPurchasedHours = hours + oldSummary.purchasedHours;
   const summary = { ...oldSummary, remainingHours: newRemainingHours, purchasedHours: newPurchasedHours };
 
   // Push notification to student

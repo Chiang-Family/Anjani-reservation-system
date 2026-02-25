@@ -1,54 +1,70 @@
 /**
- * Debug 腳本：列出指定學員的本月打卡明細（直接查學員，不經教練篩選）
+ * Debug 腳本：列出指定學員的原始打卡紀錄（含 Notion 原始時間戳）
  *
  * 使用方式：
- *   npx tsx --env-file=.env.local scripts/debug-checkins.ts
+ *   npx tsx --env-file=.env.local scripts/debug-checkins.ts <學員名稱關鍵字>
+ *
+ * 範例：
+ *   npx tsx --env-file=.env.local scripts/debug-checkins.ts 林芳嫻
  */
 
-import { findCoachByName } from '../src/lib/notion/coaches';
-import { getStudentsByCoachId } from '../src/lib/notion/students';
-import { getCheckinsByStudents } from '../src/lib/notion/checkins';
-import { nowTaipei } from '../src/lib/utils/date';
-
-// 要調查的學員姓名（模糊比對）
-const TARGET_NAMES = ['許湘', '李容甄', '楊雅萍'];
+import { getNotionClient } from '../src/lib/notion/client';
+import { getEnv } from '../src/lib/config/env';
+import { CHECKIN_PROPS } from '../src/lib/notion/types';
 
 async function main() {
-  const now = nowTaipei();
-  const year = now.getFullYear();
-  const month = String(now.getMonth() + 1).padStart(2, '0');
-  const currentMonth = `${year}-${month}`;
+  const keyword = process.argv[2] || '';
+  if (!keyword) {
+    console.error('請提供學員名稱關鍵字，例如：npx tsx --env-file=.env.local scripts/debug-checkins.ts 林芳嫻');
+    process.exit(1);
+  }
 
-  const coach = await findCoachByName('Andy');
-  if (!coach) { console.error('找不到 Andy 教練'); process.exit(1); }
+  const notion = getNotionClient();
+  const env = getEnv();
 
-  const students = await getStudentsByCoachId(coach.id);
-  const targets = students.filter(s =>
-    TARGET_NAMES.some(t => s.name.includes(t))
-  );
+  const res = await notion.databases.query({
+    database_id: env.NOTION_CHECKIN_DB_ID,
+    filter: {
+      property: CHECKIN_PROPS.TITLE,
+      title: { contains: keyword },
+    },
+    sorts: [{ property: CHECKIN_PROPS.CLASS_TIME_SLOT, direction: 'ascending' }],
+    page_size: 50,
+  });
 
-  if (targets.length === 0) { console.log('找不到符合的學員'); return; }
+  console.log(`=== ${keyword} 打卡紀錄（共 ${res.results.length} 筆）===\n`);
 
-  // 直接用學員 ID 查，不受教練 relation 限制
-  const allCheckins = await getCheckinsByStudents(targets.map(s => s.id));
+  for (const page of res.results) {
+    const p = page as { id: string; properties: Record<string, Record<string, unknown>> };
+    const props = p.properties;
 
-  for (const student of targets) {
-    const allStudentCheckins = allCheckins.filter(c => c.studentId === student.id);
-    const monthCheckins = allStudentCheckins.filter(c => c.classDate.startsWith(currentMonth));
+    const titleArr = (props[CHECKIN_PROPS.TITLE] as { title: Array<{ plain_text: string }> }).title;
+    const title = titleArr?.[0]?.plain_text ?? '(無標題)';
 
-    console.log(`\n${'='.repeat(55)}`);
-    console.log(`學員：${student.name}`);
-    console.log(`本月打卡：${monthCheckins.length} 筆（全部：${allStudentCheckins.length} 筆）`);
+    const slotProp = props[CHECKIN_PROPS.CLASS_TIME_SLOT] as { type: string; date: { start: string; end?: string | null } | null } | null;
+    const rawStart = slotProp?.date?.start ?? '(無)';
+    const rawEnd = slotProp?.date?.end ?? '(無)';
 
-    if (monthCheckins.length > 0) {
-      console.log(`  日期          時段         教練ID是否有值`);
-      for (const c of monthCheckins.sort((a, b) => a.classDate.localeCompare(b.classDate))) {
-        const hasCoach = c.coachId ? '✅ 有' : '❌ 無';
-        const isAndy = c.coachId === coach.id ? '（Andy）' : c.coachId ? `（其他: ${c.coachId.slice(0, 8)}）` : '';
-        console.log(`  ${c.classDate}  ${c.classTimeSlot.padEnd(11)}  教練: ${hasCoach}${isAndy}`);
-      }
+    let startSlice = '';
+    let endSlice = '';
+    let durationMin = 0;
+    if (slotProp?.date?.start && slotProp?.date?.end) {
+      startSlice = rawStart.slice(11, 16);
+      endSlice = rawEnd.slice(11, 16);
+      const [sh, sm] = startSlice.split(':').map(Number);
+      const [eh, em] = endSlice.split(':').map(Number);
+      durationMin = (eh * 60 + em) - (sh * 60 + sm);
     }
+
+    console.log(`[${title}]`);
+    console.log(`  raw start : ${rawStart}`);
+    console.log(`  raw end   : ${rawEnd}`);
+    console.log(`  slice時間 : ${startSlice} → ${endSlice}（${durationMin} 分）`);
+    console.log('');
   }
 }
 
-main().catch(err => { console.error('執行失敗：', err); process.exit(1); });
+main().catch(err => {
+  console.error('執行失敗：', err);
+  process.exit(1);
+});

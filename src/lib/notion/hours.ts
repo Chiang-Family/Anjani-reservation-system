@@ -66,8 +66,8 @@ export function computeSummaryFromBuckets(
   const activeConsumedMinutes = activeIdx < buckets.length ? buckets[activeIdx].consumedMinutes : 0;
   const overflowMinutes = overflowCheckins.reduce((sum, c) => sum + c.durationMinutes, 0);
   const completedMinutes = activeConsumedMinutes + overflowMinutes;
-  const completedHours = Math.round(completedMinutes / 60 * 10) / 10;
-  const remainingHours = Math.round((purchasedHours - completedMinutes / 60) * 10) / 10;
+  const completedHours = completedMinutes / 60;
+  const remainingHours = purchasedHours - completedMinutes / 60;
 
   return { purchasedHours, completedHours, remainingHours };
 }

@@ -77,7 +77,7 @@ export async function coachCheckinForStudent(
   });
 
   // 用打卡前的資料 + 本次時長，算出新的剩餘時數
-  const newRemainingHours = Math.round((oldSummary.remainingHours - durationMinutes / 60) * 10) / 10;
+  const newRemainingHours = oldSummary.remainingHours - durationMinutes / 60;
   const summary = { ...oldSummary, remainingHours: newRemainingHours };
 
   // 檢查本次打卡是否剛好消耗完當前桶（當期最後一堂課）

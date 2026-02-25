@@ -157,6 +157,20 @@ function findRenewalCycles(
         }
       }
     }
+
+    // If current bucket still has remaining hours but a next bucket is pre-paid, emit it.
+    // This handles the case where future events run out before exhausting the active bucket.
+    if (currentIdx + 1 < buckets.length) {
+      const nextInfo = getBucketInfo(currentIdx + 1);
+      cycles.push({
+        expiryDate: '',
+        renewalDate: nextInfo.actualDate,
+        isPaid: true,
+        expectedHours: nextInfo.purchasedHours,
+        expectedAmount: nextInfo.totalAmount,
+        paidAmount: nextInfo.paidAmount,
+      });
+    }
   }
 
   // 3. Overflow: all buckets consumed, no active bucket
