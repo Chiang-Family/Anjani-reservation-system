@@ -1,7 +1,7 @@
 import type { MessageEvent, TextEventMessage } from '@line/bot-sdk';
 import { identifyUser, getStudentInfo } from '@/services/student.service';
 import { getCoachScheduleForDate } from '@/services/coach.service';
-import { getCoachMonthlyStats } from '@/services/stats.service';
+import { getCoachMonthlyStats, getCoachWeeklyStats, getCoachAnnualStats } from '@/services/stats.service';
 import { getStudentsByCoachId } from '@/lib/notion/students';
 import { findCoachByLineId, getCoachById } from '@/lib/notion/coaches';
 import { findStudentByLineId, getAllStudentIds, getStudentById } from '@/lib/notion/students';
@@ -30,6 +30,8 @@ import { getEventsForDateRange } from '@/lib/google/calendar';
 import { todayDateString, addDays } from '@/lib/utils/date';
 import { studentScheduleCard } from '@/templates/flex/student-schedule';
 import { monthlyStatsCard } from '@/templates/flex/monthly-stats';
+import { weeklyStatsCard } from '@/templates/flex/weekly-stats';
+import { annualStatsCard } from '@/templates/flex/annual-stats';
 import { studentMgmtList } from '@/templates/flex/student-mgmt-list';
 import { classHistoryCard, sessionMonthlyCard } from '@/templates/flex/class-history';
 import { studentQuickReply, coachQuickReply, menuQuickReply } from '@/templates/quick-reply';
@@ -277,6 +279,30 @@ async function handleCoachMessage(
       await replyMessages(replyToken, [
         { type: 'text', text: '請輸入學員姓名搜尋：', quickReply: { items: qr } },
       ]);
+      return;
+    }
+
+    case KEYWORD.WEEKLY_STATS: {
+      const wStats = await getCoachWeeklyStats(lineUserId);
+      if (!wStats) {
+        await replyMessages(replyToken, [
+          { type: 'text', text: '找不到教練資料。', quickReply: { items: qr } },
+        ]);
+        return;
+      }
+      await replyFlex(replyToken, '本週統計', weeklyStatsCard(wStats), coachQuickReply());
+      return;
+    }
+
+    case KEYWORD.ANNUAL_STATS: {
+      const aStats = await getCoachAnnualStats(lineUserId);
+      if (!aStats) {
+        await replyMessages(replyToken, [
+          { type: 'text', text: '找不到教練資料。', quickReply: { items: qr } },
+        ]);
+        return;
+      }
+      await replyFlex(replyToken, `${aStats.year} 年度統計`, annualStatsCard(aStats), coachQuickReply());
       return;
     }
 

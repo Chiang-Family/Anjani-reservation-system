@@ -5,8 +5,8 @@ import { assignCheckinsToBuckets, computeSummaryFromBuckets } from '@/lib/notion
 import { getCheckinsByCoach } from '@/lib/notion/checkins';
 import { getMonthEvents, getEventsForDateRange } from '@/lib/google/calendar';
 import { nowTaipei, computeDurationMinutes, todayDateString } from '@/lib/utils/date';
-import { format, addMonths, addDays, parseISO } from 'date-fns';
-import type { CalendarEvent, CheckinRecord, PaymentRecord } from '@/types';
+import { format, addMonths, addDays, parseISO, subDays } from 'date-fns';
+import type { CalendarEvent, CheckinRecord, PaymentRecord, Student } from '@/types';
 
 export interface RenewalStudent {
   name: string;
@@ -26,6 +26,28 @@ export interface RenewalForecast {
   students: RenewalStudent[];
 }
 
+export interface CoachWeeklyStats {
+  coachName: string;
+  weekStart: string;          // yyyy-MM-dd (Sunday)
+  weekEnd: string;            // yyyy-MM-dd (Saturday)
+  scheduledClasses: number;
+  checkedInClasses: number;
+  executedRevenue: number;
+  collectedAmount: number;
+}
+
+export interface CoachAnnualStats {
+  coachName: string;
+  year: number;
+  totalCheckedInClasses: number;
+  totalExecutedRevenue: number;
+  totalCollectedAmount: number;
+  monthsWithData: number;
+  avgCheckedInClasses: number;
+  avgExecutedRevenue: number;
+  avgCollectedAmount: number;
+}
+
 export interface CoachMonthlyStats {
   coachName: string;
   year: number;
@@ -37,6 +59,45 @@ export interface CoachMonthlyStats {
   collectedAmount: number;
   pendingAmount: number;
   renewalForecast: RenewalForecast;
+}
+
+/**
+ * Build priceMap (name → price) and priceByStudentId (id → price) from students + payments.
+ */
+function buildPriceMaps(
+  students: Student[],
+  payments: PaymentRecord[],
+): { priceMap: Map<string, number>; priceByStudentId: Map<string, number> } {
+  const paymentsByStudentId = new Map<string, PaymentRecord[]>();
+  for (const p of payments) {
+    const arr = paymentsByStudentId.get(p.studentId) ?? [];
+    arr.push(p);
+    paymentsByStudentId.set(p.studentId, arr);
+  }
+  const studentById = new Map(students.map(s => [s.id, s]));
+
+  const priceMap = new Map<string, number>();
+  for (const s of students) {
+    const sp = paymentsByStudentId.get(s.id);
+    if (sp?.length) priceMap.set(s.name, sp[0].pricePerHour);
+  }
+  // 副學員（無付款）繼承主學員單價
+  for (const s of students) {
+    if (!priceMap.has(s.name) && s.relatedStudentIds?.length) {
+      for (const relatedId of s.relatedStudentIds) {
+        const related = studentById.get(relatedId);
+        if (related && priceMap.has(related.name)) {
+          priceMap.set(s.name, priceMap.get(related.name)!);
+          break;
+        }
+      }
+    }
+  }
+  const priceByStudentId = new Map<string, number>();
+  for (const s of students) {
+    if (priceMap.has(s.name)) priceByStudentId.set(s.id, priceMap.get(s.name)!);
+  }
+  return { priceMap, priceByStudentId };
 }
 
 /**
@@ -468,5 +529,122 @@ export async function getCoachMonthlyStats(
     collectedAmount,
     pendingAmount,
     renewalForecast,
+  };
+}
+
+export async function getCoachWeeklyStats(lineUserId: string): Promise<CoachWeeklyStats | null> {
+  const coach = await findCoachByLineId(lineUserId);
+  if (!coach) return null;
+
+  const now = nowTaipei();
+  const dayOfWeek = now.getDay(); // 0=Sun, 6=Sat
+  const weekStartDate = subDays(now, dayOfWeek);
+  const weekStart = format(weekStartDate, 'yyyy-MM-dd'); // This Sunday
+  const weekEnd = format(addDays(weekStartDate, 6), 'yyyy-MM-dd');   // This Saturday
+
+  const students = await getStudentsByCoachId(coach.id);
+  const studentNames = new Set(students.map(s => s.name));
+
+  const [allWeekEvents, allCoachCheckins, payments] = await Promise.all([
+    getEventsForDateRange(weekStart, weekEnd),
+    getCheckinsByCoach(coach.id),
+    getPaymentsByStudents(students.map(s => s.id)),
+  ]);
+
+  const weekEvents = filterEventsByStudentNames(allWeekEvents, studentNames);
+  const weekCheckins = allCoachCheckins.filter(
+    c => c.classDate >= weekStart && c.classDate <= weekEnd
+  );
+
+  const { priceMap, priceByStudentId } = buildPriceMaps(students, payments);
+
+  let executedRevenue = 0;
+  for (const checkin of weekCheckins) {
+    const price = priceByStudentId.get(checkin.studentId) ?? priceMap.get(checkin.studentName ?? '') ?? 0;
+    executedRevenue += (checkin.durationMinutes / 60) * price;
+  }
+
+  let collectedAmount = 0;
+  for (const p of payments) {
+    const d = p.actualDate >= weekStart && p.actualDate <= weekEnd ? p.actualDate
+            : p.createdAt >= weekStart && p.createdAt <= weekEnd ? p.createdAt
+            : null;
+    if (d) collectedAmount += p.paidAmount;
+  }
+
+  return {
+    coachName: coach.name,
+    weekStart,
+    weekEnd,
+    scheduledClasses: weekEvents.length,
+    checkedInClasses: weekCheckins.length,
+    executedRevenue: Math.round(executedRevenue),
+    collectedAmount,
+  };
+}
+
+export async function getCoachAnnualStats(
+  lineUserId: string,
+  targetYear?: number,
+): Promise<CoachAnnualStats | null> {
+  const coach = await findCoachByLineId(lineUserId);
+  if (!coach) return null;
+
+  const now = nowTaipei();
+  const year = targetYear ?? now.getFullYear();
+  const yearPrefix = `${year}-`;
+
+  const students = await getStudentsByCoachId(coach.id);
+  const [allCoachCheckins, payments] = await Promise.all([
+    getCheckinsByCoach(coach.id),
+    getPaymentsByStudents(students.map(s => s.id)),
+  ]);
+
+  const { priceMap, priceByStudentId } = buildPriceMaps(students, payments);
+
+  // Aggregate per-month data
+  const monthlyData = new Map<number, { checkedIn: number; executedRevenue: number; collected: number }>();
+  const ensureMonth = (m: number) => {
+    if (!monthlyData.has(m)) monthlyData.set(m, { checkedIn: 0, executedRevenue: 0, collected: 0 });
+    return monthlyData.get(m)!;
+  };
+
+  for (const checkin of allCoachCheckins) {
+    if (!checkin.classDate.startsWith(yearPrefix)) continue;
+    const month = parseInt(checkin.classDate.slice(5, 7));
+    const d = ensureMonth(month);
+    d.checkedIn += 1;
+    const price = priceByStudentId.get(checkin.studentId) ?? priceMap.get(checkin.studentName ?? '') ?? 0;
+    d.executedRevenue += (checkin.durationMinutes / 60) * price;
+  }
+
+  for (const p of payments) {
+    const isYear = p.actualDate.startsWith(yearPrefix) || p.createdAt.startsWith(yearPrefix);
+    if (!isYear) continue;
+    const attributeDate = p.actualDate.startsWith(yearPrefix) ? p.actualDate : p.createdAt;
+    const month = parseInt(attributeDate.slice(5, 7));
+    ensureMonth(month).collected += p.paidAmount;
+  }
+
+  const monthsWithData = monthlyData.size;
+  let totalCheckedInClasses = 0;
+  let totalExecutedRevenue = 0;
+  let totalCollectedAmount = 0;
+  for (const d of monthlyData.values()) {
+    totalCheckedInClasses += d.checkedIn;
+    totalExecutedRevenue += d.executedRevenue;
+    totalCollectedAmount += d.collected;
+  }
+
+  return {
+    coachName: coach.name,
+    year,
+    totalCheckedInClasses,
+    totalExecutedRevenue: Math.round(totalExecutedRevenue),
+    totalCollectedAmount,
+    monthsWithData,
+    avgCheckedInClasses: monthsWithData > 0 ? Math.round(totalCheckedInClasses / monthsWithData) : 0,
+    avgExecutedRevenue: monthsWithData > 0 ? Math.round(totalExecutedRevenue / monthsWithData) : 0,
+    avgCollectedAmount: monthsWithData > 0 ? Math.round(totalCollectedAmount / monthsWithData) : 0,
   };
 }

@@ -7,6 +7,8 @@ export const KEYWORD = {
   ADD_STUDENT: '新增學員',
   STUDENT_MGMT: '學員管理',
   MONTHLY_STATS: '本月統計',
+  WEEKLY_STATS: '本週統計',
+  ANNUAL_STATS: '年度統計',
 
   UPCOMING_CLASSES: '近期預約',
   MENU: '選單',
