@@ -199,29 +199,33 @@ function findRenewalCycles(
 }
 
 export async function getCoachMonthlyStats(
-  lineUserId: string
+  lineUserId: string,
+  targetYear?: number,
+  targetMonth?: number,
 ): Promise<CoachMonthlyStats | null> {
   const coach = await findCoachByLineId(lineUserId);
   if (!coach) return null;
 
   const now = nowTaipei();
-  const year = now.getFullYear();
-  const month = now.getMonth() + 1;
+  const year = targetYear ?? now.getFullYear();
+  const month = targetMonth ?? (now.getMonth() + 1);
   const monthPrefix = `${year}-${String(month).padStart(2, '0')}`;
   const monthStart = `${monthPrefix}-01`;
   const lastDay = new Date(year, month, 0).getDate();
   const monthEnd = `${monthPrefix}-${String(lastDay).padStart(2, '0')}`;
 
-  // Future events range: today → today + 4 months
-  const today = todayDateString();
-  const futureEnd = format(addMonths(now, 4), 'yyyy-MM-dd');
+  // Future events range: 過去月份以月底為起點，當月則以今天為起點
+  const isPastMonth = year < now.getFullYear() || (year === now.getFullYear() && month < now.getMonth() + 1);
+  const futureAnchor = isPastMonth ? monthEnd : todayDateString();
+  const futureAnchorDate = isPastMonth ? new Date(year, month - 1, lastDay) : now;
+  const futureEnd = format(addMonths(futureAnchorDate, 4), 'yyyy-MM-dd');
 
   // ====== Batch load ALL data in parallel (fixed number of API calls) ======
   // 先取學員清單，以學員 ID 查付款（避免付款紀錄未填教練欄位被漏掉）
   const [students, allMonthEvents, allFutureEvents, allCoachCheckins] = await Promise.all([
     getStudentsByCoachId(coach.id),                  // 1 Notion call
     getMonthEvents(year, month),                    // 1 Google Calendar call
-    getEventsForDateRange(today, futureEnd),         // 1 Google Calendar call
+    getEventsForDateRange(futureAnchor, futureEnd),  // 1 Google Calendar call
     getCheckinsByCoach(coach.id),                    // 1 Notion call
   ]);
   const payments = await getPaymentsByStudents(students.map(s => s.id)); // 1 Notion call

@@ -11,7 +11,7 @@ import { TEXT } from '@/templates/text-messages';
 import { scheduleList } from '@/templates/flex/today-schedule';
 import { classHistoryCard, sessionMonthlyCard, paymentPeriodSelector, paymentDetailCard } from '@/templates/flex/class-history';
 import { getPaymentsByStudent } from '@/lib/notion/payments';
-import { renewalStudentListCard } from '@/templates/flex/monthly-stats';
+import { renewalStudentListCard, monthlyStatsCard } from '@/templates/flex/monthly-stats';
 import { getCoachMonthlyStats } from '@/services/stats.service';
 import { formatDateLabel, todayDateString } from '@/lib/utils/date';
 import { menuQuickReply, coachQuickReply } from '@/templates/quick-reply';
@@ -243,20 +243,38 @@ export async function handlePostback(event: PostbackEvent): Promise<void> {
 
       case ACTION.VIEW_RENEWAL_UNPAID:
       case ACTION.VIEW_RENEWAL_PAID: {
-        const stats = await getCoachMonthlyStats(lineUserId);
+        // data = renewal_paid:YYYY:M 或 renewal_unpaid:YYYY:M
+        const targetYear = parts[1] ? parseInt(parts[1]) : undefined;
+        const targetMonth = parts[2] ? parseInt(parts[2]) : undefined;
+        const stats = await getCoachMonthlyStats(lineUserId, targetYear, targetMonth);
         if (!stats || stats.renewalForecast.students.length === 0) {
           await replyTextWithMenu(event.replyToken, '本月沒有續約學員資料。');
           return;
         }
         const showPaid = action === ACTION.VIEW_RENEWAL_PAID;
-        const filtered = stats.renewalForecast.students.filter(s => {
-          const isPaid = s.isPaid;
-          return showPaid ? isPaid : !isPaid;
-        });
+        const filtered = stats.renewalForecast.students.filter(s => showPaid ? s.isPaid : !s.isPaid);
         const title = showPaid ? '✅ 已繳費學員' : '❌ 未繳費學員';
         const color = showPaid ? '#2ecc71' : '#e74c3c';
         await replyFlex(event.replyToken, title,
           renewalStudentListCard(title, filtered, color), menuQuickReply());
+        return;
+      }
+
+      case ACTION.VIEW_MONTH_STATS: {
+        // data = view_month_stats:YYYY:M
+        const targetYear = parts[1] ? parseInt(parts[1]) : undefined;
+        const targetMonth = parts[2] ? parseInt(parts[2]) : undefined;
+        const stats = await getCoachMonthlyStats(lineUserId, targetYear, targetMonth);
+        if (!stats) {
+          await replyTextWithMenu(event.replyToken, '找不到教練資料。');
+          return;
+        }
+        await replyFlex(
+          event.replyToken,
+          `${stats.year}/${stats.month} 月度統計`,
+          monthlyStatsCard(stats),
+          coachQuickReply(),
+        );
         return;
       }
 

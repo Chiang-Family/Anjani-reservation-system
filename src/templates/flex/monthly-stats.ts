@@ -1,11 +1,30 @@
 import type { messagingApi } from '@line/bot-sdk';
 import type { CoachMonthlyStats, RenewalStudent } from '@/services/stats.service';
 import { ACTION } from '@/lib/config/constants';
+import { nowTaipei } from '@/lib/utils/date';
 
 type FlexBubble = messagingApi.FlexBubble;
 type FlexComponent = messagingApi.FlexComponent;
 
+// 有資料的最早月份（一月無資料，從二月開始）
+const FIRST_YEAR = 2026;
+const FIRST_MONTH = 2;
+
 export function monthlyStatsCard(stats: CoachMonthlyStats): FlexBubble {
+  const now = nowTaipei();
+  const currentYear = now.getFullYear();
+  const currentMonth = now.getMonth() + 1;
+
+  const { year, month } = stats;
+  const isFirst = year === FIRST_YEAR && month === FIRST_MONTH;
+  const isLast = year === currentYear && month === currentMonth;
+
+  const prevMonth = month === 1 ? 12 : month - 1;
+  const prevYear = month === 1 ? year - 1 : year;
+  const nextMonth = month === 12 ? 1 : month + 1;
+  const nextYear = month === 12 ? year + 1 : year;
+
+  const renewalData = `${year}:${month}`;
   const bodyContents: FlexComponent[] = [
     statRow('📅 已預約堂數', `${stats.scheduledClasses} 堂`),
     statRow('✅ 已打卡堂數', `${stats.checkedInClasses} 堂`),
@@ -38,6 +57,79 @@ export function monthlyStatsCard(stats: CoachMonthlyStats): FlexBubble {
   const unpaidCount = forecast.students.filter(s => !s.isPaid).length;
   const paidCount = forecast.students.length - unpaidCount;
 
+  // 月份導覽列（左右箭頭）
+  const navContents: FlexComponent[] = [];
+  if (!isFirst) {
+    navContents.push({
+      type: 'button',
+      action: {
+        type: 'postback',
+        label: `← ${prevMonth}月`,
+        data: `${ACTION.VIEW_MONTH_STATS}:${prevYear}:${prevMonth}`,
+      },
+      style: 'secondary',
+      height: 'sm',
+      flex: 1,
+    } as FlexComponent);
+  } else {
+    navContents.push({ type: 'filler' } as FlexComponent);
+  }
+  if (!isLast) {
+    navContents.push({
+      type: 'button',
+      action: {
+        type: 'postback',
+        label: `${nextMonth}月 →`,
+        data: `${ACTION.VIEW_MONTH_STATS}:${nextYear}:${nextMonth}`,
+      },
+      style: 'secondary',
+      height: 'sm',
+      flex: 1,
+    } as FlexComponent);
+  } else {
+    navContents.push({ type: 'filler' } as FlexComponent);
+  }
+
+  const footerContents: FlexComponent[] = [];
+  // 只有不同時是第一月和最後月（即有超過一個月可導覽）時才顯示導覽列
+  if (!(isFirst && isLast)) {
+    footerContents.push({
+      type: 'box',
+      layout: 'horizontal',
+      spacing: 'sm',
+      contents: navContents,
+    } as FlexComponent);
+  }
+  footerContents.push({
+    type: 'box',
+    layout: 'horizontal',
+    spacing: 'sm',
+    contents: [
+      {
+        type: 'button',
+        action: {
+          type: 'postback',
+          label: `❌ 未繳費 (${unpaidCount})`,
+          data: `${ACTION.VIEW_RENEWAL_UNPAID}:${renewalData}`,
+        },
+        style: 'secondary',
+        height: 'sm',
+        flex: 1,
+      },
+      {
+        type: 'button',
+        action: {
+          type: 'postback',
+          label: `✅ 已繳費 (${paidCount})`,
+          data: `${ACTION.VIEW_RENEWAL_PAID}:${renewalData}`,
+        },
+        style: 'secondary',
+        height: 'sm',
+        flex: 1,
+      },
+    ],
+  } as FlexComponent);
+
   return {
     type: 'bubble',
     size: 'mega',
@@ -47,7 +139,7 @@ export function monthlyStatsCard(stats: CoachMonthlyStats): FlexBubble {
       contents: [
         {
           type: 'text',
-          text: `${stats.year}/${String(stats.month).padStart(2, '0')} 月度統計`,
+          text: `${year}/${String(month).padStart(2, '0')} 月度統計`,
           weight: 'bold',
           size: 'lg',
           color: '#FFFFFF',
@@ -72,32 +164,9 @@ export function monthlyStatsCard(stats: CoachMonthlyStats): FlexBubble {
     },
     footer: {
       type: 'box',
-      layout: 'horizontal',
-      contents: [
-        {
-          type: 'button',
-          action: {
-            type: 'postback',
-            label: `❌ 未繳費 (${unpaidCount})`,
-            data: ACTION.VIEW_RENEWAL_UNPAID,
-          },
-          style: 'secondary',
-          height: 'sm',
-          flex: 1,
-        },
-        {
-          type: 'button',
-          action: {
-            type: 'postback',
-            label: `✅ 已繳費 (${paidCount})`,
-            data: ACTION.VIEW_RENEWAL_PAID,
-          },
-          style: 'secondary',
-          height: 'sm',
-          flex: 1,
-        },
-      ],
+      layout: 'vertical',
       spacing: 'sm',
+      contents: footerContents,
       paddingAll: '12px',
     },
   };
