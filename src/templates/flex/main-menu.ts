@@ -140,6 +140,7 @@ export function coachMenu(name: string): FlexBubble {
         menuButton(KEYWORD.WEEKLY_STATS, '#4A7A6A'),
         menuButton(KEYWORD.MONTHLY_STATS, '#6D5D85'),
         menuButton(KEYWORD.ANNUAL_STATS, '#7A5B3D'),
+        menuButton(KEYWORD.MONTHLY_REPORT, '#3A6B8A'),
       ] as messagingApi.FlexComponent[],
       paddingAll: '16px',
       spacing: 'sm',

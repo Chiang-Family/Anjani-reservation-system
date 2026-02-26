@@ -20,6 +20,7 @@ export function coachQuickReply(): QuickReplyItem[] {
     quickReplyButton(KEYWORD.WEEKLY_STATS),
     quickReplyButton(KEYWORD.MONTHLY_STATS),
     quickReplyButton(KEYWORD.ANNUAL_STATS),
+    quickReplyButton(KEYWORD.MONTHLY_REPORT),
     quickReplyButton(KEYWORD.MENU),
   ];
 }

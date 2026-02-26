@@ -19,6 +19,8 @@ import {
   startBinding,
 } from '@/services/student-management.service';
 import { replyText, replyFlex, replyMessages } from '@/lib/line/reply';
+import { showLoading } from '@/lib/line/push';
+import { generateMonthlyReport } from '@/services/report.service';
 import { pMap } from '@/lib/utils/concurrency';
 import { KEYWORD, ROLE } from '@/lib/config/constants';
 import { TEXT } from '@/templates/text-messages';
@@ -303,6 +305,20 @@ async function handleCoachMessage(
         return;
       }
       await replyFlex(replyToken, `${aStats.year} 年度統計`, annualStatsCard(aStats), coachQuickReply());
+      return;
+    }
+
+    case KEYWORD.MONTHLY_REPORT: {
+      const now = new Date();
+      const repYear = now.getMonth() === 0 ? now.getFullYear() - 1 : now.getFullYear();
+      const repMonth = now.getMonth() === 0 ? 12 : now.getMonth();
+      await showLoading(lineUserId, 30);
+      const reportUrl = await generateMonthlyReport(lineUserId, repYear, repMonth);
+      if (!reportUrl) {
+        await replyText(replyToken, '找不到教練資料。', qr);
+        return;
+      }
+      await replyText(replyToken, `✅ ${repYear}年${repMonth}月報表已生成：\n${reportUrl}`, qr);
       return;
     }
 

@@ -10,6 +10,7 @@ export const KEYWORD = {
   WEEKLY_STATS: '本週統計',
   ANNUAL_STATS: '年度統計',
 
+  MONTHLY_REPORT: '月報表',
   UPCOMING_CLASSES: '近期預約',
   MENU: '選單',
 } as const;
