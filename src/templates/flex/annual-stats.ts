@@ -27,6 +27,30 @@ export function annualStatsCard(stats: CoachAnnualStats): FlexBubble {
     statRow('📅 平均堂數', `${stats.avgCheckedInClasses} 堂`),
     statRow('🏷️ 平均執行收入', `$${stats.avgExecutedRevenue.toLocaleString()}`),
     statRow('💰 平均實際收款', `$${stats.avgCollectedAmount.toLocaleString()}`),
+    separator(),
+    // Monthly breakdown header
+    {
+      type: 'box',
+      layout: 'horizontal',
+      margin: 'md',
+      contents: [
+        { type: 'text', text: '月份', size: 'xs', color: '#888888', flex: 2 },
+        { type: 'text', text: '堂數', size: 'xs', color: '#888888', flex: 2, align: 'end' },
+        { type: 'text', text: '執行收入', size: 'xs', color: '#888888', flex: 3, align: 'end' },
+        { type: 'text', text: '實際收款', size: 'xs', color: '#888888', flex: 3, align: 'end' },
+      ],
+    } as FlexComponent,
+    ...stats.monthlyBreakdown.map(m => ({
+      type: 'box',
+      layout: 'horizontal',
+      margin: 'sm',
+      contents: [
+        { type: 'text', text: `${m.month} 月`, size: 'xs', color: '#333333', flex: 2, weight: 'bold' },
+        { type: 'text', text: `${m.checkedIn}`, size: 'xs', color: '#333333', flex: 2, align: 'end' },
+        { type: 'text', text: `$${m.executedRevenue.toLocaleString()}`, size: 'xs', color: '#333333', flex: 3, align: 'end' },
+        { type: 'text', text: `$${m.collected.toLocaleString()}`, size: 'xs', color: '#333333', flex: 3, align: 'end' },
+      ],
+    } as FlexComponent)),
   ];
 
   return {

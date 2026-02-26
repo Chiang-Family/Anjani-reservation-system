@@ -6,6 +6,7 @@ import { getCheckinsByCoach } from '@/lib/notion/checkins';
 import { getMonthEvents, getEventsForDateRange } from '@/lib/google/calendar';
 import { nowTaipei, computeDurationMinutes, todayDateString } from '@/lib/utils/date';
 import { format, addMonths, addDays, parseISO, subDays } from 'date-fns';
+import { HISTORICAL_MONTHLY_STATS } from '@/lib/config/historical-stats';
 import type { CalendarEvent, CheckinRecord, PaymentRecord, Student } from '@/types';
 
 export interface RenewalStudent {
@@ -36,6 +37,13 @@ export interface CoachWeeklyStats {
   collectedAmount: number;
 }
 
+export interface MonthlyBreakdown {
+  month: number;
+  checkedIn: number;
+  executedRevenue: number;
+  collected: number;
+}
+
 export interface CoachAnnualStats {
   coachName: string;
   year: number;
@@ -46,6 +54,7 @@ export interface CoachAnnualStats {
   avgCheckedInClasses: number;
   avgExecutedRevenue: number;
   avgCollectedAmount: number;
+  monthlyBreakdown: MonthlyBreakdown[];
 }
 
 export interface CoachMonthlyStats {
@@ -626,6 +635,15 @@ export async function getCoachAnnualStats(
     ensureMonth(month).collected += p.paidAmount;
   }
 
+  // Merge historical overrides (for months not yet imported into Notion)
+  const historicalYearData = HISTORICAL_MONTHLY_STATS[coach.name]?.[year] ?? {};
+  for (const [monthStr, hist] of Object.entries(historicalYearData)) {
+    const month = parseInt(monthStr);
+    if (!monthlyData.has(month)) {
+      monthlyData.set(month, { checkedIn: hist.checkedIn, executedRevenue: hist.executedRevenue, collected: hist.collected });
+    }
+  }
+
   const monthsWithData = monthlyData.size;
   let totalCheckedInClasses = 0;
   let totalExecutedRevenue = 0;
@@ -635,6 +653,15 @@ export async function getCoachAnnualStats(
     totalExecutedRevenue += d.executedRevenue;
     totalCollectedAmount += d.collected;
   }
+
+  const monthlyBreakdown: MonthlyBreakdown[] = [...monthlyData.entries()]
+    .sort(([a], [b]) => a - b)
+    .map(([month, d]) => ({
+      month,
+      checkedIn: d.checkedIn,
+      executedRevenue: Math.round(d.executedRevenue),
+      collected: d.collected,
+    }));
 
   return {
     coachName: coach.name,
@@ -646,5 +673,6 @@ export async function getCoachAnnualStats(
     avgCheckedInClasses: monthsWithData > 0 ? Math.round(totalCheckedInClasses / monthsWithData) : 0,
     avgExecutedRevenue: monthsWithData > 0 ? Math.round(totalExecutedRevenue / monthsWithData) : 0,
     avgCollectedAmount: monthsWithData > 0 ? Math.round(totalCollectedAmount / monthsWithData) : 0,
+    monthlyBreakdown,
   };
 }
