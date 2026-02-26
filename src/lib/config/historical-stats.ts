@@ -11,4 +11,9 @@ export const HISTORICAL_MONTHLY_STATS: Record<
       1: { checkedIn: 41, executedRevenue: 52200, collected: 53800 },
     },
   },
+  Andy: {
+    2026: {
+      1: { checkedIn: 183, executedRevenue: 240630, collected: 178235 },
+    },
+  },
 };
