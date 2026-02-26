@@ -25,7 +25,8 @@ handleEvent() 事件分發
     │ checkin.service   │ ← 打卡（含 Calendar 時長計算 + 繳費提醒）
     │ coach.service     │ ← 教練課表（批次查詢 + 記憶體比對）
     │ calendar.service  │ ← Google Calendar 事件查詢
-    │ stats.service     │ ← 月度統計 + 續約預測
+    │ stats.service     │ ← 月度/週度/年度統計 + 續約預測
+    │ report.service    │ ← 月報表生成（Google Sheets）
     │ student-mgmt      │ ← 新增學員/收款/補繳/綁定
     │ student.service   │ ← 身份識別
     └──────────────────┘
@@ -36,6 +37,7 @@ handleEvent() 事件分發
     ├──────────────────┤
     │ Notion API        │ ← 學員/教練/打卡/繳費 CRUD
     │ Google Calendar   │ ← 課表讀取（唯讀）
+    │ Google Sheets     │ ← 月報表輸出（公開連結）
     │ LINE Messaging    │ ← 推播通知
     └──────────────────┘
 ```
@@ -48,7 +50,7 @@ handleEvent() 事件分發
 | TypeScript | 5 | 全專案型別安全 |
 | @line/bot-sdk | 10 | LINE Messaging API |
 | @notionhq/client | 2 | Notion 資料庫 CRUD |
-| googleapis | 171 | Google Calendar 讀取 |
+| googleapis | 171 | Google Calendar 讀取 + Google Sheets 報表輸出 |
 | date-fns + date-fns-tz | 4 / 3 | 台灣時區日期處理 |
 | zod | 4 | 環境變數驗證 |
 
@@ -175,6 +177,10 @@ handleEvent() 事件分發
 | `學員管理` | 查看所有學員的時數/狀態，提供收款/查看按鈕 |
 | `新增學員` | 多步驟流程：`姓名 時數 單價` → 確認 → 建立 |
 | `本月統計` | 本月排課數、已打卡數、營收、續約預測 |
+| `本週統計` | 本週合計 + 每日明細（日期、堂數、執行收入、實際收款） |
+| `年度統計` | 各月份已打卡堂數、執行收入、實際收款，自動套用歷史靜態資料補全早期月份 |
+| `月報表` | 選擇月份，生成 Google Sheets 試算表（彙總、上課明細、繳費明細），回傳公開連結 |
+| `月報表 YYYY-MM` | 直接指定月份生成報表（如 `月報表 2026-02`） |
 | `選單` | 顯示功能選單 |
 
 ---
@@ -197,6 +203,10 @@ handleEvent() 事件分發
 | `view_pay_dtl` | `{studentId}:{bucketDate}` | 查看指定期的繳費明細 |
 | `view_unpaid` | `{studentId}` | 查看未繳費期上課紀錄 |
 | `session_pay` | `{studentId}:{date}` | 單堂學員繳費（標記某日已繳費） |
+| `renewal_unpaid` | `{studentId}` | 查看未繳費（overflow）期上課紀錄 |
+| `renewal_paid` | `{studentId}:{bucketDate}` | 查看已繳費期上課紀錄 |
+| `view_month_stats` | `{YYYY-MM}` | 切換月度統計到指定月份 |
+| `gen_report` | `{YYYY-MM}` | 生成指定月份的 Google Sheets 月報表 |
 
 ---
 
@@ -205,7 +215,7 @@ handleEvent() 事件分發
 所有回覆訊息皆附帶 Quick Reply 按鈕，方便使用者快速切換功能：
 
 - **學員端**：選單、當期上課紀錄（或當月上課/繳費）、繳費紀錄、近期預約
-- **教練端**：選單、每日課表、學員管理、新增學員、本月統計
+- **教練端**：選單、每日課表、學員管理、新增學員、本月統計、本週統計、月報表
 
 ---
 
@@ -299,6 +309,60 @@ paymentPeriodSelector()
 
 ---
 
+## 月報表（Google Sheets）
+
+教練輸入「月報表」或點選快捷按鈕，系統顯示月份選擇卡片（最早從 2026-02），教練點選後觸發 `gen_report:YYYY-MM` postback：
+
+1. `showLoading` 顯示載入動畫（不消耗 replyToken）
+2. 從 Notion 取得學員、打卡、繳費資料
+3. 透過 Google Sheets API 建立試算表（3 個分頁）：
+   - **彙總**：學員、執行堂數、執行時數、執行收入、繳費金額（含合計行）
+   - **上課明細**：學員、上課日期、上課時段、時長（分）
+   - **繳費明細**：學員、繳費日期、購買時數、總金額、已付金額、差額、狀態
+4. 設定試算表為公開可查閱（任何人有連結即可開啟，無需 Google 登入）
+5. 回覆教練試算表 URL
+
+> Service Account 需要 `spreadsheets` + `drive.file` 兩個 scope，並在 GCP Console 啟用 Google Sheets API 和 Google Drive API。
+
+---
+
+## 年度統計 + 歷史資料補全
+
+年度統計卡片（`年度統計`）顯示本年度每月的已打卡堂數、執行收入（依時數 × 單價計算）、實際收款，統計範圍為 1 月到當月。
+
+對於 Notion 尚無打卡/繳費資料的早期月份（系統匯入前的歷史資料），透過靜態設定檔補全：
+
+```typescript
+// src/lib/config/historical-stats.ts
+export const HISTORICAL_MONTHLY_STATS = {
+  Winnie: { 2026: { 1: { checkedIn: 41, executedRevenue: 52200, collected: 53800 } } },
+  Andy:   { 2026: { 1: { checkedIn: 183, executedRevenue: 240630, collected: 178235 } } },
+};
+```
+
+系統在統計時優先使用 Notion 資料；若某月份無 Notion 打卡記錄，則套用歷史靜態設定值。
+
+---
+
+## 週度統計
+
+`本週統計` 顯示：
+- 本週合計：排課數、已打卡數、執行收入、實際收款
+- **每日明細**（週日至週六）：日期、堂數、執行收入、實際收款；無資料的日期以灰色顯示
+
+---
+
+## Cron Job（定期排程）
+
+每週六 18:00（台北）自動推播本週統計摘要給所有教練，包含本週執行堂數、執行收入、已收款項，提醒教練跟進未收款項目。
+
+```
+# vercel.json
+"crons": [{ "path": "/api/cron/weekly-reminder", "schedule": "0 10 * * 6" }]
+```
+
+---
+
 ## Google Calendar 整合
 
 系統以**唯讀**方式讀取 Google Calendar，不會建立或修改事件。
@@ -378,15 +442,18 @@ src/
 │   ├── calendar.service.ts           # Calendar 事件查詢 + 學員比對
 │   ├── checkin.service.ts            # 打卡邏輯 + 繳費提醒
 │   ├── coach.service.ts              # 教練課表（批次查詢優化）
-│   ├── stats.service.ts              # 月度統計 + 續約預測
+│   ├── stats.service.ts              # 月度/週度/年度統計 + 續約預測
+│   ├── report.service.ts             # 月報表生成（Google Sheets）
 │   ├── student-management.service.ts # 新增學員/收款/補繳/綁定
 │   └── student.service.ts            # 身份識別
 ├── lib/
 │   ├── config/
 │   │   ├── constants.ts              # 關鍵字、Action、角色常數
-│   │   └── env.ts                    # 環境變數驗證（Zod）
+│   │   ├── env.ts                    # 環境變數驗證（Zod）
+│   │   └── historical-stats.ts       # 靜態歷史統計資料（Notion 尚無記錄的早期月份）
 │   ├── google/
-│   │   └── calendar.ts               # Google Calendar API（含分頁）
+│   │   ├── calendar.ts               # Google Calendar API（含分頁）
+│   │   └── sheets.ts                 # Google Sheets + Drive API（報表建立與分享）
 │   ├── line/
 │   │   ├── client.ts                 # LINE Messaging API 客戶端
 │   │   ├── reply.ts                  # 回覆工具函式
@@ -413,6 +480,9 @@ src/
 │   │   ├── class-history.ts          # 上課紀錄 + 繳費期數選單 + 繳費明細
 │   │   ├── payment-confirm.ts        # 收款期數選擇（新期/補繳）
 │   │   ├── monthly-stats.ts          # 月度統計卡片
+│   │   ├── weekly-stats.ts           # 週度統計卡片（含每日明細）
+│   │   ├── annual-stats.ts           # 年度統計卡片
+│   │   ├── report-selector.ts        # 月報表月份選擇卡片
 │   │   ├── student-schedule.ts       # 學員近期預約（未來 2 個月）
 │   │   ├── unpaid-session-dates.ts   # 單堂學員欠費日期選擇
 │   │   ├── add-student-confirm.ts    # 新增學員確認卡片
