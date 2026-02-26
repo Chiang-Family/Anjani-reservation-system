@@ -47,6 +47,8 @@ export interface MonthlyBreakdown {
 export interface CoachAnnualStats {
   coachName: string;
   year: number;
+  startMonth: number;
+  endMonth: number;
   totalCheckedInClasses: number;
   totalExecutedRevenue: number;
   totalCollectedAmount: number;
@@ -602,6 +604,8 @@ export async function getCoachAnnualStats(
   const now = nowTaipei();
   const year = targetYear ?? now.getFullYear();
   const yearPrefix = `${year}-`;
+  const startMonth = 1;
+  const endMonth = year === now.getFullYear() ? now.getMonth() + 1 : 12;
 
   const students = await getStudentsByCoachId(coach.id);
   const [allCoachCheckins, payments] = await Promise.all([
@@ -621,6 +625,7 @@ export async function getCoachAnnualStats(
   for (const checkin of allCoachCheckins) {
     if (!checkin.classDate.startsWith(yearPrefix)) continue;
     const month = parseInt(checkin.classDate.slice(5, 7));
+    if (month < startMonth || month > endMonth) continue;
     const d = ensureMonth(month);
     d.checkedIn += 1;
     const price = priceByStudentId.get(checkin.studentId) ?? priceMap.get(checkin.studentName ?? '') ?? 0;
@@ -632,6 +637,7 @@ export async function getCoachAnnualStats(
     if (!isYear) continue;
     const attributeDate = p.actualDate.startsWith(yearPrefix) ? p.actualDate : p.createdAt;
     const month = parseInt(attributeDate.slice(5, 7));
+    if (month < startMonth || month > endMonth) continue;
     ensureMonth(month).collected += p.paidAmount;
   }
 
@@ -666,6 +672,8 @@ export async function getCoachAnnualStats(
   return {
     coachName: coach.name,
     year,
+    startMonth,
+    endMonth,
     totalCheckedInClasses,
     totalExecutedRevenue: Math.round(totalExecutedRevenue),
     totalCollectedAmount,

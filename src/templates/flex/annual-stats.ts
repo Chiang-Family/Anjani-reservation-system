@@ -8,7 +8,7 @@ export function annualStatsCard(stats: CoachAnnualStats): FlexBubble {
   const bodyContents: FlexComponent[] = [
     {
       type: 'text',
-      text: `年度合計（${stats.monthsWithData} 個月資料）`,
+      text: `年度合計（${stats.startMonth}月－${stats.endMonth}月）`,
       size: 'xs',
       color: '#888888',
       margin: 'none',
