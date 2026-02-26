@@ -408,6 +408,8 @@ export async function getCoachMonthlyStats(
     for (const cycle of cycles) {
       // 只看續約日是否在本月
       if (cycle.renewalDate === '' || !cycle.renewalDate.startsWith(monthPrefix)) continue;
+      // 若同一日期已有已繳費 cycle（例如 Section 1），略過 Section 3 產生的未繳費 cycle
+      if (!cycle.isPaid && cycles.some(c => c.isPaid && c.renewalDate === cycle.renewalDate)) continue;
 
       renewalStudents.push({
         name: student.name,

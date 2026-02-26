@@ -154,7 +154,12 @@ function simulateCycles(
 
   // Final filter
   console.log('\n--- 最終過濾（只保留本月 renewalDate）---');
-  const shown = cycles.filter(c => c.renewalDate !== '' && c.renewalDate.startsWith(monthPrefix));
+  const shown = cycles.filter(c => {
+    if (c.renewalDate === '' || !c.renewalDate.startsWith(monthPrefix)) return false;
+    // 若同一日期已有已繳費 cycle，略過未繳費 cycle（避免 Section 3 與 Section 1 重複）
+    if (!c.isPaid && cycles.some(o => o.isPaid && o.renewalDate === c.renewalDate)) return false;
+    return true;
+  });
   if (shown.length === 0) {
     console.log('  ❌ 無符合本月的 cycle → 不出現在名單');
   } else {
