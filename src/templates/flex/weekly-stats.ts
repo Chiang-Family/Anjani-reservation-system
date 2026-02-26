@@ -4,6 +4,8 @@ import type { CoachWeeklyStats } from '@/services/stats.service';
 type FlexBubble = messagingApi.FlexBubble;
 type FlexComponent = messagingApi.FlexComponent;
 
+const DAY_NAMES = ['日', '一', '二', '三', '四', '五', '六'];
+
 export function weeklyStatsCard(stats: CoachWeeklyStats): FlexBubble {
   const fmtDate = (d: string) => `${d.slice(5, 7)}/${d.slice(8, 10)}`;
 
@@ -13,6 +15,36 @@ export function weeklyStatsCard(stats: CoachWeeklyStats): FlexBubble {
     separator(),
     statRow('🏷️ 已執行收入', `$${stats.executedRevenue.toLocaleString()}`),
     statRow('💰 實際收款', `$${stats.collectedAmount.toLocaleString()}`),
+    separator(),
+    // Daily breakdown header
+    {
+      type: 'box',
+      layout: 'horizontal',
+      margin: 'md',
+      contents: [
+        { type: 'text', text: '日期', size: 'xs', color: '#888888', flex: 3 },
+        { type: 'text', text: '堂', size: 'xs', color: '#888888', flex: 1, align: 'end' },
+        { type: 'text', text: '執行收入', size: 'xs', color: '#888888', flex: 3, align: 'end' },
+        { type: 'text', text: '實際收款', size: 'xs', color: '#888888', flex: 3, align: 'end' },
+      ],
+    } as FlexComponent,
+    ...stats.dailyBreakdown.map((d, i) => {
+      const dayName = DAY_NAMES[i];
+      const label = `${fmtDate(d.date)}（${dayName}）`;
+      const hasData = d.checkedIn > 0 || d.collected > 0;
+      const color = hasData ? '#333333' : '#BBBBBB';
+      return {
+        type: 'box',
+        layout: 'horizontal',
+        margin: 'sm',
+        contents: [
+          { type: 'text', text: label, size: 'xs', color, flex: 3 },
+          { type: 'text', text: hasData ? `${d.checkedIn}` : '-', size: 'xs', color, flex: 1, align: 'end' },
+          { type: 'text', text: hasData ? `$${d.executedRevenue.toLocaleString()}` : '-', size: 'xs', color, flex: 3, align: 'end' },
+          { type: 'text', text: hasData ? `$${d.collected.toLocaleString()}` : '-', size: 'xs', color, flex: 3, align: 'end' },
+        ],
+      } as FlexComponent;
+    }),
   ];
 
   return {

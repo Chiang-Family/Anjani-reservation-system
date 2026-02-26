@@ -27,6 +27,13 @@ export interface RenewalForecast {
   students: RenewalStudent[];
 }
 
+export interface DailyBreakdown {
+  date: string;         // yyyy-MM-dd
+  checkedIn: number;
+  executedRevenue: number;
+  collected: number;
+}
+
 export interface CoachWeeklyStats {
   coachName: string;
   weekStart: string;          // yyyy-MM-dd (Sunday)
@@ -35,6 +42,7 @@ export interface CoachWeeklyStats {
   checkedInClasses: number;
   executedRevenue: number;
   collectedAmount: number;
+  dailyBreakdown: DailyBreakdown[];
 }
 
 export interface MonthlyBreakdown {
@@ -569,19 +577,39 @@ export async function getCoachWeeklyStats(lineUserId: string): Promise<CoachWeek
 
   const { priceMap, priceByStudentId } = buildPriceMaps(students, payments);
 
+  // Build daily breakdown (Sun to Sat) alongside totals
+  const dailyMap = new Map<string, { checkedIn: number; executedRevenue: number; collected: number }>();
+  const ensureDay = (date: string) => {
+    if (!dailyMap.has(date)) dailyMap.set(date, { checkedIn: 0, executedRevenue: 0, collected: 0 });
+    return dailyMap.get(date)!;
+  };
+
   let executedRevenue = 0;
   for (const checkin of weekCheckins) {
     const price = priceByStudentId.get(checkin.studentId) ?? priceMap.get(checkin.studentName ?? '') ?? 0;
-    executedRevenue += (checkin.durationMinutes / 60) * price;
+    const rev = (checkin.durationMinutes / 60) * price;
+    executedRevenue += rev;
+    const d = ensureDay(checkin.classDate);
+    d.checkedIn += 1;
+    d.executedRevenue += rev;
   }
 
   let collectedAmount = 0;
   for (const p of payments) {
-    const d = p.actualDate >= weekStart && p.actualDate <= weekEnd ? p.actualDate
-            : p.createdAt >= weekStart && p.createdAt <= weekEnd ? p.createdAt
-            : null;
-    if (d) collectedAmount += p.paidAmount;
+    const date = p.actualDate >= weekStart && p.actualDate <= weekEnd ? p.actualDate
+               : p.createdAt >= weekStart && p.createdAt <= weekEnd ? p.createdAt
+               : null;
+    if (date) {
+      collectedAmount += p.paidAmount;
+      ensureDay(date).collected += p.paidAmount;
+    }
   }
+
+  const dailyBreakdown: DailyBreakdown[] = Array.from({ length: 7 }, (_, i) => {
+    const date = format(addDays(weekStartDate, i), 'yyyy-MM-dd');
+    const data = dailyMap.get(date) ?? { checkedIn: 0, executedRevenue: 0, collected: 0 };
+    return { date, checkedIn: data.checkedIn, executedRevenue: Math.round(data.executedRevenue), collected: data.collected };
+  });
 
   return {
     coachName: coach.name,
@@ -591,6 +619,7 @@ export async function getCoachWeeklyStats(lineUserId: string): Promise<CoachWeek
     checkedInClasses: weekCheckins.length,
     executedRevenue: Math.round(executedRevenue),
     collectedAmount,
+    dailyBreakdown,
   };
 }
 
