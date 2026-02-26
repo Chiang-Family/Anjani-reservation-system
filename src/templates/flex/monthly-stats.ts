@@ -17,7 +17,10 @@ export function monthlyStatsCard(stats: CoachMonthlyStats): FlexBubble {
 
   const { year, month } = stats;
   const isFirst = year === FIRST_YEAR && month === FIRST_MONTH;
-  const isLast = year === currentYear && month === currentMonth;
+  // 允許查看至下個月為止
+  const maxMonth = currentMonth === 12 ? 1 : currentMonth + 1;
+  const maxYear = currentMonth === 12 ? currentYear + 1 : currentYear;
+  const isLast = year === maxYear && month === maxMonth;
 
   const prevMonth = month === 1 ? 12 : month - 1;
   const prevYear = month === 1 ? year - 1 : year;
