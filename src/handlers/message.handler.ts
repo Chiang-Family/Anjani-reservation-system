@@ -340,6 +340,28 @@ async function handleCoachMessage(
     }
 
     default: {
+      // "月報表 YYYY-MM" — generate report for a specific month
+      if (text.startsWith('月報表 ')) {
+        const parts = text.split(' ');
+        const match = parts[1]?.match(/^(\d{4})-(\d{2})$/);
+        if (match) {
+          const repYear = parseInt(match[1]);
+          const repMonth = parseInt(match[2]);
+          if (repMonth >= 1 && repMonth <= 12) {
+            await showLoading(lineUserId, 30);
+            const reportUrl = await generateMonthlyReport(lineUserId, repYear, repMonth);
+            if (!reportUrl) {
+              await replyText(replyToken, '找不到教練資料。', qr);
+              return;
+            }
+            await replyText(replyToken, `✅ ${repYear}年${repMonth}月報表已生成：\n${reportUrl}`, qr);
+            return;
+          }
+        }
+        await replyText(replyToken, '格式錯誤，請輸入「月報表 YYYY-MM」，例如：月報表 2026-01', qr);
+        return;
+      }
+
       // Check if input matches "name hours price" pattern for adding student
       const parsed = parseAddStudentInput(text);
       if (parsed) {
