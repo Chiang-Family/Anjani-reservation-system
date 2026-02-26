@@ -3,7 +3,7 @@
   "crons": [
     {
       "path": "/api/cron/weekly-checkin-reminder",
-      "schedule": "0 1 * * 1"
+      "schedule": "0 10 * * 6"
     }
   ]
 }
