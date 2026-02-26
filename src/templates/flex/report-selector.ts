@@ -7,6 +7,10 @@ type FlexBubble = messagingApi.FlexBubble;
  * Month selector card for generating monthly reports.
  * Shows the past 6 months as postback buttons.
  */
+// Earliest month with report data
+const REPORT_START_YEAR = 2026;
+const REPORT_START_MONTH = 2; // February 2026
+
 export function reportSelectorCard(coachName: string): FlexBubble {
   const now = new Date();
   const months: { label: string; value: string }[] = [];
@@ -15,10 +19,15 @@ export function reportSelectorCard(coachName: string): FlexBubble {
     const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
     const y = d.getFullYear();
     const m = d.getMonth() + 1;
+    // Skip months before the report start date
+    if (y < REPORT_START_YEAR || (y === REPORT_START_YEAR && m < REPORT_START_MONTH)) break;
     months.push({
       label: `${y}年${m}月`,
       value: `${y}-${String(m).padStart(2, '0')}`,
     });
+  }
+  if (months.length === 0) {
+    months.push({ label: `${REPORT_START_YEAR}年${REPORT_START_MONTH}月`, value: `${REPORT_START_YEAR}-${String(REPORT_START_MONTH).padStart(2, '0')}` });
   }
 
   return {
