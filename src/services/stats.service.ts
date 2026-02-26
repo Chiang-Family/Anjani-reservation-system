@@ -378,24 +378,26 @@ export async function getCoachMonthlyStats(
         capturedRenewalDates.add(p.actualDate);
       }
     } else if (buckets.length > 0) {
-      // 全部耗盡（activeIdx=-1）：Section 1 已透過後繼桶捕捉舊桶的續約日。
-      // 若最後一桶的付款日在本月且未被捕捉（例如只有 1 桶的學員），補充加入。
+      // 全部耗盡（activeIdx=-1）：Section 1 已透過後繼桶捕捉「桶i → 桶i+1」的續約日，
+      // 但首桶（bucket[0]）本身的付款日若在本月則不會被捕捉。
+      // 掃描所有桶，凡付款日在本月且未被捕捉者（包含首次報名）一律補上。
       const capturedRenewalDates = new Set(cycles.map(c => c.renewalDate));
-      const lastBucketDate = buckets[buckets.length - 1].paymentDate;
-      for (const p of studentPayments) {
-        if (p.createdAt !== lastBucketDate) continue;
-        if (!p.actualDate.startsWith(monthPrefix)) continue;
-        if (capturedRenewalDates.has(p.actualDate)) continue;
-        const sameDatePayments = studentPayments.filter(sp => sp.createdAt === p.createdAt);
-        cycles.push({
-          expiryDate: '',
-          renewalDate: p.actualDate,
-          isPaid: true,
-          expectedHours: sameDatePayments.reduce((s, sp) => s + sp.purchasedHours, 0),
-          expectedAmount: sameDatePayments.reduce((s, sp) => s + sp.totalAmount, 0),
-          paidAmount: sameDatePayments.reduce((s, sp) => s + sp.paidAmount, 0),
-        });
-        capturedRenewalDates.add(p.actualDate);
+      for (const bucket of buckets) {
+        const bucketPayments = studentPayments.filter(p => p.createdAt === bucket.paymentDate);
+        for (const p of bucketPayments) {
+          if (!p.actualDate.startsWith(monthPrefix)) continue;
+          if (capturedRenewalDates.has(p.actualDate)) continue;
+          const sameDatePayments = studentPayments.filter(sp => sp.createdAt === p.createdAt);
+          cycles.push({
+            expiryDate: '',
+            renewalDate: p.actualDate,
+            isPaid: true,
+            expectedHours: sameDatePayments.reduce((s, sp) => s + sp.purchasedHours, 0),
+            expectedAmount: sameDatePayments.reduce((s, sp) => s + sp.totalAmount, 0),
+            paidAmount: sameDatePayments.reduce((s, sp) => s + sp.paidAmount, 0),
+          });
+          capturedRenewalDates.add(p.actualDate);
+        }
       }
     }
 

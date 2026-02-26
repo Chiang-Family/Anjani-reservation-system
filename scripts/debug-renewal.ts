@@ -130,23 +130,24 @@ function simulateCycles(
       capturedRenewalDates.add(p.actualDate);
     }
   } else if (buckets.length > 0) {
-    console.log('  activeIdx=-1（全部耗盡）→ 只檢查最後一桶是否本月未捕捉');
+    console.log('  activeIdx=-1（全部耗盡）→ 掃描所有桶，凡本月未捕捉者補上（含首次報名）');
     const capturedRenewalDates = new Set(cycles.map(c => c.renewalDate));
     console.log(`  capturedRenewalDates = ${JSON.stringify([...capturedRenewalDates])}`);
-    const lastBucketDate = buckets[buckets.length - 1].paymentDate;
-    console.log(`  lastBucketDate = ${lastBucketDate}`);
-    for (const p of payments) {
-      if (p.createdAt !== lastBucketDate) continue;
-      if (!p.actualDate.startsWith(monthPrefix)) continue;
-      if (capturedRenewalDates.has(p.actualDate)) {
-        console.log(`  payment actualDate=${p.actualDate}: 已被捕捉 → skip`);
-        continue;
+    for (let bi = 0; bi < buckets.length; bi++) {
+      const bucket = buckets[bi];
+      const bucketPayments = payments.filter(p => p.createdAt === bucket.paymentDate);
+      for (const p of bucketPayments) {
+        if (!p.actualDate.startsWith(monthPrefix)) continue;
+        if (capturedRenewalDates.has(p.actualDate)) {
+          console.log(`  桶${bi} actualDate=${p.actualDate}: 已被捕捉 → skip`);
+          continue;
+        }
+        const sameDatePayments = payments.filter(sp => sp.createdAt === p.createdAt);
+        const total = sameDatePayments.reduce((s, sp) => s + sp.totalAmount, 0);
+        console.log(`  桶${bi} actualDate=${p.actualDate}: 未捕捉 → emit renewalDate=${p.actualDate} $${total}`);
+        cycles.push({ section: 'SUPP-all', renewalDate: p.actualDate, isPaid: true, expectedAmount: total });
+        capturedRenewalDates.add(p.actualDate);
       }
-      const sameDatePayments = payments.filter(sp => sp.createdAt === p.createdAt);
-      const total = sameDatePayments.reduce((s, sp) => s + sp.totalAmount, 0);
-      console.log(`  payment actualDate=${p.actualDate}: 未捕捉（最後桶）→ emit renewalDate=${p.actualDate} $${total}`);
-      cycles.push({ section: 'SUPP-last', renewalDate: p.actualDate, isPaid: true, expectedAmount: total });
-      capturedRenewalDates.add(p.actualDate);
     }
   } else {
     console.log('  buckets 為空 → 跳過');
