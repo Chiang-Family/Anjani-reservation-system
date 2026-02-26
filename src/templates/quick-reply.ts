@@ -17,7 +17,9 @@ export function coachQuickReply(): QuickReplyItem[] {
   return [
     quickReplyButton(KEYWORD.TODAY_SCHEDULE),
     quickReplyButton(KEYWORD.STUDENT_MGMT),
+    quickReplyButton(KEYWORD.WEEKLY_STATS),
     quickReplyButton(KEYWORD.MONTHLY_STATS),
+    quickReplyButton(KEYWORD.ANNUAL_STATS),
     quickReplyButton(KEYWORD.MENU),
   ];
 }
