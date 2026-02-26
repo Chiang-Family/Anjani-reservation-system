@@ -6,6 +6,8 @@ import { getStudentById } from '@/lib/notion/students';
 import { getCheckinsByStudent } from '@/lib/notion/checkins';
 import { getStudentOverflowInfo, resolveOverflowIds } from '@/lib/notion/hours';
 import { replyText, replyFlex, replyMessages } from '@/lib/line/reply';
+import { showLoading } from '@/lib/line/push';
+import { generateMonthlyReport } from '@/services/report.service';
 import { ACTION } from '@/lib/config/constants';
 import { TEXT } from '@/templates/text-messages';
 import { scheduleList } from '@/templates/flex/today-schedule';
@@ -275,6 +277,25 @@ export async function handlePostback(event: PostbackEvent): Promise<void> {
           monthlyStatsCard(stats),
           coachQuickReply(),
         );
+        return;
+      }
+
+      case ACTION.GENERATE_REPORT: {
+        // data = gen_report:YYYY-MM
+        const match = id?.match(/^(\d{4})-(\d{2})$/);
+        if (!match) {
+          await replyTextWithMenu(event.replyToken, '報表格式錯誤。');
+          return;
+        }
+        const repYear = parseInt(match[1]);
+        const repMonth = parseInt(match[2]);
+        await showLoading(lineUserId, 30);
+        const reportUrl = await generateMonthlyReport(lineUserId, repYear, repMonth);
+        if (!reportUrl) {
+          await replyTextWithMenu(event.replyToken, '找不到教練資料。');
+          return;
+        }
+        await replyText(event.replyToken, `✅ ${repYear}年${repMonth}月報表已生成：\n${reportUrl}`, coachQuickReply());
         return;
       }
 

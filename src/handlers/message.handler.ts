@@ -34,6 +34,7 @@ import { studentScheduleCard } from '@/templates/flex/student-schedule';
 import { monthlyStatsCard } from '@/templates/flex/monthly-stats';
 import { weeklyStatsCard } from '@/templates/flex/weekly-stats';
 import { annualStatsCard } from '@/templates/flex/annual-stats';
+import { reportSelectorCard } from '@/templates/flex/report-selector';
 import { studentMgmtList } from '@/templates/flex/student-mgmt-list';
 import { classHistoryCard, sessionMonthlyCard } from '@/templates/flex/class-history';
 import { studentQuickReply, coachQuickReply, menuQuickReply } from '@/templates/quick-reply';
@@ -309,16 +310,7 @@ async function handleCoachMessage(
     }
 
     case KEYWORD.MONTHLY_REPORT: {
-      const now = new Date();
-      const repYear = now.getMonth() === 0 ? now.getFullYear() - 1 : now.getFullYear();
-      const repMonth = now.getMonth() === 0 ? 12 : now.getMonth();
-      await showLoading(lineUserId, 30);
-      const reportUrl = await generateMonthlyReport(lineUserId, repYear, repMonth);
-      if (!reportUrl) {
-        await replyText(replyToken, '找不到教練資料。', qr);
-        return;
-      }
-      await replyText(replyToken, `✅ ${repYear}年${repMonth}月報表已生成：\n${reportUrl}`, qr);
+      await replyFlex(replyToken, '月報表 — 選擇月份', reportSelectorCard(name), qr);
       return;
     }
 

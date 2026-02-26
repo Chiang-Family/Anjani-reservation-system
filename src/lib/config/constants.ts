@@ -32,6 +32,7 @@ export const ACTION = {
   VIEW_RENEWAL_PAID: 'renewal_paid',
   SESSION_PAYMENT: 'session_pay',
   VIEW_MONTH_STATS: 'view_month_stats',
+  GENERATE_REPORT: 'gen_report',
 } as const;
 
 // 角色
