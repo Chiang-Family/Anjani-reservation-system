@@ -357,21 +357,26 @@ export async function getCoachMonthlyStats(
     const cycles = findRenewalCycles(buckets, overflowCheckins, studentFutureEvents, studentPayments);
 
     // 補充：若學員有付款紀錄的 actualDate 在本月，但尚未被 cycle 邏輯捕捉（例如當前活躍桶本身就是本月付款）
-    const capturedRenewalDates = new Set(cycles.map(c => c.renewalDate));
-    for (const p of studentPayments) {
-      if (!p.actualDate.startsWith(monthPrefix)) continue;
-      if (capturedRenewalDates.has(p.actualDate)) continue;
-      // 找同一 createdAt 的所有付款（合併計算）
-      const sameDatePayments = studentPayments.filter(sp => sp.createdAt === p.createdAt);
-      cycles.push({
-        expiryDate: '',
-        renewalDate: p.actualDate,
-        isPaid: true,
-        expectedHours: sameDatePayments.reduce((s, sp) => s + sp.purchasedHours, 0),
-        expectedAmount: sameDatePayments.reduce((s, sp) => s + sp.totalAmount, 0),
-        paidAmount: sameDatePayments.reduce((s, sp) => s + sp.paidAmount, 0),
-      });
-      capturedRenewalDates.add(p.actualDate);
+    // 只對「活躍桶」或「未來預繳桶」補充，已耗盡的舊桶由 Section 1 處理，不重複加入。
+    const activeIdxForSupp = buckets.findIndex(b => b.consumedMinutes < b.purchasedHours * 60);
+    if (activeIdxForSupp >= 0) {
+      const activePlusFutureDates = new Set(buckets.slice(activeIdxForSupp).map(b => b.paymentDate));
+      const capturedRenewalDates = new Set(cycles.map(c => c.renewalDate));
+      for (const p of studentPayments) {
+        if (!p.actualDate.startsWith(monthPrefix)) continue;
+        if (capturedRenewalDates.has(p.actualDate)) continue;
+        if (!activePlusFutureDates.has(p.createdAt)) continue; // 只考慮活躍桶及其後
+        const sameDatePayments = studentPayments.filter(sp => sp.createdAt === p.createdAt);
+        cycles.push({
+          expiryDate: '',
+          renewalDate: p.actualDate,
+          isPaid: true,
+          expectedHours: sameDatePayments.reduce((s, sp) => s + sp.purchasedHours, 0),
+          expectedAmount: sameDatePayments.reduce((s, sp) => s + sp.totalAmount, 0),
+          paidAmount: sameDatePayments.reduce((s, sp) => s + sp.paidAmount, 0),
+        });
+        capturedRenewalDates.add(p.actualDate);
+      }
     }
 
     // 搭檔學員姓名（顯示用）
