@@ -357,15 +357,35 @@ export async function getCoachMonthlyStats(
     const cycles = findRenewalCycles(buckets, overflowCheckins, studentFutureEvents, studentPayments);
 
     // 補充：若學員有付款紀錄的 actualDate 在本月，但尚未被 cycle 邏輯捕捉（例如當前活躍桶本身就是本月付款）
-    // 只對「活躍桶」或「未來預繳桶」補充，已耗盡的舊桶由 Section 1 處理，不重複加入。
     const activeIdxForSupp = buckets.findIndex(b => b.consumedMinutes < b.purchasedHours * 60);
     if (activeIdxForSupp >= 0) {
+      // 有活躍桶：只對「活躍桶」或「未來預繳桶」補充，已耗盡的舊桶由 Section 1 處理，不重複加入。
       const activePlusFutureDates = new Set(buckets.slice(activeIdxForSupp).map(b => b.paymentDate));
       const capturedRenewalDates = new Set(cycles.map(c => c.renewalDate));
       for (const p of studentPayments) {
         if (!p.actualDate.startsWith(monthPrefix)) continue;
         if (capturedRenewalDates.has(p.actualDate)) continue;
         if (!activePlusFutureDates.has(p.createdAt)) continue; // 只考慮活躍桶及其後
+        const sameDatePayments = studentPayments.filter(sp => sp.createdAt === p.createdAt);
+        cycles.push({
+          expiryDate: '',
+          renewalDate: p.actualDate,
+          isPaid: true,
+          expectedHours: sameDatePayments.reduce((s, sp) => s + sp.purchasedHours, 0),
+          expectedAmount: sameDatePayments.reduce((s, sp) => s + sp.totalAmount, 0),
+          paidAmount: sameDatePayments.reduce((s, sp) => s + sp.paidAmount, 0),
+        });
+        capturedRenewalDates.add(p.actualDate);
+      }
+    } else if (buckets.length > 0) {
+      // 全部耗盡（activeIdx=-1）：Section 1 已透過後繼桶捕捉舊桶的續約日。
+      // 若最後一桶的付款日在本月且未被捕捉（例如只有 1 桶的學員），補充加入。
+      const capturedRenewalDates = new Set(cycles.map(c => c.renewalDate));
+      const lastBucketDate = buckets[buckets.length - 1].paymentDate;
+      for (const p of studentPayments) {
+        if (p.createdAt !== lastBucketDate) continue;
+        if (!p.actualDate.startsWith(monthPrefix)) continue;
+        if (capturedRenewalDates.has(p.actualDate)) continue;
         const sameDatePayments = studentPayments.filter(sp => sp.createdAt === p.createdAt);
         cycles.push({
           expiryDate: '',

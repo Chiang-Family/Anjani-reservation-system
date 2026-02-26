@@ -105,12 +105,10 @@ function simulateCycles(
     console.log('  不走 section 3');
   }
 
-  // Supplementary check (only for active + future buckets; skip if all exhausted)
+  // Supplementary check
   console.log('\n--- 補充邏輯（capturedRenewalDates）---');
   const activeIdxForSupp = buckets.findIndex(b => b.consumedMinutes < b.purchasedHours * 60);
-  if (activeIdxForSupp < 0) {
-    console.log('  activeIdx=-1（全部耗盡）→ 補充邏輯跳過');
-  } else {
+  if (activeIdxForSupp >= 0) {
     const activePlusFutureDates = new Set(buckets.slice(activeIdxForSupp).map(b => b.paymentDate));
     console.log(`  activeIdxForSupp=${activeIdxForSupp}, activePlusFutureDates=${JSON.stringify([...activePlusFutureDates])}`);
     const capturedRenewalDates = new Set(cycles.map(c => c.renewalDate));
@@ -131,6 +129,27 @@ function simulateCycles(
       cycles.push({ section: 'SUPP', renewalDate: p.actualDate, isPaid: true, expectedAmount: total });
       capturedRenewalDates.add(p.actualDate);
     }
+  } else if (buckets.length > 0) {
+    console.log('  activeIdx=-1（全部耗盡）→ 只檢查最後一桶是否本月未捕捉');
+    const capturedRenewalDates = new Set(cycles.map(c => c.renewalDate));
+    console.log(`  capturedRenewalDates = ${JSON.stringify([...capturedRenewalDates])}`);
+    const lastBucketDate = buckets[buckets.length - 1].paymentDate;
+    console.log(`  lastBucketDate = ${lastBucketDate}`);
+    for (const p of payments) {
+      if (p.createdAt !== lastBucketDate) continue;
+      if (!p.actualDate.startsWith(monthPrefix)) continue;
+      if (capturedRenewalDates.has(p.actualDate)) {
+        console.log(`  payment actualDate=${p.actualDate}: 已被捕捉 → skip`);
+        continue;
+      }
+      const sameDatePayments = payments.filter(sp => sp.createdAt === p.createdAt);
+      const total = sameDatePayments.reduce((s, sp) => s + sp.totalAmount, 0);
+      console.log(`  payment actualDate=${p.actualDate}: 未捕捉（最後桶）→ emit renewalDate=${p.actualDate} $${total}`);
+      cycles.push({ section: 'SUPP-last', renewalDate: p.actualDate, isPaid: true, expectedAmount: total });
+      capturedRenewalDates.add(p.actualDate);
+    }
+  } else {
+    console.log('  buckets 為空 → 跳過');
   }
 
   // Final filter
