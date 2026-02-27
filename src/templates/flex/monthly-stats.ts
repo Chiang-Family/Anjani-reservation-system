@@ -195,7 +195,8 @@ export function renewalStudentListCard(
     } as FlexComponent);
   }
 
-  for (const s of students) {
+  for (let i = 0; i < students.length; i++) {
+    const s = students[i];
     bodyContents.push({
       type: 'text',
       text: s.partnerName ? `${s.name}・${s.partnerName}` : s.name,
@@ -213,7 +214,7 @@ export function renewalStudentListCard(
     if (!s.isPaid && s.paidAmount > 0) {
       bodyContents.push(detailRow('已付', `$${s.paidAmount.toLocaleString()}`));
     }
-    if (bodyContents.length < 50) {
+    if (i < students.length - 1) {
       bodyContents.push(separator());
     }
   }
