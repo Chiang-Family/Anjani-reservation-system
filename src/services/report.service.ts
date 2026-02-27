@@ -121,9 +121,8 @@ function compileRows(
         student.name,
         payDate,
         p.purchasedHours,
-        p.totalAmount,
+        p.pricePerHour,
         p.paidAmount,
-        p.totalAmount - p.paidAmount,
       ]);
     }
   }
@@ -190,7 +189,7 @@ export async function compileMonthlyReport(
       rows: checkinRows,
     },
     payments: {
-      headers: ['學員', '繳費日期', '購買時數', '總金額', '已付金額', '差額'],
+      headers: ['學員', '繳費日期', '購買時數', '單價', '已付金額'],
       rows: paymentRows,
     },
   };
