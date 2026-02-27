@@ -1,20 +1,24 @@
 import { google } from 'googleapis';
 import { getEnv } from '@/lib/config/env';
 
-function getGoogleClients() {
+function getSheetsClient() {
   const env = getEnv();
   const auth = new google.auth.JWT({
     email: env.GOOGLE_SERVICE_ACCOUNT_EMAIL,
     key: env.GOOGLE_PRIVATE_KEY.replace(/\\n/g, '\n'),
-    scopes: [
-      'https://www.googleapis.com/auth/spreadsheets',
-      'https://www.googleapis.com/auth/drive',
-    ],
+    scopes: ['https://www.googleapis.com/auth/spreadsheets'],
   });
-  return {
-    sheets: google.sheets({ version: 'v4', auth }),
-    drive: google.drive({ version: 'v3', auth }),
-  };
+  return google.sheets({ version: 'v4', auth });
+}
+
+function getDriveClient() {
+  const env = getEnv();
+  const auth = new google.auth.JWT({
+    email: env.GOOGLE_SERVICE_ACCOUNT_EMAIL,
+    key: env.GOOGLE_PRIVATE_KEY.replace(/\\n/g, '\n'),
+    scopes: ['https://www.googleapis.com/auth/drive'],
+  });
+  return google.drive({ version: 'v3', auth });
 }
 
 export interface SheetData {
@@ -24,7 +28,7 @@ export interface SheetData {
 }
 
 export async function createSpreadsheet(title: string, sheets: SheetData[], shareEmail?: string): Promise<string> {
-  const { sheets: sheetsClient, drive } = getGoogleClients();
+  const sheetsClient = getSheetsClient();
 
   // Step 1: Create spreadsheet with tabs
   console.log('[Sheets] Step1: creating spreadsheet:', title);
@@ -102,10 +106,11 @@ export async function createSpreadsheet(title: string, sheets: SheetData[], shar
     console.warn('[Sheets] Step3: formatting failed (non-critical):', fmtErr);
   }
 
-  // Step 4: Share — coach email > env fallback > anyone-with-link
+  // Step 4: Share — Drive client is separate so its auth failure never blocks Sheets steps
   try {
     console.log('[Sheets] Step4: sharing');
     const emailToShare = shareEmail || getEnv().REPORT_SHARE_EMAIL;
+    const drive = getDriveClient();
     if (emailToShare) {
       await drive.permissions.create({
         fileId: spreadsheetId,
