@@ -6,8 +6,8 @@ import { getStudentById } from '@/lib/notion/students';
 import { getCheckinsByStudent } from '@/lib/notion/checkins';
 import { getStudentOverflowInfo, resolveOverflowIds } from '@/lib/notion/hours';
 import { replyText, replyFlex, replyMessages } from '@/lib/line/reply';
-import { showLoading } from '@/lib/line/push';
-import { generateMonthlyReport } from '@/services/report.service';
+import { findCoachByLineId } from '@/lib/notion/coaches';
+import { generateReportToken } from '@/lib/utils/report-token';
 import { ACTION } from '@/lib/config/constants';
 import { TEXT } from '@/templates/text-messages';
 import { scheduleList } from '@/templates/flex/today-schedule';
@@ -290,15 +290,16 @@ export async function handlePostback(event: PostbackEvent): Promise<void> {
         const repYear = parseInt(match[1]);
         const repMonth = parseInt(match[2]);
         try {
-          await showLoading(lineUserId, 30);
-          const sheetUrl = await generateMonthlyReport(lineUserId, repYear, repMonth);
-          if (!sheetUrl) {
+          const coach = await findCoachByLineId(lineUserId);
+          if (!coach) {
             await replyTextWithMenu(event.replyToken, '找不到教練資料。');
             return;
           }
-          const spreadsheetId = sheetUrl.replace('https://docs.google.com/spreadsheets/d/', '');
-          const pdfUrl = `https://docs.google.com/spreadsheets/d/${spreadsheetId}/export?format=pdf&size=a4&portrait=false&fitw=true&sheetnames=true&printtitle=true&pagenumbers=false&gridlines=false`;
-          await replyText(event.replyToken, `✅ ${repYear}年${repMonth}月報表已生成\n\n📄 PDF（可列印）：\n${pdfUrl}\n\n📊 試算表：\n${sheetUrl}`, coachQuickReply());
+          const token = generateReportToken(coach.id, repYear, repMonth);
+          const host = process.env.VERCEL_PROJECT_PRODUCTION_URL || process.env.VERCEL_URL || 'localhost:3000';
+          const protocol = host.startsWith('localhost') ? 'http' : 'https';
+          const reportUrl = `${protocol}://${host}/api/report?coach=${coach.id}&year=${repYear}&month=${repMonth}&token=${token}`;
+          await replyText(event.replyToken, `✅ ${repYear}年${repMonth}月報表\n\n📄 點此查看（可列印）：\n${reportUrl}`, coachQuickReply());
         } catch (reportError) {
           console.error('Report generation error:', reportError);
           const msg = reportError instanceof Error ? reportError.message : String(reportError);

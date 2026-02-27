@@ -20,8 +20,7 @@ import {
   startBinding,
 } from '@/services/student-management.service';
 import { replyText, replyFlex, replyMessages } from '@/lib/line/reply';
-import { showLoading } from '@/lib/line/push';
-import { generateMonthlyReport } from '@/services/report.service';
+import { generateReportToken } from '@/lib/utils/report-token';
 import { pMap } from '@/lib/utils/concurrency';
 import { KEYWORD, ROLE } from '@/lib/config/constants';
 import { TEXT } from '@/templates/text-messages';
@@ -365,13 +364,16 @@ async function handleCoachMessage(
           const repYear = parseInt(match[1]);
           const repMonth = parseInt(match[2]);
           if (repMonth >= 1 && repMonth <= 12) {
-            await showLoading(lineUserId, 30);
-            const reportUrl = await generateMonthlyReport(lineUserId, repYear, repMonth);
-            if (!reportUrl) {
+            const coach = await findCoachByLineId(lineUserId);
+            if (!coach) {
               await replyText(replyToken, '找不到教練資料。', qr);
               return;
             }
-            await replyText(replyToken, `✅ ${repYear}年${repMonth}月報表已生成：\n${reportUrl}`, qr);
+            const token = generateReportToken(coach.id, repYear, repMonth);
+            const host = process.env.VERCEL_PROJECT_PRODUCTION_URL || process.env.VERCEL_URL || 'localhost:3000';
+            const protocol = host.startsWith('localhost') ? 'http' : 'https';
+            const reportUrl = `${protocol}://${host}/api/report?coach=${coach.id}&year=${repYear}&month=${repMonth}&token=${token}`;
+            await replyText(replyToken, `✅ ${repYear}年${repMonth}月報表\n\n📄 點此查看（可列印）：\n${reportUrl}`, qr);
             return;
           }
         }

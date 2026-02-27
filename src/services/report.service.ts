@@ -1,10 +1,28 @@
-import { findCoachByLineId } from '@/lib/notion/coaches';
+import { findCoachByLineId, getCoachById } from '@/lib/notion/coaches';
 import { getStudentsByCoachId } from '@/lib/notion/students';
 import { getPaymentsByStudents } from '@/lib/notion/payments';
 import { getCheckinsByCoach } from '@/lib/notion/checkins';
 import { nowTaipei } from '@/lib/utils/date';
-import { createSpreadsheet } from '@/lib/google/sheets';
 import type { CheckinRecord, PaymentRecord, Student } from '@/types';
+
+export interface ReportData {
+  title: string;
+  coachName: string;
+  year: number;
+  month: number;
+  summary: {
+    headers: string[];
+    rows: (string | number)[][];
+  };
+  checkins: {
+    headers: string[];
+    rows: (string | number)[][];
+  };
+  payments: {
+    headers: string[];
+    rows: (string | number)[][];
+  };
+}
 
 function buildPriceMaps(
   students: Student[],
@@ -42,38 +60,13 @@ function buildPriceMaps(
   return { priceMap, priceByStudentId };
 }
 
-/**
- * Generate a monthly report as a Google Sheets spreadsheet.
- * Returns the spreadsheet URL, or null if the coach is not found.
- */
-export async function generateMonthlyReport(
-  lineUserId: string,
-  targetYear?: number,
-  targetMonth?: number,
-): Promise<string | null> {
-  const coach = await findCoachByLineId(lineUserId);
-  if (!coach) return null;
-
-  const now = nowTaipei();
-  // Default: previous month
-  const year = targetYear ?? (now.getMonth() === 0 ? now.getFullYear() - 1 : now.getFullYear());
-  const month = targetMonth ?? (now.getMonth() === 0 ? 12 : now.getMonth());
-  const monthPrefix = `${year}-${String(month).padStart(2, '0')}`;
-
-  const students = await getStudentsByCoachId(coach.id);
-  const [allCoachCheckins, payments] = await Promise.all([
-    getCheckinsByCoach(coach.id),
-    getPaymentsByStudents(students.map(s => s.id)),
-  ]);
-
-  const { priceMap, priceByStudentId } = buildPriceMaps(students, payments);
-
-  const monthCheckins = allCoachCheckins.filter(c => c.classDate.startsWith(monthPrefix));
-  const monthPayments = payments.filter(
-    p => p.actualDate.startsWith(monthPrefix) || p.createdAt.startsWith(monthPrefix),
-  );
-
-  // Group by studentId
+function compileRows(
+  students: Student[],
+  monthCheckins: CheckinRecord[],
+  monthPayments: PaymentRecord[],
+  priceMap: Map<string, number>,
+  priceByStudentId: Map<string, number>,
+) {
   const checkinsByStudentId = new Map<string, CheckinRecord[]>();
   for (const c of monthCheckins) {
     const arr = checkinsByStudentId.get(c.studentId) ?? [];
@@ -87,7 +80,6 @@ export async function generateMonthlyReport(
     paymentsByStudentId.set(p.studentId, arr);
   }
 
-  // Build per-student rows
   const summaryRows: (string | number)[][] = [];
   const checkinRows: (string | number)[][] = [];
   const paymentRows: (string | number)[][] = [];
@@ -147,22 +139,60 @@ export async function generateMonthlyReport(
     summaryRows.push(['合計', totalCheckedIn, +totalHours.toFixed(1), totalRevenue, totalCollected]);
   }
 
-  const title = `安傑力月報表 ${year}年${month}月 ${coach.name}教練`;
-  return createSpreadsheet(title, [
-    {
-      title: '彙總',
+  return { summaryRows, checkinRows, paymentRows };
+}
+
+/**
+ * Compile monthly report data. Can be called with lineUserId or coachId.
+ */
+export async function compileMonthlyReport(
+  opts: { lineUserId: string } | { coachId: string },
+  targetYear?: number,
+  targetMonth?: number,
+): Promise<ReportData | null> {
+  const coach = 'lineUserId' in opts
+    ? await findCoachByLineId(opts.lineUserId)
+    : await getCoachById(opts.coachId);
+  if (!coach) return null;
+
+  const now = nowTaipei();
+  const year = targetYear ?? (now.getMonth() === 0 ? now.getFullYear() - 1 : now.getFullYear());
+  const month = targetMonth ?? (now.getMonth() === 0 ? 12 : now.getMonth());
+  const monthPrefix = `${year}-${String(month).padStart(2, '0')}`;
+
+  const students = await getStudentsByCoachId(coach.id);
+  const [allCoachCheckins, payments] = await Promise.all([
+    getCheckinsByCoach(coach.id),
+    getPaymentsByStudents(students.map(s => s.id)),
+  ]);
+
+  const { priceMap, priceByStudentId } = buildPriceMaps(students, payments);
+
+  const monthCheckins = allCoachCheckins.filter(c => c.classDate.startsWith(monthPrefix));
+  const monthPayments = payments.filter(
+    p => p.actualDate.startsWith(monthPrefix) || p.createdAt.startsWith(monthPrefix),
+  );
+
+  const { summaryRows, checkinRows, paymentRows } = compileRows(
+    students, monthCheckins, monthPayments, priceMap, priceByStudentId,
+  );
+
+  return {
+    title: `安傑力月報表 ${year}年${month}月 ${coach.name}教練`,
+    coachName: coach.name,
+    year,
+    month,
+    summary: {
       headers: ['學員', '執行堂數', '執行時數(時)', '執行收入', '繳費金額'],
       rows: summaryRows,
     },
-    {
-      title: '上課明細',
+    checkins: {
       headers: ['學員', '上課日期', '上課時段', '時長(分)'],
       rows: checkinRows,
     },
-    {
-      title: '繳費明細',
+    payments: {
       headers: ['學員', '繳費日期', '購買時數', '總金額', '已付金額', '差額', '狀態'],
       rows: paymentRows,
     },
-  ], coach.googleEmail);
+  };
 }
