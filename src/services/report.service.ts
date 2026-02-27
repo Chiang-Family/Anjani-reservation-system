@@ -124,7 +124,6 @@ function compileRows(
         p.totalAmount,
         p.paidAmount,
         p.totalAmount - p.paidAmount,
-        p.status,
       ]);
     }
   }
@@ -191,7 +190,7 @@ export async function compileMonthlyReport(
       rows: checkinRows,
     },
     payments: {
-      headers: ['學員', '繳費日期', '購買時數', '總金額', '已付金額', '差額', '狀態'],
+      headers: ['學員', '繳費日期', '購買時數', '總金額', '已付金額', '差額'],
       rows: paymentRows,
     },
   };
