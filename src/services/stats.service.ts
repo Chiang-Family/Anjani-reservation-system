@@ -468,6 +468,10 @@ export async function getCoachMonthlyStats(
     // 副學員（無付款記錄）跳過，其續約由主學員代表
     if (buckets.length === 0) continue;
 
+    // 行事曆無此學員名稱且有關聯學員 → 由行事曆上的關聯學員代表，避免重複計算
+    const hasOwnCalendarEvents = (futureEventsByStudent.get(student.name) ?? []).length > 0;
+    if (!hasOwnCalendarEvents && (student.relatedStudentIds?.length ?? 0) > 0) continue;
+
     // 合併關聯學員的未來事件，確保時數消耗模擬完整
     const primaryFutureEvents = futureEventsByStudent.get(student.name) ?? [];
     const relatedFutureEvents = (student.relatedStudentIds ?? [])
