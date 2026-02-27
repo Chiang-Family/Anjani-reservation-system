@@ -14,7 +14,6 @@ const envSchema = z.object({
   CRON_SECRET: z.string().min(1).optional(),
   RICH_MENU_STUDENT_ID: z.string().optional(),
   RICH_MENU_COACH_ID: z.string().optional(),
-  REPORT_SHARE_EMAIL: z.string().email().optional(),
 });
 
 export type Env = z.infer<typeof envSchema>;

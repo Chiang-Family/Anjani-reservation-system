@@ -49,22 +49,3 @@ export async function replyFlex(
   });
 }
 
-export async function replyFlexCarousel(
-  replyToken: string,
-  altText: string,
-  bubbles: messagingApi.FlexBubble[]
-): Promise<void> {
-  await getLineClient().replyMessage({
-    replyToken,
-    messages: [
-      {
-        type: 'flex',
-        altText,
-        contents: {
-          type: 'carousel',
-          contents: bubbles.slice(0, 12),
-        },
-      },
-    ],
-  });
-}

@@ -235,30 +235,3 @@ export async function getCheckinsByCoach(coachId: string): Promise<CheckinRecord
   return results;
 }
 
-export async function getCheckinsByDateRange(
-  from: string,
-  to: string
-): Promise<CheckinRecord[]> {
-  const notion = getNotionClient();
-  const filter = {
-    and: [
-      {
-        property: CHECKIN_PROPS.CHECKIN_TIME,
-        date: { on_or_after: from },
-      },
-      {
-        property: CHECKIN_PROPS.CHECKIN_TIME,
-        date: { on_or_before: to },
-      },
-    ],
-  } as NotionFilter;
-
-  const res = await notion.databases.query({
-    database_id: getEnv().NOTION_CHECKIN_DB_ID,
-    filter,
-  });
-
-  return res.results.map((page) =>
-    extractCheckin(page as unknown as Record<string, unknown>)
-  );
-}

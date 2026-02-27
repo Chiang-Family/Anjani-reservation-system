@@ -342,10 +342,6 @@ export function startBinding(lineUserId: string): void {
   bindingStates.set(lineUserId, { waitingForName: true });
 }
 
-export function clearBindingState(lineUserId: string): void {
-  bindingStates.delete(lineUserId);
-}
-
 export async function handleBinding(
   lineUserId: string,
   name: string

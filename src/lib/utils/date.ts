@@ -15,18 +15,8 @@ export function formatDate(date: Date | string): string {
   return format(toTaipei(date), 'yyyy/MM/dd');
 }
 
-export function formatTime(date: Date | string): string {
-  return format(toTaipei(date), 'HH:mm');
-}
-
 export function formatDateTime(date: Date | string): string {
   return format(toTaipei(date), 'yyyy/MM/dd HH:mm');
-}
-
-export function formatWeekday(date: Date | string): string {
-  const weekdays = ['日', '一', '二', '三', '四', '五', '六'];
-  const d = toTaipei(date);
-  return weekdays[d.getDay()];
 }
 
 export function todayDateString(): string {
@@ -52,17 +42,6 @@ export function formatDateLabel(dateStr: string): string {
   const zoned = toZonedTime(d, TZ);
   const weekdays = ['日', '一', '二', '三', '四', '五', '六'];
   return `${zoned.getMonth() + 1}/${zoned.getDate()}（${weekdays[zoned.getDay()]}）`;
-}
-
-/** 組合 yyyy-MM-dd + HH:mm → Taipei Date */
-export function parseSlotTime(dateStr: string, timeStr: string): Date {
-  const iso = `${dateStr}T${timeStr}:00+08:00`;
-  return toZonedTime(new Date(iso), TZ);
-}
-
-export function formatSlotDisplay(date: string, startTime: string, endTime: string): string {
-  const d = toTaipei(date);
-  return `${formatDate(d)}（${formatWeekday(d)}）${startTime}–${endTime}`;
 }
 
 /** 計算課程時長（分鐘），從 HH:mm 格式的開始/結束時間 */

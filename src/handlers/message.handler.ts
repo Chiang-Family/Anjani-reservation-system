@@ -24,7 +24,6 @@ import { generateReportToken } from '@/lib/utils/report-token';
 import { pMap } from '@/lib/utils/concurrency';
 import { KEYWORD, ROLE } from '@/lib/config/constants';
 import { TEXT } from '@/templates/text-messages';
-import { studentInfoCard } from '@/templates/flex/student-info';
 import { paymentHistoryCard } from '@/templates/flex/payment-history';
 import { studentMenu, coachMenu } from '@/templates/flex/main-menu';
 import { scheduleList } from '@/templates/flex/today-schedule';

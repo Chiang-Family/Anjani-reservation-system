@@ -163,8 +163,3 @@ export async function getEventsForDateRange(fromDate: string, toDate: string): P
   return events;
 }
 
-export function getEventsByColorId(events: CalendarEvent[], colorId: number): CalendarEvent[] {
-  const filtered = events.filter((e) => e.colorId === String(colorId));
-  console.log(`[Calendar] Filter by colorId=${colorId}: ${filtered.length}/${events.length} events matched`);
-  return filtered;
-}
