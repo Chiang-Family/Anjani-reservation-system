@@ -289,8 +289,8 @@ export async function handlePostback(event: PostbackEvent): Promise<void> {
         }
         const repYear = parseInt(match[1]);
         const repMonth = parseInt(match[2]);
-        await showLoading(lineUserId, 30);
         try {
+          await showLoading(lineUserId, 30);
           const reportUrl = await generateMonthlyReport(lineUserId, repYear, repMonth);
           if (!reportUrl) {
             await replyTextWithMenu(event.replyToken, '找不到教練資料。');
