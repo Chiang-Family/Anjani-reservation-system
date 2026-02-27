@@ -37,7 +37,7 @@ handleEvent() 事件分發
     ├──────────────────┤
     │ Notion API        │ ← 學員/教練/打卡/繳費 CRUD
     │ Google Calendar   │ ← 課表讀取（唯讀）
-    │ Google Sheets     │ ← 月報表輸出（公開連結）
+    │ Google Sheets     │ ← 月報表輸出（分享至教練 Google Email / PDF 連結）
     │ LINE Messaging    │ ← 推播通知
     └──────────────────┘
 ```
@@ -86,7 +86,9 @@ handleEvent() 事件分發
 |------|------|------|
 | 姓名 | title | 教練姓名 |
 | LINE User ID | rich_text | 綁定的 LINE ID |
-| 日曆顏色ID | number | Google Calendar 的 colorId，用來對應教練 |
+| 個人LINE連結 | url | 教練的 LINE 個人連結（供學員加好友） |
+| 日曆顏色ID | number | Google Calendar 的 colorId |
+| Google Email | rich_text | 月報表自動分享至此信箱（教練綁定 LINE 時填寫） |
 | 狀態 | select | 教練狀態 |
 
 ### 繳費紀錄 (Payments) — 課程包
@@ -298,13 +300,19 @@ paymentPeriodSelector()
 教練輸入「新增學員」→ 輸入「姓名 時數 單價」→ 確認卡片 → 建立學員 + 繳費紀錄
 ```
 
-### 5. 學員綁定流程
+### 5. 學員/教練綁定流程
 
 ```
 新使用者加入 LINE 好友 / 傳送任意訊息
     ├─ 無法識別身份 → 啟動綁定流程
-    ├─ 輸入「教練姓名」（如「教練Jack」）→ 綁定為教練
-    └─ 輸入學員姓名 → 綁定為學員
+    │
+    ├─ 輸入「教練姓名」（如「教練Jack」）
+    │       → 綁定 LINE ID 為教練
+    │       → 詢問 Google Email（月報表分享用）
+    │       → 輸入有效 Email 儲存至 Notion，或輸入「跳過」略過
+    │       → 顯示教練選單
+    │
+    └─ 輸入學員姓名 → 綁定為學員 → 顯示學員選單
 ```
 
 ---
@@ -319,10 +327,15 @@ paymentPeriodSelector()
    - **彙總**：學員、執行堂數、執行時數、執行收入、繳費金額（含合計行）
    - **上課明細**：學員、上課日期、上課時段、時長（分）
    - **繳費明細**：學員、繳費日期、購買時數、總金額、已付金額、差額、狀態
-4. 設定試算表為公開可查閱（任何人有連結即可開啟，無需 Google 登入）
-5. 回覆教練試算表 URL
+4. 嘗試將試算表分享給教練（三層優先順序，失敗不阻斷流程）：
+   - 教練 Notion `Google Email` 欄位 → `type: 'user'` 個人分享
+   - env var `REPORT_SHARE_EMAIL` → 同上
+   - `type: 'anyone'` 公開連結（企業 Workspace 可能被 org policy 封鎖）
+5. 回覆教練 PDF 可列印連結 + 試算表連結
 
-> Service Account 需要 `spreadsheets` + `drive.file` 兩個 scope，並在 GCP Console 啟用 Google Sheets API 和 Google Drive API。
+**Google Auth 設計**：Sheets client（`spreadsheets` scope）和 Drive client（`drive` scope）使用**分離的 JWT auth**，避免 Drive scope 未授權時影響試算表建立。
+
+> Service Account 需在 GCP Console 啟用 Google Sheets API（必須）及 Google Drive API（分享功能選用）。
 
 ---
 
@@ -520,6 +533,7 @@ GOOGLE_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----\
 CRON_SECRET=your_cron_secret
 RICH_MENU_STUDENT_ID=richmenu-xxx
 RICH_MENU_COACH_ID=richmenu-xxx
+REPORT_SHARE_EMAIL=fallback@example.com  # 月報表分享備用信箱（教練 Notion 有 Google Email 時優先用那個）
 ```
 
 ---
