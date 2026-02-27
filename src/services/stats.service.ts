@@ -173,7 +173,8 @@ function findRenewalCycles(
     const allFullyPaid = ps.length > 0 && ps.every(p => p.status === '已繳費');
     return {
       actualDate: ps[0]?.actualDate ?? bucket.paymentDate,
-      purchasedHours: bucket.purchasedHours,
+      // 用原始付款時數，不含 FIFO 結轉（結轉會膨脹 bucket.purchasedHours）
+      purchasedHours: ps.reduce((s, p) => s + p.purchasedHours, 0),
       totalAmount: allFullyPaid ? paidTotal : formulaTotal,
       paidAmount: paidTotal,
       pricePerHour: ps[0]?.pricePerHour ?? 0,
