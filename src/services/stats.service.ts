@@ -229,13 +229,15 @@ function findRenewalCycles(
           remainingMin = buckets[nextIdx].purchasedHours * 60 + remainingMin;
         } else {
           // Not renewed: estimate from current bucket
+          // 用 FIFO 調整後的 bucket.purchasedHours（含結轉），反映實際消耗堂數
+          const curBucket = buckets[currentIdx];
           const curInfo = getBucketInfo(currentIdx);
           cycles.push({
             expiryDate,
             renewalDate: evtIdx < futureEvents.length ? futureEvents[evtIdx].date : '',
             isPaid: false,
-            expectedHours: curInfo.purchasedHours,
-            expectedAmount: Math.round(curInfo.purchasedHours * curInfo.pricePerHour),
+            expectedHours: curBucket.purchasedHours,
+            expectedAmount: Math.round(curBucket.purchasedHours * curInfo.pricePerHour),
             paidAmount: 0,
           });
           break;
@@ -268,13 +270,14 @@ function findRenewalCycles(
         : null;
 
     if (lastCheckin) {
+      // 用 FIFO 調整後的 bucket.purchasedHours（含結轉），反映實際消耗堂數
       const lastInfo = getBucketInfo(buckets.length - 1);
       cycles.push({
         expiryDate: lastCheckin.classDate,
         renewalDate: futureEvents.length > 0 ? futureEvents[0].date : '',
         isPaid: false,
-        expectedHours: lastInfo.purchasedHours,
-        expectedAmount: Math.round(lastInfo.purchasedHours * lastInfo.pricePerHour),
+        expectedHours: lastBucket.purchasedHours,
+        expectedAmount: Math.round(lastBucket.purchasedHours * lastInfo.pricePerHour),
         paidAmount: 0,
       });
     }
