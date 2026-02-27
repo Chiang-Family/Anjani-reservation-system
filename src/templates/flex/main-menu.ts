@@ -91,7 +91,7 @@ export function studentMenu(name: string, coachLineUrl?: string, paymentType?: s
   };
 }
 
-function sectionLabel(text: string): messagingApi.FlexBox {
+function sectionLabel(text: string, margin: 'sm' | 'md' | 'lg' | 'xl' | 'xxl' = 'lg'): messagingApi.FlexBox {
   return {
     type: 'box',
     layout: 'horizontal',
@@ -110,7 +110,7 @@ function sectionLabel(text: string): messagingApi.FlexBox {
     ],
     alignItems: 'center',
     spacing: 'md',
-    margin: 'lg',
+    margin,
   };
 }
 
@@ -157,11 +157,11 @@ export function coachMenu(name: string): FlexBubble {
       type: 'box',
       layout: 'vertical',
       contents: [
-        sectionLabel('課程管理'),
+        sectionLabel('課程管理', 'sm'),
         menuButton(KEYWORD.TODAY_SCHEDULE, '#3E6B8A'),
         menuButton(KEYWORD.STUDENT_MGMT, '#5A7E92'),
         menuButton(KEYWORD.ADD_STUDENT, '#5A8E72'),
-        sectionLabel('統計報表'),
+        sectionLabel('統計報表', 'xl'),
         menuButton(KEYWORD.WEEKLY_STATS, '#4A7A6A'),
         menuButton(KEYWORD.MONTHLY_STATS, '#6D5D85'),
         menuButton(KEYWORD.ANNUAL_STATS, '#7A5B3D'),

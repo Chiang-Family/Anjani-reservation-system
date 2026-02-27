@@ -334,7 +334,7 @@ async function handleCoachMessage(
     }
 
     case KEYWORD.MONTHLY_REPORT: {
-      await replyFlex(replyToken, '月報表 — 選擇月份', reportSelectorCard(name), qr);
+      await replyFlex(replyToken, '上課明細月報表 — 選擇月份', reportSelectorCard(name), qr);
       return;
     }
 
@@ -356,8 +356,8 @@ async function handleCoachMessage(
     }
 
     default: {
-      // "月報表 YYYY-MM" — generate report for a specific month
-      if (text.startsWith('月報表 ')) {
+      // "上課明細月報表 YYYY-MM" — generate report for a specific month
+      if (text.startsWith('上課明細月報表 ')) {
         const parts = text.split(' ');
         const match = parts[1]?.match(/^(\d{4})-(\d{2})$/);
         if (match) {
@@ -377,7 +377,7 @@ async function handleCoachMessage(
             return;
           }
         }
-        await replyText(replyToken, '格式錯誤，請輸入「月報表 YYYY-MM」，例如：月報表 2026-01', qr);
+        await replyText(replyToken, '格式錯誤，請輸入「上課明細月報表 YYYY-MM」，例如：上課明細月報表 2026-01', qr);
         return;
       }
 

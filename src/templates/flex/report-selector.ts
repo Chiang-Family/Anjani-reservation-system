@@ -39,7 +39,7 @@ export function reportSelectorCard(coachName: string): FlexBubble {
       contents: [
         {
           type: 'text',
-          text: '月報表',
+          text: '上課明細月報表',
           weight: 'bold',
           size: 'lg',
           color: '#FFFFFF',
