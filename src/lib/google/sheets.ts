@@ -92,11 +92,24 @@ export async function createSpreadsheet(title: string, sheets: SheetData[]): Pro
     requestBody: { requests },
   });
 
-  // Share: anyone with the link can view
-  await drive.permissions.create({
-    fileId: spreadsheetId,
-    requestBody: { role: 'reader', type: 'anyone' },
-  });
+  // Share: with specific email if set, otherwise try anyone-with-link
+  try {
+    const shareEmail = getEnv().REPORT_SHARE_EMAIL;
+    if (shareEmail) {
+      await drive.permissions.create({
+        fileId: spreadsheetId,
+        sendNotificationEmail: false,
+        requestBody: { role: 'writer', type: 'user', emailAddress: shareEmail },
+      });
+    } else {
+      await drive.permissions.create({
+        fileId: spreadsheetId,
+        requestBody: { role: 'reader', type: 'anyone' },
+      });
+    }
+  } catch (shareErr) {
+    console.warn('[Sheets] 分享設定失敗（將以服務帳號身分存取）：', shareErr);
+  }
 
   return `https://docs.google.com/spreadsheets/d/${spreadsheetId}`;
 }
