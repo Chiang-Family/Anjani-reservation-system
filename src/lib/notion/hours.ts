@@ -40,6 +40,17 @@ export function assignCheckinsToBuckets(
       bucketIdx++;
     }
 
+    // 日期邊界：上課日期 >= 下一期繳費日期時，結轉剩餘時數到下一期
+    while (bucketIdx < buckets.length - 1 &&
+           checkin.classDate >= buckets[bucketIdx + 1].paymentDate) {
+      const remainingMinutes = buckets[bucketIdx].purchasedHours * 60 - buckets[bucketIdx].consumedMinutes;
+      if (remainingMinutes > 0) {
+        buckets[bucketIdx + 1].purchasedHours += remainingMinutes / 60;
+      }
+      buckets[bucketIdx].consumedMinutes = buckets[bucketIdx].purchasedHours * 60;
+      bucketIdx++;
+    }
+
     if (bucketIdx >= buckets.length) {
       overflowCheckins.push(checkin);
     } else {
