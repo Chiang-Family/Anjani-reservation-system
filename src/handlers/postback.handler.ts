@@ -290,12 +290,18 @@ export async function handlePostback(event: PostbackEvent): Promise<void> {
         const repYear = parseInt(match[1]);
         const repMonth = parseInt(match[2]);
         await showLoading(lineUserId, 30);
-        const reportUrl = await generateMonthlyReport(lineUserId, repYear, repMonth);
-        if (!reportUrl) {
-          await replyTextWithMenu(event.replyToken, '找不到教練資料。');
-          return;
+        try {
+          const reportUrl = await generateMonthlyReport(lineUserId, repYear, repMonth);
+          if (!reportUrl) {
+            await replyTextWithMenu(event.replyToken, '找不到教練資料。');
+            return;
+          }
+          await replyText(event.replyToken, `✅ ${repYear}年${repMonth}月報表已生成：\n${reportUrl}`, coachQuickReply());
+        } catch (reportError) {
+          console.error('Report generation error:', reportError);
+          const msg = reportError instanceof Error ? reportError.message : String(reportError);
+          await replyTextWithMenu(event.replyToken, `❌ 報表生成失敗：${msg}`);
         }
-        await replyText(event.replyToken, `✅ ${repYear}年${repMonth}月報表已生成：\n${reportUrl}`, coachQuickReply());
         return;
       }
 

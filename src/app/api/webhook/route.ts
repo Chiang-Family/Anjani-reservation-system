@@ -3,6 +3,8 @@ import { validateSignature } from '@/lib/line/validate';
 import { handleEvent } from '@/handlers';
 import type { WebhookEvent } from '@line/bot-sdk';
 
+export const maxDuration = 60;
+
 export async function POST(req: NextRequest) {
   try {
     const body = await req.text();
