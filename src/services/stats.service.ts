@@ -167,11 +167,15 @@ function findRenewalCycles(
   function getBucketInfo(idx: number) {
     const bucket = buckets[idx];
     const ps = paymentsByCreatedAt.get(bucket.paymentDate) ?? [];
+    const formulaTotal = ps.reduce((s, p) => s + p.totalAmount, 0);
+    const paidTotal = ps.reduce((s, p) => s + p.paidAmount, 0);
+    // 已繳費 → 用實際收費金額（已付金額）；部分/未繳費 → 用公式金額
+    const allFullyPaid = ps.length > 0 && ps.every(p => p.status === '已繳費');
     return {
       actualDate: ps[0]?.actualDate ?? bucket.paymentDate,
       purchasedHours: bucket.purchasedHours,
-      totalAmount: ps.reduce((s, p) => s + p.totalAmount, 0),
-      paidAmount: ps.reduce((s, p) => s + p.paidAmount, 0),
+      totalAmount: allFullyPaid ? paidTotal : formulaTotal,
+      paidAmount: paidTotal,
       pricePerHour: ps[0]?.pricePerHour ?? 0,
     };
   }
@@ -438,7 +442,14 @@ export async function getCoachMonthlyStats(
     const studentFutureEvents = [...primaryFutureEvents, ...relatedFutureEvents]
       .sort((a, b) => a.date.localeCompare(b.date) || a.startTime.localeCompare(b.startTime));
 
-    const cycles = findRenewalCycles(buckets, overflowCheckins, studentFutureEvents, studentPayments);
+    // 排除已打卡日期的行事曆事件，避免續約預測重複計算
+    const checkedInDates = new Set(
+      buckets.flatMap(b => b.checkins.map(c => c.classDate))
+        .concat(overflowCheckins.map(c => c.classDate))
+    );
+    const uncheckedFutureEvents = studentFutureEvents.filter(e => !checkedInDates.has(e.date));
+
+    const cycles = findRenewalCycles(buckets, overflowCheckins, uncheckedFutureEvents, studentPayments);
 
     // 補充：若學員有付款紀錄的 actualDate 在本月，但尚未被 cycle 邏輯捕捉（例如當前活躍桶本身就是本月付款）
     const activeIdxForSupp = buckets.findIndex(b => b.consumedMinutes < b.purchasedHours * 60);
@@ -451,13 +462,16 @@ export async function getCoachMonthlyStats(
         if (capturedRenewalDates.has(p.actualDate)) continue;
         if (!activePlusFutureDates.has(p.createdAt)) continue; // 只考慮活躍桶及其後
         const sameDatePayments = studentPayments.filter(sp => sp.createdAt === p.createdAt);
+        const allFullyPaid = sameDatePayments.every(sp => sp.status === '已繳費');
+        const formulaTotal = sameDatePayments.reduce((s, sp) => s + sp.totalAmount, 0);
+        const paidTotal = sameDatePayments.reduce((s, sp) => s + sp.paidAmount, 0);
         cycles.push({
           expiryDate: '',
           renewalDate: p.actualDate,
           isPaid: true,
           expectedHours: sameDatePayments.reduce((s, sp) => s + sp.purchasedHours, 0),
-          expectedAmount: sameDatePayments.reduce((s, sp) => s + sp.totalAmount, 0),
-          paidAmount: sameDatePayments.reduce((s, sp) => s + sp.paidAmount, 0),
+          expectedAmount: allFullyPaid ? paidTotal : formulaTotal,
+          paidAmount: paidTotal,
         });
         capturedRenewalDates.add(p.actualDate);
       }
@@ -472,13 +486,16 @@ export async function getCoachMonthlyStats(
           if (!p.actualDate.startsWith(monthPrefix)) continue;
           if (capturedRenewalDates.has(p.actualDate)) continue;
           const sameDatePayments = studentPayments.filter(sp => sp.createdAt === p.createdAt);
+          const allFullyPaid = sameDatePayments.every(sp => sp.status === '已繳費');
+          const formulaTotal = sameDatePayments.reduce((s, sp) => s + sp.totalAmount, 0);
+          const paidTotal = sameDatePayments.reduce((s, sp) => s + sp.paidAmount, 0);
           cycles.push({
             expiryDate: '',
             renewalDate: p.actualDate,
             isPaid: true,
             expectedHours: sameDatePayments.reduce((s, sp) => s + sp.purchasedHours, 0),
-            expectedAmount: sameDatePayments.reduce((s, sp) => s + sp.totalAmount, 0),
-            paidAmount: sameDatePayments.reduce((s, sp) => s + sp.paidAmount, 0),
+            expectedAmount: allFullyPaid ? paidTotal : formulaTotal,
+            paidAmount: paidTotal,
           });
           capturedRenewalDates.add(p.actualDate);
         }
