@@ -37,13 +37,19 @@ export async function GET(req: NextRequest) {
   });
 }
 
-function renderTable(headers: string[], rows: (string | number)[][]) {
+function renderTable(headers: string[], rows: (string | number)[][], dedup1stCol = false) {
   const ths = headers.map(h => `<th>${h}</th>`).join('');
+  let prevFirst = '';
   const trs = rows.map((row, i) => {
     if (row.length === 0) return '<tr class="spacer"><td colspan="' + headers.length + '"></td></tr>';
     const isTotal = row[0] === '合計';
     const cls = isTotal ? ' class="total"' : (i % 2 === 1 ? ' class="stripe"' : '');
     const tds = row.map((cell, ci) => {
+      if (dedup1stCol && ci === 0 && !isTotal) {
+        const s = String(cell);
+        if (s === prevFirst) return '<td></td>';
+        prevFirst = s;
+      }
       const val = typeof cell === 'number'
         ? (ci >= 3 ? cell.toLocaleString() : cell)
         : cell;
@@ -113,12 +119,12 @@ function renderReportHtml(data: ReportData): string {
 
   <h2>上課明細</h2>
   ${data.checkins.rows.length > 0
-    ? renderTable(data.checkins.headers, data.checkins.rows)
+    ? renderTable(data.checkins.headers, data.checkins.rows, true)
     : '<p class="empty">本月無上課紀錄</p>'}
 
   <h2>繳費明細</h2>
   ${data.payments.rows.length > 0
-    ? renderTable(data.payments.headers, data.payments.rows)
+    ? renderTable(data.payments.headers, data.payments.rows, true)
     : '<p class="empty">本月無繳費紀錄</p>'}
 </div>
 </body>
