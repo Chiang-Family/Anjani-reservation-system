@@ -32,7 +32,6 @@ export interface Coach {
   lineUserId: string;
   lineUrl?: string;
   calendarColorId?: number;
-  googleEmail?: string;
   status?: string;
 }
 

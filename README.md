@@ -88,7 +88,6 @@ handleEvent() 事件分發
 | LINE User ID | rich_text | 綁定的 LINE ID |
 | 個人LINE連結 | url | 教練的 LINE 個人連結（供學員加好友） |
 | 日曆顏色ID | number | Google Calendar 的 colorId |
-| Google Email | rich_text | 月報表自動分享至此信箱（教練綁定 LINE 時填寫） |
 | 狀態 | select | 教練狀態 |
 
 ### 繳費紀錄 (Payments) — 課程包
@@ -309,8 +308,6 @@ paymentPeriodSelector()
     │
     ├─ 輸入「教練姓名」（如「教練Jack」）
     │       → 綁定 LINE ID 為教練
-    │       → 詢問 Google Email（月報表分享用）
-    │       → 輸入有效 Email 儲存至 Notion，或輸入「跳過」略過
     │       → 顯示教練選單
     │
     └─ 輸入學員姓名 → 綁定為學員 → 顯示學員選單

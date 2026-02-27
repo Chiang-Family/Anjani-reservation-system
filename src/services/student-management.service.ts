@@ -1,5 +1,5 @@
 import { createStudent, findStudentByName, bindStudentLineId, getStudentById } from '@/lib/notion/students';
-import { findCoachByLineId, findCoachByName, bindCoachLineId, updateCoachGoogleEmail } from '@/lib/notion/coaches';
+import { findCoachByLineId, findCoachByName, bindCoachLineId } from '@/lib/notion/coaches';
 import { createPaymentRecord, getLatestPaymentByStudent, getPaymentsByStudent } from '@/lib/notion/payments';
 import { getCheckinsByStudent } from '@/lib/notion/checkins';
 import { getStudentOverflowInfo, resolveOverflowIds } from '@/lib/notion/hours';
@@ -327,9 +327,6 @@ export async function executeConfirmPayment(
 /** 學員綁定 LINE User ID（透過姓名比對） */
 interface BindingState {
   waitingForName: boolean;
-  waitingForGoogleEmail?: boolean;
-  coachId?: string;
-  coachName?: string;
 }
 
 const bindingStates = new Map<string, BindingState>();
@@ -370,21 +367,11 @@ export async function handleBinding(
       };
     }
     await bindCoachLineId(coach.id, lineUserId);
-    bindingStates.set(lineUserId, {
-      waitingForName: false,
-      waitingForGoogleEmail: true,
-      coachId: coach.id,
-      coachName: coach.name,
-    });
+    bindingStates.delete(lineUserId);
 
     return {
       success: true,
-      message: [
-        `✅ 綁定成功！歡迎 ${coach.name} 教練！`,
-        '',
-        '請輸入您的 Google Email（月報表將自動分享至此信箱）：',
-        '若不需要，請輸入「跳過」。',
-      ].join('\n'),
+      message: `✅ 綁定成功！歡迎 ${coach.name} 教練！\n輸入「選單」查看所有功能。`,
     };
   }
 
@@ -424,38 +411,3 @@ export async function handleBinding(
   };
 }
 
-/** 處理教練綁定後的 Google Email 輸入步驟 */
-export async function handleGoogleEmailStep(
-  lineUserId: string,
-  input: string,
-): Promise<{ message: string; done: boolean }> {
-  const state = bindingStates.get(lineUserId);
-  if (!state?.waitingForGoogleEmail || !state.coachId) {
-    return { message: '沒有進行中的綁定流程。', done: true };
-  }
-
-  if (input.trim() === '跳過') {
-    bindingStates.delete(lineUserId);
-    return {
-      message: `已跳過 Google Email 設定。\n輸入「選單」查看所有功能。`,
-      done: true,
-    };
-  }
-
-  const email = input.trim();
-  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-  if (!emailRegex.test(email)) {
-    return { message: '請輸入有效的 Email 格式，或輸入「跳過」略過：', done: false };
-  }
-
-  await updateCoachGoogleEmail(state.coachId, email);
-  bindingStates.delete(lineUserId);
-  return {
-    message: [
-      `✅ Google Email 已設定：${email}`,
-      '',
-      '輸入「選單」查看所有功能。',
-    ].join('\n'),
-    done: true,
-  };
-}

@@ -33,14 +33,12 @@ function getUrlValue(prop: Record<string, unknown>): string {
 function extractCoach(page: Record<string, unknown>): Coach {
   const props = (page as { properties: Record<string, unknown> }).properties as Record<string, Record<string, unknown>>;
   const colorId = getNumberValue(props[COACH_PROPS.CALENDAR_COLOR_ID]);
-  const googleEmail = getRichTextValue(props[COACH_PROPS.GOOGLE_EMAIL]);
   return {
     id: (page as { id: string }).id,
     name: getRichTextValue(props[COACH_PROPS.NAME]),
     lineUserId: getRichTextValue(props[COACH_PROPS.LINE_USER_ID]),
     lineUrl: getUrlValue(props[COACH_PROPS.LINE_URL]) || undefined,
     calendarColorId: colorId || undefined,
-    googleEmail: googleEmail || undefined,
     status: getRichTextValue(props[COACH_PROPS.STATUS]) || undefined,
   };
 }
@@ -100,18 +98,6 @@ export async function getAllCoaches(): Promise<Coach[]> {
   return res.results.map((page) =>
     extractCoach(page as unknown as Record<string, unknown>)
   );
-}
-
-export async function updateCoachGoogleEmail(coachId: string, email: string): Promise<void> {
-  const notion = getNotionClient();
-  await notion.pages.update({
-    page_id: coachId,
-    properties: {
-      [COACH_PROPS.GOOGLE_EMAIL]: {
-        rich_text: [{ type: 'text', text: { content: email } }],
-      },
-    },
-  });
 }
 
 export async function getCoachById(coachId: string): Promise<Coach | null> {
