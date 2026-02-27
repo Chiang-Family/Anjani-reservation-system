@@ -751,13 +751,11 @@ export async function getCoachAnnualStats(
     ensureMonth(month).collected += p.paidAmount;
   }
 
-  // Merge historical overrides (for months not yet imported into Notion)
+  // Historical overrides take priority (for months with incomplete Notion data)
   const historicalYearData = HISTORICAL_MONTHLY_STATS[coach.name]?.[year] ?? {};
   for (const [monthStr, hist] of Object.entries(historicalYearData)) {
     const month = parseInt(monthStr);
-    if (!monthlyData.has(month)) {
-      monthlyData.set(month, { checkedIn: hist.checkedIn, executedRevenue: hist.executedRevenue, collected: hist.collected });
-    }
+    monthlyData.set(month, { checkedIn: hist.checkedIn, executedRevenue: hist.executedRevenue, collected: hist.collected });
   }
 
   const monthsWithData = monthlyData.size;

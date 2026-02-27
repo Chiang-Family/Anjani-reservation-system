@@ -7,7 +7,7 @@ export function nowTaipei(): Date {
   return toZonedTime(new Date(), TZ);
 }
 
-export function toTaipei(date: Date | string): Date {
+function toTaipei(date: Date | string): Date {
   return toZonedTime(new Date(date), TZ);
 }
 

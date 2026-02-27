@@ -205,79 +205,6 @@ export async function getLatestPaymentByStudent(studentId: string): Promise<Paym
   return extractPayment(res.results[0] as unknown as Record<string, unknown>);
 }
 
-export async function getPaymentsByCoachStudents(coachId: string): Promise<PaymentRecord[]> {
-  const notion = getNotionClient();
-  const res = await notion.databases.query({
-    database_id: getEnv().NOTION_PAYMENTS_DB_ID,
-    filter: {
-      property: PAYMENT_PROPS.COACH,
-      relation: { contains: coachId },
-    },
-    sorts: [{ property: PAYMENT_PROPS.CREATED_AT, direction: 'descending' }],
-  });
-
-  return res.results.map((page) =>
-    extractPayment(page as unknown as Record<string, unknown>)
-  );
-}
-
-export async function updatePaymentStatus(
-  paymentId: string,
-  status: '已繳費' | '部分繳費' | '未繳費'
-): Promise<void> {
-  const notion = getNotionClient();
-  await notion.pages.update({
-    page_id: paymentId,
-    properties: {
-      [PAYMENT_PROPS.STATUS]: {
-        select: { name: status },
-      },
-    } as Parameters<typeof notion.pages.update>[0]['properties'],
-  });
-}
-
-export async function recordPaymentAmount(
-  paymentId: string,
-  amount: number,
-  currentPaid: number,
-  totalAmount: number
-): Promise<{ newPaidAmount: number; newStatus: '已繳費' | '部分繳費' }> {
-  const notion = getNotionClient();
-  const newPaid = currentPaid + amount;
-  const fullyPaid = newPaid >= totalAmount;
-  const newPaidAmount = fullyPaid ? totalAmount : newPaid;
-  const newStatus = fullyPaid ? '已繳費' as const : '部分繳費' as const;
-
-  await notion.pages.update({
-    page_id: paymentId,
-    properties: {
-      [PAYMENT_PROPS.PAID_AMOUNT]: {
-        number: newPaidAmount,
-      },
-      [PAYMENT_PROPS.STATUS]: {
-        select: { name: newStatus },
-      },
-    } as Parameters<typeof notion.pages.update>[0]['properties'],
-  });
-
-  return { newPaidAmount, newStatus };
-}
-
-export async function updatePaymentHours(
-  paymentId: string,
-  purchasedHours: number
-): Promise<void> {
-  const notion = getNotionClient();
-  await notion.pages.update({
-    page_id: paymentId,
-    properties: {
-      [PAYMENT_PROPS.PURCHASED_HOURS]: {
-        number: purchasedHours,
-      },
-    } as Parameters<typeof notion.pages.update>[0]['properties'],
-  });
-}
-
 export async function getPaymentsByDate(dateStr: string): Promise<PaymentRecord[]> {
   const notion = getNotionClient();
   const res = await notion.databases.query({
@@ -293,26 +220,3 @@ export async function getPaymentsByDate(dateStr: string): Promise<PaymentRecord[
   );
 }
 
-export async function getLatestUnpaidPayment(studentId: string): Promise<PaymentRecord | null> {
-  const notion = getNotionClient();
-  const res = await notion.databases.query({
-    database_id: getEnv().NOTION_PAYMENTS_DB_ID,
-    filter: {
-      and: [
-        {
-          property: PAYMENT_PROPS.STUDENT,
-          relation: { contains: studentId },
-        },
-        {
-          property: PAYMENT_PROPS.STATUS,
-          select: { does_not_equal: '已繳費' },
-        },
-      ],
-    } as NotionFilter,
-    sorts: [{ property: PAYMENT_PROPS.CREATED_AT, direction: 'descending' }],
-    page_size: 1,
-  });
-
-  if (res.results.length === 0) return null;
-  return extractPayment(res.results[0] as unknown as Record<string, unknown>);
-}

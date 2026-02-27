@@ -7,7 +7,7 @@
 
 import { findCoachByName } from '../src/lib/notion/coaches';
 import { getStudentsByCoachId } from '../src/lib/notion/students';
-import { getPaymentsByCoachStudents } from '../src/lib/notion/payments';
+import { getPaymentsByStudents } from '../src/lib/notion/payments';
 import { getMonthEvents } from '../src/lib/google/calendar';
 import { nowTaipei, computeDurationMinutes } from '../src/lib/utils/date';
 import type { Student, PaymentRecord } from '../src/types';
@@ -26,9 +26,9 @@ async function main() {
   }
 
   // 2. 取得學員、付款紀錄、本月行事曆
-  const [students, payments, allMonthEvents] = await Promise.all([
-    getStudentsByCoachId(coach.id),
-    getPaymentsByCoachStudents(coach.id),
+  const students = await getStudentsByCoachId(coach.id);
+  const [payments, allMonthEvents] = await Promise.all([
+    getPaymentsByStudents(students.map(s => s.id)),
     getMonthEvents(year, month),
   ]);
 
