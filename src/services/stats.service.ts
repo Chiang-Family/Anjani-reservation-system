@@ -468,26 +468,29 @@ export async function getCoachMonthlyStats(
     // 副學員（無付款記錄）跳過，其續約由主學員代表
     if (buckets.length === 0) continue;
 
-    // 行事曆無此學員名稱且有關聯學員 → 由行事曆上的關聯學員代表，避免重複計算
+    // 行事曆無此學員名稱且有關聯學員 → 跳過未來事件模擬（避免未繳費預測重複），但仍保留已繳費 cycle
     const hasOwnCalendarEvents = (futureEventsByStudent.get(student.name) ?? []).length > 0;
-    if (!hasOwnCalendarEvents && (student.relatedStudentIds?.length ?? 0) > 0) continue;
+    const skipFutureSimulation = !hasOwnCalendarEvents && (student.relatedStudentIds?.length ?? 0) > 0;
 
-    // 合併關聯學員的未來事件，確保時數消耗模擬完整
-    const primaryFutureEvents = futureEventsByStudent.get(student.name) ?? [];
-    const relatedFutureEvents = (student.relatedStudentIds ?? [])
-      .flatMap(id => {
-        const related = studentById.get(id);
-        return related ? (futureEventsByStudent.get(related.name) ?? []) : [];
-      });
-    const studentFutureEvents = [...primaryFutureEvents, ...relatedFutureEvents]
-      .sort((a, b) => a.date.localeCompare(b.date) || a.startTime.localeCompare(b.startTime));
+    let uncheckedFutureEvents: CalendarEvent[] = [];
+    if (!skipFutureSimulation) {
+      // 合併關聯學員的未來事件，確保時數消耗模擬完整
+      const primaryFutureEvents = futureEventsByStudent.get(student.name) ?? [];
+      const relatedFutureEvents = (student.relatedStudentIds ?? [])
+        .flatMap(id => {
+          const related = studentById.get(id);
+          return related ? (futureEventsByStudent.get(related.name) ?? []) : [];
+        });
+      const studentFutureEvents = [...primaryFutureEvents, ...relatedFutureEvents]
+        .sort((a, b) => a.date.localeCompare(b.date) || a.startTime.localeCompare(b.startTime));
 
-    // 排除已打卡日期的行事曆事件，避免續約預測重複計算
-    const checkedInDates = new Set(
-      buckets.flatMap(b => b.checkins.map(c => c.classDate))
-        .concat(overflowCheckins.map(c => c.classDate))
-    );
-    const uncheckedFutureEvents = studentFutureEvents.filter(e => !checkedInDates.has(e.date));
+      // 排除已打卡日期的行事曆事件，避免續約預測重複計算
+      const checkedInDates = new Set(
+        buckets.flatMap(b => b.checkins.map(c => c.classDate))
+          .concat(overflowCheckins.map(c => c.classDate))
+      );
+      uncheckedFutureEvents = studentFutureEvents.filter(e => !checkedInDates.has(e.date));
+    }
 
     const cycles = findRenewalCycles(buckets, overflowCheckins, uncheckedFutureEvents, studentPayments);
 
