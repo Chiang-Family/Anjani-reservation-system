@@ -102,6 +102,18 @@ export async function getAllCoaches(): Promise<Coach[]> {
   );
 }
 
+export async function updateCoachGoogleEmail(coachId: string, email: string): Promise<void> {
+  const notion = getNotionClient();
+  await notion.pages.update({
+    page_id: coachId,
+    properties: {
+      [COACH_PROPS.GOOGLE_EMAIL]: {
+        rich_text: [{ type: 'text', text: { content: email } }],
+      },
+    },
+  });
+}
+
 export async function getCoachById(coachId: string): Promise<Coach | null> {
   const notion = getNotionClient();
   try {

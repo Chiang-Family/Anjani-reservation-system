@@ -15,6 +15,7 @@ import {
   getCollectAndAddState,
   handleCollectAndAddStep,
   handleBinding,
+  handleGoogleEmailStep,
   getBindingState,
   startBinding,
 } from '@/services/student-management.service';
@@ -51,6 +52,24 @@ export async function handleMessage(event: MessageEvent): Promise<void> {
 
   // Check if coach is in a multi-step flow
   if (user?.role === ROLE.COACH) {
+    // Newly bound coach waiting to provide Google Email
+    const bindState = getBindingState(lineUserId);
+    if (bindState?.waitingForGoogleEmail) {
+      try {
+        const result = await handleGoogleEmailStep(lineUserId, text);
+        if (result.done) {
+          const coach = await findCoachByLineId(lineUserId);
+          await replyFlex(event.replyToken, '安傑力教練管理系統', coachMenu(coach?.name ?? user.name), coachQuickReply());
+        } else {
+          await replyText(event.replyToken, result.message, menuQuickReply());
+        }
+      } catch (error) {
+        console.error('Google Email step error:', error);
+        await replyText(event.replyToken, TEXT.ERROR, menuQuickReply());
+      }
+      return;
+    }
+
     const collectState = getCollectAndAddState(lineUserId);
     if (collectState) {
       try {
@@ -78,6 +97,12 @@ export async function handleMessage(event: MessageEvent): Promise<void> {
       try {
         const result = await handleBinding(lineUserId, text);
         if (result.success) {
+          // Check if now waiting for Google Email (coach flow)
+          const newBindState = getBindingState(lineUserId);
+          if (newBindState?.waitingForGoogleEmail) {
+            await replyText(event.replyToken, result.message, menuQuickReply());
+            return;
+          }
           const student = await getStudentInfo(lineUserId);
           if (student) {
             const coach = student.coachId ? await getCoachById(student.coachId) : null;
