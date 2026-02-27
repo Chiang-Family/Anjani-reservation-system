@@ -604,17 +604,15 @@ export async function getCoachMonthlyStats(
     students: finalRenewalStudents,
   };
 
-  // 實際收款 + 待收款: from actual payments created in this month
+  // 實際收款: from actual payments created in this month
   let collectedAmount = 0;
-  let pendingAmount = 0;
   for (const p of payments) {
     if (p.createdAt.startsWith(monthPrefix) || p.actualDate.startsWith(monthPrefix)) {
       collectedAmount += p.paidAmount;
-      if (p.totalAmount > p.paidAmount) {
-        pendingAmount += (p.totalAmount - p.paidAmount);
-      }
     }
   }
+  // 待收款 = 預估續約總額 - 實際收款
+  const pendingAmount = Math.max(0, renewalForecast.expectedAmount - collectedAmount);
 
   return {
     coachName: coach.name,
