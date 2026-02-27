@@ -14,7 +14,8 @@ import { scheduleList } from '@/templates/flex/today-schedule';
 import { classHistoryCard, sessionMonthlyCard, paymentPeriodSelector, paymentDetailCard } from '@/templates/flex/class-history';
 import { getPaymentsByStudent } from '@/lib/notion/payments';
 import { renewalStudentListCard, monthlyStatsCard } from '@/templates/flex/monthly-stats';
-import { getCoachMonthlyStats } from '@/services/stats.service';
+import { getCoachMonthlyStats, getCoachWeeklyStats } from '@/services/stats.service';
+import { weeklyStatsCard } from '@/templates/flex/weekly-stats';
 import { formatDateLabel, todayDateString } from '@/lib/utils/date';
 import { menuQuickReply, coachQuickReply } from '@/templates/quick-reply';
 
@@ -259,6 +260,18 @@ export async function handlePostback(event: PostbackEvent): Promise<void> {
         const color = showPaid ? '#2ecc71' : '#e74c3c';
         await replyFlex(event.replyToken, title,
           renewalStudentListCard(title, filtered, color), menuQuickReply());
+        return;
+      }
+
+      case ACTION.VIEW_WEEK_STATS: {
+        // data = view_week_stats:YYYY-MM-DD
+        const targetWeekStart = parts[1]; // "YYYY-MM-DD"
+        const wStats = await getCoachWeeklyStats(lineUserId, targetWeekStart);
+        if (!wStats) {
+          await replyTextWithMenu(event.replyToken, '找不到教練資料。');
+          return;
+        }
+        await replyFlex(event.replyToken, '週統計', weeklyStatsCard(wStats), coachQuickReply());
         return;
       }
 

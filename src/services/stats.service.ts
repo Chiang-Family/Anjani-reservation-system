@@ -627,13 +627,17 @@ export async function getCoachMonthlyStats(
   };
 }
 
-export async function getCoachWeeklyStats(lineUserId: string): Promise<CoachWeeklyStats | null> {
+export async function getCoachWeeklyStats(
+  lineUserId: string,
+  targetWeekStart?: string, // yyyy-MM-dd (must be a Sunday)
+): Promise<CoachWeeklyStats | null> {
   const coach = await findCoachByLineId(lineUserId);
   if (!coach) return null;
 
   const now = nowTaipei();
-  const dayOfWeek = now.getDay(); // 0=Sun, 6=Sat
-  const weekStartDate = subDays(now, dayOfWeek);
+  const weekStartDate = targetWeekStart
+    ? parseISO(targetWeekStart)
+    : subDays(now, now.getDay());
   const weekStart = format(weekStartDate, 'yyyy-MM-dd'); // This Sunday
   const weekEnd = format(addDays(weekStartDate, 6), 'yyyy-MM-dd');   // This Saturday
 

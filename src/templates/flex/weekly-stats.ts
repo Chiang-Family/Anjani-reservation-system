@@ -1,5 +1,8 @@
 import type { messagingApi } from '@line/bot-sdk';
 import type { CoachWeeklyStats } from '@/services/stats.service';
+import { ACTION } from '@/lib/config/constants';
+import { nowTaipei } from '@/lib/utils/date';
+import { subDays, addDays, parseISO, format } from 'date-fns';
 
 type FlexBubble = messagingApi.FlexBubble;
 type FlexComponent = messagingApi.FlexComponent;
@@ -47,7 +50,55 @@ export function weeklyStatsCard(stats: CoachWeeklyStats): FlexBubble {
     }),
   ];
 
-  return {
+  // Week navigation bounds
+  const now = nowTaipei();
+  const currentWeekStart = format(subDays(now, now.getDay()), 'yyyy-MM-dd');
+  const weekStartDate = parseISO(stats.weekStart);
+  // Earliest navigable: the Sunday of the week containing the 1st of the displayed month
+  const monthFirst = new Date(weekStartDate.getFullYear(), weekStartDate.getMonth(), 1);
+  const earliestWeekStart = format(subDays(monthFirst, monthFirst.getDay()), 'yyyy-MM-dd');
+
+  const isFirst = stats.weekStart <= earliestWeekStart;
+  const isLast = stats.weekStart >= currentWeekStart;
+
+  const prevWeekStart = format(subDays(weekStartDate, 7), 'yyyy-MM-dd');
+  const nextWeekStart = format(addDays(weekStartDate, 7), 'yyyy-MM-dd');
+
+  const navContents: FlexComponent[] = [];
+  if (!isFirst) {
+    navContents.push({
+      type: 'button',
+      action: {
+        type: 'postback',
+        label: `← 上週`,
+        data: `${ACTION.VIEW_WEEK_STATS}:${prevWeekStart}`,
+      },
+      style: 'secondary',
+      height: 'sm',
+      flex: 1,
+    } as FlexComponent);
+  } else {
+    navContents.push({ type: 'filler' } as FlexComponent);
+  }
+  if (!isLast) {
+    navContents.push({
+      type: 'button',
+      action: {
+        type: 'postback',
+        label: `下週 →`,
+        data: `${ACTION.VIEW_WEEK_STATS}:${nextWeekStart}`,
+      },
+      style: 'secondary',
+      height: 'sm',
+      flex: 1,
+    } as FlexComponent);
+  } else {
+    navContents.push({ type: 'filler' } as FlexComponent);
+  }
+
+  const hasNav = !(isFirst && isLast);
+
+  const bubble: FlexBubble = {
     type: 'bubble',
     size: 'mega',
     header: {
@@ -56,7 +107,7 @@ export function weeklyStatsCard(stats: CoachWeeklyStats): FlexBubble {
       contents: [
         {
           type: 'text',
-          text: '本週統計',
+          text: '週統計',
           weight: 'bold',
           size: 'lg',
           color: '#FFFFFF',
@@ -87,6 +138,18 @@ export function weeklyStatsCard(stats: CoachWeeklyStats): FlexBubble {
       spacing: 'md',
     },
   };
+
+  if (hasNav) {
+    bubble.footer = {
+      type: 'box',
+      layout: 'horizontal',
+      spacing: 'sm',
+      contents: navContents,
+      paddingAll: '12px',
+    };
+  }
+
+  return bubble;
 }
 
 function statRow(label: string, value: string): FlexComponent {
