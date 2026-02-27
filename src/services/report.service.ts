@@ -164,5 +164,5 @@ export async function generateMonthlyReport(
       headers: ['學員', '繳費日期', '購買時數', '總金額', '已付金額', '差額', '狀態'],
       rows: paymentRows,
     },
-  ]);
+  ], coach.googleEmail);
 }

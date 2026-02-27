@@ -23,7 +23,7 @@ export interface SheetData {
   rows: (string | number)[][];
 }
 
-export async function createSpreadsheet(title: string, sheets: SheetData[]): Promise<string> {
+export async function createSpreadsheet(title: string, sheets: SheetData[], shareEmail?: string): Promise<string> {
   const { sheets: sheetsClient, drive } = getGoogleClients();
 
   // Create spreadsheet with tabs
@@ -92,14 +92,14 @@ export async function createSpreadsheet(title: string, sheets: SheetData[]): Pro
     requestBody: { requests },
   });
 
-  // Share: with specific email if set, otherwise try anyone-with-link
+  // Share: coach email > env fallback > anyone-with-link
   try {
-    const shareEmail = getEnv().REPORT_SHARE_EMAIL;
-    if (shareEmail) {
+    const emailToShare = shareEmail || getEnv().REPORT_SHARE_EMAIL;
+    if (emailToShare) {
       await drive.permissions.create({
         fileId: spreadsheetId,
         sendNotificationEmail: false,
-        requestBody: { role: 'writer', type: 'user', emailAddress: shareEmail },
+        requestBody: { role: 'writer', type: 'user', emailAddress: emailToShare },
       });
     } else {
       await drive.permissions.create({

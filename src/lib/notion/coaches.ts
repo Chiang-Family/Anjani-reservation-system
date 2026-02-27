@@ -33,12 +33,14 @@ function getUrlValue(prop: Record<string, unknown>): string {
 function extractCoach(page: Record<string, unknown>): Coach {
   const props = (page as { properties: Record<string, unknown> }).properties as Record<string, Record<string, unknown>>;
   const colorId = getNumberValue(props[COACH_PROPS.CALENDAR_COLOR_ID]);
+  const googleEmail = getRichTextValue(props[COACH_PROPS.GOOGLE_EMAIL]);
   return {
     id: (page as { id: string }).id,
     name: getRichTextValue(props[COACH_PROPS.NAME]),
     lineUserId: getRichTextValue(props[COACH_PROPS.LINE_USER_ID]),
     lineUrl: getUrlValue(props[COACH_PROPS.LINE_URL]) || undefined,
     calendarColorId: colorId || undefined,
+    googleEmail: googleEmail || undefined,
     status: getRichTextValue(props[COACH_PROPS.STATUS]) || undefined,
   };
 }

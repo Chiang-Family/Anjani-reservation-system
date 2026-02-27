@@ -15,6 +15,7 @@ export const COACH_PROPS = {
   LINE_USER_ID: 'LINE User ID',
   LINE_URL: '個人LINE連結',
   CALENDAR_COLOR_ID: '日曆顏色ID',
+  GOOGLE_EMAIL: 'Google Email',
   STATUS: '狀態',
 } as const;
 
