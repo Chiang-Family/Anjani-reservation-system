@@ -1,5 +1,5 @@
 export const TEXT = {
-  WELCOME_NEW: '歡迎加入 Anjani！\n請輸入您在健身房登記的姓名來完成綁定。',
+  WELCOME_NEW: '歡迎加入 🏋️ 安傑力運動工作室！\n請輸入您在健身房登記的姓名來完成綁定。',
 
   UNKNOWN_USER: '找不到您的帳號資料，請聯繫工作人員。',
 

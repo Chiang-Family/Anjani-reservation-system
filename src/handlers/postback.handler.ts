@@ -291,12 +291,14 @@ export async function handlePostback(event: PostbackEvent): Promise<void> {
         const repMonth = parseInt(match[2]);
         try {
           await showLoading(lineUserId, 30);
-          const reportUrl = await generateMonthlyReport(lineUserId, repYear, repMonth);
-          if (!reportUrl) {
+          const sheetUrl = await generateMonthlyReport(lineUserId, repYear, repMonth);
+          if (!sheetUrl) {
             await replyTextWithMenu(event.replyToken, '找不到教練資料。');
             return;
           }
-          await replyText(event.replyToken, `✅ ${repYear}年${repMonth}月報表已生成：\n${reportUrl}`, coachQuickReply());
+          const spreadsheetId = sheetUrl.replace('https://docs.google.com/spreadsheets/d/', '');
+          const pdfUrl = `https://docs.google.com/spreadsheets/d/${spreadsheetId}/export?format=pdf&size=a4&portrait=false&fitw=true&sheetnames=true&printtitle=true&pagenumbers=false&gridlines=false`;
+          await replyText(event.replyToken, `✅ ${repYear}年${repMonth}月報表已生成\n\n📄 PDF（可列印）：\n${pdfUrl}\n\n📊 試算表：\n${sheetUrl}`, coachQuickReply());
         } catch (reportError) {
           console.error('Report generation error:', reportError);
           const msg = reportError instanceof Error ? reportError.message : String(reportError);
