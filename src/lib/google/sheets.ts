@@ -8,7 +8,7 @@ function getGoogleClients() {
     key: env.GOOGLE_PRIVATE_KEY.replace(/\\n/g, '\n'),
     scopes: [
       'https://www.googleapis.com/auth/spreadsheets',
-      'https://www.googleapis.com/auth/drive.file',
+      'https://www.googleapis.com/auth/drive',
     ],
   });
   return {
