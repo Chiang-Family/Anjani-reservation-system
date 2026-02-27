@@ -6,8 +6,8 @@ export const KEYWORD = {
   TODAY_SCHEDULE: '每日課表',
   ADD_STUDENT: '新增學員',
   STUDENT_MGMT: '學員管理',
-  MONTHLY_STATS: '本月統計',
-  WEEKLY_STATS: '本週統計',
+  MONTHLY_STATS: '每月統計',
+  WEEKLY_STATS: '每週統計',
   ANNUAL_STATS: '年度統計',
 
   MONTHLY_REPORT: '上課明細月報表',

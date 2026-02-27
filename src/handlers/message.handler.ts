@@ -316,7 +316,7 @@ async function handleCoachMessage(
         ]);
         return;
       }
-      await replyFlex(replyToken, '本週統計', weeklyStatsCard(wStats), coachQuickReply());
+      await replyFlex(replyToken, '每週統計', weeklyStatsCard(wStats), coachQuickReply());
       return;
     }
 
