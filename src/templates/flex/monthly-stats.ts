@@ -112,7 +112,7 @@ export function monthlyStatsCard(stats: CoachMonthlyStats): FlexBubble {
         type: 'button',
         action: {
           type: 'postback',
-          label: `❌ 未繳費 (${unpaidCount})`,
+          label: `未繳費 (${unpaidCount})`,
           data: `${ACTION.VIEW_RENEWAL_UNPAID}:${renewalData}`,
         },
         style: 'secondary',
@@ -123,7 +123,7 @@ export function monthlyStatsCard(stats: CoachMonthlyStats): FlexBubble {
         type: 'button',
         action: {
           type: 'postback',
-          label: `✅ 已繳費 (${paidCount})`,
+          label: `已繳費 (${paidCount})`,
           data: `${ACTION.VIEW_RENEWAL_PAID}:${renewalData}`,
         },
         style: 'secondary',
