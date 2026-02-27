@@ -229,17 +229,33 @@ function findRenewalCycles(
           remainingMin = buckets[nextIdx].purchasedHours * 60 + remainingMin;
         } else {
           // Not renewed: estimate from current bucket
-          // 用 FIFO 調整後的 bucket.purchasedHours（含結轉），反映實際消耗堂數
           const curBucket = buckets[currentIdx];
           const curInfo = getBucketInfo(currentIdx);
-          cycles.push({
-            expiryDate,
-            renewalDate: evtIdx < futureEvents.length ? futureEvents[evtIdx].date : '',
-            isPaid: false,
-            expectedHours: curBucket.purchasedHours,
-            expectedAmount: Math.round(curBucket.purchasedHours * curInfo.pricePerHour),
-            paidAmount: 0,
-          });
+          const isSession = payments.some(p => p.isSessionPayment);
+
+          if (isSession) {
+            // 單堂計費：每個剩餘未來事件都是一次續約
+            for (let j = evtIdx; j < futureEvents.length; j++) {
+              cycles.push({
+                expiryDate: futureEvents[j].date,
+                renewalDate: futureEvents[j].date,
+                isPaid: false,
+                expectedHours: 1,
+                expectedAmount: curInfo.pricePerHour,
+                paidAmount: 0,
+              });
+            }
+          } else {
+            // 套時數：用 FIFO 調整後的 bucket.purchasedHours（含結轉），反映實際消耗堂數
+            cycles.push({
+              expiryDate,
+              renewalDate: evtIdx < futureEvents.length ? futureEvents[evtIdx].date : '',
+              isPaid: false,
+              expectedHours: curBucket.purchasedHours,
+              expectedAmount: Math.round(curBucket.purchasedHours * curInfo.pricePerHour),
+              paidAmount: 0,
+            });
+          }
           break;
         }
       }
@@ -270,16 +286,32 @@ function findRenewalCycles(
         : null;
 
     if (lastCheckin) {
-      // 用 FIFO 調整後的 bucket.purchasedHours（含結轉），反映實際消耗堂數
       const lastInfo = getBucketInfo(buckets.length - 1);
-      cycles.push({
-        expiryDate: lastCheckin.classDate,
-        renewalDate: futureEvents.length > 0 ? futureEvents[0].date : '',
-        isPaid: false,
-        expectedHours: lastBucket.purchasedHours,
-        expectedAmount: Math.round(lastBucket.purchasedHours * lastInfo.pricePerHour),
-        paidAmount: 0,
-      });
+      const isSession = payments.some(p => p.isSessionPayment);
+
+      if (isSession) {
+        // 單堂計費：每個未來事件都是一次續約
+        for (const evt of futureEvents) {
+          cycles.push({
+            expiryDate: lastCheckin.classDate,
+            renewalDate: evt.date,
+            isPaid: false,
+            expectedHours: 1,
+            expectedAmount: lastInfo.pricePerHour,
+            paidAmount: 0,
+          });
+        }
+      } else {
+        // 套時數：用 FIFO 調整後的 bucket.purchasedHours（含結轉），反映實際消耗堂數
+        cycles.push({
+          expiryDate: lastCheckin.classDate,
+          renewalDate: futureEvents.length > 0 ? futureEvents[0].date : '',
+          isPaid: false,
+          expectedHours: lastBucket.purchasedHours,
+          expectedAmount: Math.round(lastBucket.purchasedHours * lastInfo.pricePerHour),
+          paidAmount: 0,
+        });
+      }
     }
   }
 
@@ -534,16 +566,35 @@ export async function getCoachMonthlyStats(
     }
   }
 
+  // 合併同一學員的多筆未繳費 cycle（單堂計費學員每堂課各產生一筆 cycle，需彙整為一筆）
+  const unpaidByName = new Map<string, RenewalStudent>();
+  const finalRenewalStudents: RenewalStudent[] = [];
+  for (const rs of renewalStudents) {
+    if (!rs.isPaid) {
+      const existing = unpaidByName.get(rs.name);
+      if (existing) {
+        existing.expectedRenewalHours += rs.expectedRenewalHours;
+        existing.expectedRenewalAmount += rs.expectedRenewalAmount;
+      } else {
+        const entry = { ...rs };
+        unpaidByName.set(rs.name, entry);
+        finalRenewalStudents.push(entry);
+      }
+    } else {
+      finalRenewalStudents.push(rs);
+    }
+  }
+
   // Sort: unpaid first
-  renewalStudents.sort((a, b) => {
+  finalRenewalStudents.sort((a, b) => {
     if (a.isPaid !== b.isPaid) return a.isPaid ? 1 : -1;
     return 0;
   });
 
   const renewalForecast: RenewalForecast = {
-    studentCount: renewalStudents.length,
-    expectedAmount: renewalStudents.reduce((sum, s) => sum + s.expectedRenewalAmount, 0),
-    students: renewalStudents,
+    studentCount: finalRenewalStudents.length,
+    expectedAmount: finalRenewalStudents.reduce((sum, s) => sum + s.expectedRenewalAmount, 0),
+    students: finalRenewalStudents,
   };
 
   // 實際收款 + 待收款: from actual payments created in this month
