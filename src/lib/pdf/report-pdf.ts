@@ -148,7 +148,7 @@ export async function generateReportPdf(data: ReportData): Promise<Uint8Array> {
       data.summary.headers,
       data.summary.rows,
       false,
-      [60, 'auto', 'auto', '*', '*'],
+      [60, '*', '*', 70, 70],
       summaryColors,
     ));
   } else {
@@ -172,7 +172,7 @@ export async function generateReportPdf(data: ReportData): Promise<Uint8Array> {
       checkinHeaders,
       checkinRows,
       true,
-      [60, 'auto', '*', '*', '*'],
+      [60, 35, '*', '*', 50],
       checkinRowColors,
       new Set([1, 2, 3]),
     ));
@@ -188,7 +188,7 @@ export async function generateReportPdf(data: ReportData): Promise<Uint8Array> {
       data.payments.headers,
       data.payments.rows,
       true,
-      [60, '*', '*', '*', '*'],
+      [60, '*', 60, '*', '*'],
       paymentColors,
     ));
   } else {
@@ -197,7 +197,7 @@ export async function generateReportPdf(data: ReportData): Promise<Uint8Array> {
 
   const docDefinition: TDocumentDefinitions = {
     pageSize: 'A4',
-    pageMargins: [56, 40, 56, 60],
+    pageMargins: [48, 40, 48, 60],
     defaultStyle: {
       font: 'NotoSansTC',
       fontSize: 10,
@@ -217,7 +217,7 @@ export async function generateReportPdf(data: ReportData): Promise<Uint8Array> {
           color: '#888888',
         },
       ],
-      margin: [56, 10, 56, 0] as [number, number, number, number],
+      margin: [48, 10, 48, 0] as [number, number, number, number],
     }),
     content,
     styles: {
