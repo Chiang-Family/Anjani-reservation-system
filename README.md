@@ -134,6 +134,9 @@ handleEvent() 事件分發
 3. 逐筆分配上課紀錄到桶：
    - 若當前桶尚未耗盡 → 分配到此桶
    - 若當前桶已耗盡 → 移到下一桶
+   - 日期邊界（上課日期 ≥ 下一期繳費日期）：
+     - 當前桶剩餘時數 ≥ 該堂課時長 → 留在當前桶
+     - 當前桶剩餘時數 < 該堂課時長 → 結轉剩餘至下一桶，跳桶
    - 若所有桶都耗盡 → 歸入 overflow（未繳費）
 4. 計算 summary：
    - purchasedHours = 當前桶 + 未來桶的購買時數
@@ -363,11 +366,18 @@ export const HISTORICAL_MONTHLY_STATS = {
 
 ## Cron Job（定期排程）
 
+### 每週打卡提醒
 每週六 18:00（台北）自動推播本週統計摘要給所有教練，包含本週執行堂數、執行收入、已收款項，提醒教練跟進未收款項目。
+
+### 每月報表提醒
+每月 1 號 08:00（台北）自動推播上月報表連結給所有教練，提醒列印留存備份。訊息包含 HMAC 簽名的報表 URL，教練點擊即可開啟 HTML 報表並列印。
 
 ```
 # vercel.json
-"crons": [{ "path": "/api/cron/weekly-reminder", "schedule": "0 10 * * 6" }]
+"crons": [
+  { "path": "/api/cron/weekly-checkin-reminder", "schedule": "0 10 * * 6" },
+  { "path": "/api/cron/monthly-report-reminder", "schedule": "0 0 1 * *" }
+]
 ```
 
 ---
@@ -442,6 +452,9 @@ src/
 │   └── api/
 │       ├── webhook/route.ts          # LINE Webhook 端點
 │       ├── report/route.ts           # HTML 月報表端點（HMAC 驗證）
+│       ├── cron/
+│       │   ├── weekly-checkin-reminder/route.ts  # 每週六打卡提醒
+│       │   └── monthly-report-reminder/route.ts  # 每月 1 號報表提醒
 │       └── setup/rich-menu/route.ts  # Rich Menu 設定 API
 ├── handlers/
 │   ├── index.ts                      # 事件分發器
