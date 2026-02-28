@@ -1,9 +1,15 @@
 {
-  "regions": ["hnd1"],
+  "regions": [
+    "hnd1"
+  ],
   "crons": [
     {
       "path": "/api/cron/weekly-checkin-reminder",
       "schedule": "0 10 * * 6"
+    },
+    {
+      "path": "/api/cron/monthly-report-reminder",
+      "schedule": "0 0 1 * *"
     }
   ]
 }
