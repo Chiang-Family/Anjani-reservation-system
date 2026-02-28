@@ -34,8 +34,8 @@ export function annualStatsCard(stats: CoachAnnualStats): FlexBubble {
       layout: 'horizontal',
       margin: 'md',
       contents: [
-        { type: 'text', text: '月份', size: 'xs', color: '#888888', flex: 2 },
-        { type: 'text', text: '堂數', size: 'xs', color: '#888888', flex: 2, align: 'end' },
+        { type: 'text', text: '月份', size: 'xs', color: '#888888', flex: 1 },
+        { type: 'text', text: '堂數', size: 'xs', color: '#888888', flex: 1, align: 'end' },
         { type: 'text', text: '執行收入', size: 'xs', color: '#888888', flex: 3, align: 'end' },
         { type: 'text', text: '實際收款', size: 'xs', color: '#888888', flex: 3, align: 'end' },
       ],
@@ -45,8 +45,8 @@ export function annualStatsCard(stats: CoachAnnualStats): FlexBubble {
       layout: 'horizontal',
       margin: 'sm',
       contents: [
-        { type: 'text', text: `${m.month} 月`, size: 'xs', color: '#333333', flex: 2, weight: 'bold' },
-        { type: 'text', text: `${m.checkedIn}`, size: 'xs', color: '#333333', flex: 2, align: 'end' },
+        { type: 'text', text: `${m.month} 月`, size: 'xs', color: '#333333', flex: 1, weight: 'bold' },
+        { type: 'text', text: `${m.checkedIn}`, size: 'xs', color: '#333333', flex: 1, align: 'end' },
         { type: 'text', text: `$${m.executedRevenue.toLocaleString()}`, size: 'xs', color: '#333333', flex: 3, align: 'end' },
         { type: 'text', text: `$${m.collected.toLocaleString()}`, size: 'xs', color: '#333333', flex: 3, align: 'end' },
       ],

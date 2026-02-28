@@ -40,10 +40,14 @@ export function assignCheckinsToBuckets(
       bucketIdx++;
     }
 
-    // 日期邊界：上課日期 >= 下一期繳費日期時，結轉剩餘時數到下一期
+    // 日期邊界：上課日期 >= 下一期繳費日期時，檢查當前桶剩餘時數
+    // 足夠該堂課 → 留在當前桶；不足 → 結轉剩餘並跳到下一桶
     while (bucketIdx < buckets.length - 1 &&
            checkin.classDate >= buckets[bucketIdx + 1].paymentDate) {
       const remainingMinutes = buckets[bucketIdx].purchasedHours * 60 - buckets[bucketIdx].consumedMinutes;
+      if (remainingMinutes >= checkin.durationMinutes) {
+        break; // 當前桶夠用，不跳桶
+      }
       if (remainingMinutes > 0) {
         buckets[bucketIdx + 1].purchasedHours += remainingMinutes / 60;
       }
