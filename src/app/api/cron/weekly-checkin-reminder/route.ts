@@ -76,9 +76,8 @@ export async function GET(req: Request) {
       const student = studentByName.get(name);
       if (!student) continue;
 
-      // 主學員或任一關聯學員有打卡即視為已打卡
-      const allIds = [student.id, ...(student.relatedStudentIds ?? [])];
-      const hasCheckin = allIds.some(id => checkinKey.has(`${id}:${evt.date}`));
+      // 只檢查該學員本人是否打卡（不含關聯學員，避免同日不同課誤判）
+      const hasCheckin = checkinKey.has(`${student.id}:${evt.date}`);
       if (!hasCheckin) {
         missing.push({ date: evt.date, name, time: `${evt.startTime}-${evt.endTime}` });
       }
