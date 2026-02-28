@@ -32,68 +32,74 @@ export async function GET(req: Request) {
   // 只推送給有 LINE 帳號的教練
   const activeCoaches = coaches.filter(c => c.lineUserId);
 
-  const results: { coach: string; missing: number }[] = [];
+  const results: { coach: string; missing: number; error?: string }[] = [];
 
   // 所有教練共用同一份行事曆查詢（依上課名稱分配）
   const allWeekEvents = await getEventsForDateRange(weekStart, weekEnd);
 
   for (const coach of activeCoaches) {
-    const [students, allCheckins] = await Promise.all([
-      getStudentsByCoachId(coach.id),
-      getCheckinsByCoach(coach.id),
-    ]);
+    try {
+      const [students, allCheckins] = await Promise.all([
+        getStudentsByCoachId(coach.id),
+        getCheckinsByCoach(coach.id),
+      ]);
 
-    if (students.length === 0) continue;
+      if (students.length === 0) continue;
 
-    // 只保留本教練學員名稱的課程
-    const studentNames = new Set(students.map(s => s.name));
-    const weekEvents = allWeekEvents.filter(e => studentNames.has(e.summary.trim()));
+      // 只保留本教練學員名稱的課程
+      const studentNames = new Set(students.map(s => s.name));
+      const weekEvents = allWeekEvents.filter(e => studentNames.has(e.summary.trim()));
 
-    if (weekEvents.length === 0) continue;
+      if (weekEvents.length === 0) continue;
 
-    // 上週打卡紀錄（依 classDate 過濾）
-    const weekCheckins = allCheckins.filter(
-      c => c.classDate >= weekStart && c.classDate <= weekEnd
-    );
+      // 本週打卡紀錄（依 classDate 過濾）
+      const weekCheckins = allCheckins.filter(
+        c => c.classDate >= weekStart && c.classDate <= weekEnd
+      );
 
-    // 建立 checkin 查詢集合：`studentId:classDate`
-    const checkinKey = new Set(weekCheckins.map(c => `${c.studentId}:${c.classDate}`));
+      // 建立 checkin 查詢集合：`studentId:classDate`
+      const checkinKey = new Set(weekCheckins.map(c => `${c.studentId}:${c.classDate}`));
 
-    // 學員名稱 → 學員物件（含 relatedStudentIds）
-    const studentByName = new Map(students.map(s => [s.name, s]));
+      // 學員名稱 → 學員物件
+      const studentByName = new Map(students.map(s => [s.name, s]));
 
-    // 找出沒有打卡的課程
-    interface MissingEntry { date: string; name: string; time: string }
-    const missing: MissingEntry[] = [];
-    const seen = new Set<string>(); // 避免同一 (name, date, time) 重複
+      // 找出沒有打卡的課程
+      interface MissingEntry { date: string; name: string; time: string }
+      const missing: MissingEntry[] = [];
+      const seen = new Set<string>(); // 避免同一 (name, date, time) 重複
 
-    for (const evt of weekEvents) {
-      const name = evt.summary.trim();
-      const key = `${name}:${evt.date}:${evt.startTime}`;
-      if (seen.has(key)) continue;
-      seen.add(key);
+      for (const evt of weekEvents) {
+        const name = evt.summary.trim();
+        const key = `${name}:${evt.date}:${evt.startTime}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
 
-      const student = studentByName.get(name);
-      if (!student) continue;
+        const student = studentByName.get(name);
+        if (!student) continue;
 
-      // 只檢查該學員本人是否打卡（不含關聯學員，避免同日不同課誤判）
-      const hasCheckin = checkinKey.has(`${student.id}:${evt.date}`);
-      if (!hasCheckin) {
-        missing.push({ date: evt.date, name, time: `${evt.startTime}-${evt.endTime}` });
+        // 只檢查該學員本人是否打卡（不含關聯學員，避免同日不同課誤判）
+        const hasCheckin = checkinKey.has(`${student.id}:${evt.date}`);
+        if (!hasCheckin) {
+          missing.push({ date: evt.date, name, time: `${evt.startTime}-${evt.endTime}` });
+        }
       }
+
+      if (missing.length === 0) {
+        results.push({ coach: coach.name, missing: 0 });
+        continue;
+      }
+
+      // 排序（依日期、時間）
+      missing.sort((a, b) => a.date.localeCompare(b.date) || a.time.localeCompare(b.time));
+
+      const card = checkinReminderCard(weekStart, weekEnd, missing);
+      await pushFlex(coach.lineUserId, '本週打卡確認提醒', card);
+      results.push({ coach: coach.name, missing: missing.length });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error(`Weekly checkin reminder failed for ${coach.name}:`, msg);
+      results.push({ coach: coach.name, missing: -1, error: msg });
     }
-
-    if (missing.length === 0) {
-      results.push({ coach: coach.name, missing: 0 });
-      continue;
-    }
-
-    // 排序（依日期、時間）
-    missing.sort((a, b) => a.date.localeCompare(b.date) || a.time.localeCompare(b.time));
-
-    const card = checkinReminderCard(weekStart, weekEnd, missing);
-    await pushFlex(coach.lineUserId, '本週打卡確認提醒', card);
-    results.push({ coach: coach.name, missing: missing.length });
   }
 
   return NextResponse.json({ ok: true, weekStart, weekEnd, results });
