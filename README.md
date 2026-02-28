@@ -26,7 +26,7 @@ handleEvent() 事件分發
     │ coach.service     │ ← 教練課表（批次查詢 + 記憶體比對）
     │ calendar.service  │ ← Google Calendar 事件查詢
     │ stats.service     │ ← 月度/週度/年度統計 + 續約預測
-    │ report.service    │ ← 月報表資料編譯（HTML 報表）
+    │ report.service    │ ← 月報表資料編譯（PDF 報表）
     │ student-mgmt      │ ← 新增學員/收款/補繳/綁定
     │ student.service   │ ← 身份識別
     └──────────────────┘
@@ -37,7 +37,7 @@ handleEvent() 事件分發
     ├──────────────────┤
     │ Notion API        │ ← 學員/教練/打卡/繳費 CRUD
     │ Google Calendar   │ ← 課表讀取（唯讀）
-    │ /api/report       │ ← HTML 月報表（HMAC 簽名 URL，可列印）
+    │ /api/report       │ ← PDF 月報表（HMAC 簽名 URL，A4 格式）
     │ LINE Messaging    │ ← 推播通知
     └──────────────────┘
 ```
@@ -51,6 +51,7 @@ handleEvent() 事件分發
 | @line/bot-sdk | 10 | LINE Messaging API |
 | @notionhq/client | 2 | Notion 資料庫 CRUD |
 | googleapis | 171 | Google Calendar 讀取 |
+| pdfmake | 0.3 | 月報表 PDF 生成（server-side） |
 | date-fns + date-fns-tz | 4 / 3 | 台灣時區日期處理 |
 | zod | 4 | 環境變數驗證 |
 
@@ -183,7 +184,7 @@ handleEvent() 事件分發
 | `每月統計` | 本月排課數、已打卡數、營收、續約預測（已繳費/未繳費學員清單），支援月份導覽 |
 | `每週統計` | 本週合計 + 每日明細（日期、堂數、執行收入、實際收款），支援當月跨週導覽 |
 | `年度統計` | 各月份已打卡堂數、執行收入、實際收款，歷史靜態資料優先覆蓋早期月份 |
-| `上課明細月報表` | 選擇月份，生成 HTML 報表連結（彙總、上課明細、繳費明細），可列印 |
+| `上課明細月報表` | 選擇月份，生成 PDF 報表連結（彙總、上課明細、繳費明細），A4 格式含頁碼 |
 | `上課明細月報表 YYYY-MM` | 直接指定月份生成報表（如 `上課明細月報表 2026-02`） |
 | `選單` | 顯示功能選單 |
 
@@ -211,7 +212,7 @@ handleEvent() 事件分發
 | `renewal_paid` | `{studentId}:{bucketDate}` | 查看已繳費期上課紀錄 |
 | `view_month_stats` | `{YYYY-MM}` | 切換月度統計到指定月份 |
 | `view_week_stats` | `{YYYY-MM-DD}` | 切換週度統計到指定週（日期為該週週日） |
-| `gen_report` | `{YYYY-MM}` | 生成指定月份的 HTML 月報表連結 |
+| `gen_report` | `{YYYY-MM}` | 生成指定月份的 PDF 月報表連結 |
 
 ---
 
@@ -318,20 +319,25 @@ paymentPeriodSelector()
 
 ---
 
-## 上課明細月報表（HTML）
+## 上課明細月報表（PDF）
 
 教練輸入「上課明細月報表」或點選快捷按鈕，系統顯示月份選擇卡片（最早從 2026-02），教練點選後觸發 `gen_report:YYYY-MM` postback：
 
 1. 根據教練 ID、年、月產生 HMAC-SHA256 簽名 token（以 `LINE_CHANNEL_SECRET` 為 key）
 2. 回覆教練一個報表 URL：`/api/report?coach={id}&year={y}&month={m}&token={hmac}`
-3. 教練在瀏覽器開啟 URL，後端即時從 Notion 抓取資料並回傳 HTML 報表
-4. 報表包含三個表格：
+3. 教練在瀏覽器開啟 URL，後端即時從 Notion 抓取資料並以 pdfmake 生成 A4 PDF
+4. 報表包含三個表格（各佔獨立頁面）：
    - **彙總**：學員、執行堂數、執行時數、執行收入、繳費金額（含合計行）
-   - **上課明細**：學員、上課日期、上課時段、時長（分）
+   - **上課明細**：學員、堂次（#1, #2...）、上課日期、上課時段、時長（分）
    - **繳費明細**：學員、繳費日期、購買時數、單價、已付金額
-5. HTML 含列印按鈕 + `@media print` 列印樣式，可直接列印
+5. PDF 特色：
+   - A4 尺寸，每頁 footer 含年月、教練名、頁碼（第X頁/共Y頁）
+   - 同一學員套用相同底色（交替分組）
+   - 合計列粗體 + 醒目底色 + 上方加粗分隔線
+   - Noto Sans TC Regular / Bold 字型，支援中文
+   - 標題區左側色彩條 + 粗體大字
 
-**設計決策**：原先使用 Google Sheets API，但 Service Account 在個人 Google 帳號下遇到無法解決的 403 權限問題。改為 HTML 報表後零外部 API 依賴，報表即時生成且列印排版可控。
+**字型檔案**：`fonts/NotoSansTC-Regular.otf` 和 `fonts/NotoSansTC-Bold.otf`（各約 16MB），透過 `next.config.ts` 的 `outputFileTracingIncludes` 確保 Vercel 打包。
 
 **安全性**：URL 中的 HMAC token 確保只有持有正確簽名的連結才能存取報表資料。
 
@@ -370,7 +376,7 @@ export const HISTORICAL_MONTHLY_STATS = {
 每週六 18:00（台北）自動推播本週統計摘要給所有教練，包含本週執行堂數、執行收入、已收款項，提醒教練跟進未收款項目。
 
 ### 每月報表提醒
-每月 1 號 08:00（台北）自動推播上月報表連結給所有教練，提醒列印留存備份。訊息包含 HMAC 簽名的報表 URL，教練點擊即可開啟 HTML 報表並列印。
+每月 1 號 08:00（台北）自動推播上月報表連結給所有教練，提醒留存備份。訊息包含 HMAC 簽名的報表 URL，教練點擊即可開啟 PDF 報表。
 
 ```
 # vercel.json
@@ -451,7 +457,7 @@ src/
 ├── app/
 │   └── api/
 │       ├── webhook/route.ts          # LINE Webhook 端點
-│       ├── report/route.ts           # HTML 月報表端點（HMAC 驗證）
+│       ├── report/route.ts           # PDF 月報表端點（HMAC 驗證 + pdfmake）
 │       ├── cron/
 │       │   ├── weekly-checkin-reminder/route.ts  # 每週六打卡提醒
 │       │   └── monthly-report-reminder/route.ts  # 每月 1 號報表提醒
@@ -466,7 +472,7 @@ src/
 │   ├── checkin.service.ts            # 打卡邏輯 + 繳費提醒
 │   ├── coach.service.ts              # 教練課表（批次查詢優化）
 │   ├── stats.service.ts              # 月度/週度/年度統計 + 續約預測
-│   ├── report.service.ts             # 月報表資料編譯（compileMonthlyReport）
+│   ├── report.service.ts             # 月報表資料編譯（compileMonthlyReport → PDF）
 │   ├── student-management.service.ts # 新增學員/收款/補繳/綁定
 │   └── student.service.ts            # 身份識別
 ├── lib/
@@ -482,6 +488,8 @@ src/
 │   │   ├── push.ts                   # 推播工具函式
 │   │   ├── validate.ts               # Webhook 簽名驗證
 │   │   └── rich-menu.ts              # Rich Menu 管理
+│   ├── pdf/
+│   │   └── report-pdf.ts              # PDF 報表生成（pdfmake + Noto Sans TC）
 │   ├── notion/
 │   │   ├── client.ts                 # Notion API 客戶端
 │   │   ├── types.ts                  # Notion 欄位名稱對應
@@ -543,7 +551,7 @@ GOOGLE_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----\
 CRON_SECRET=your_cron_secret
 RICH_MENU_STUDENT_ID=richmenu-xxx
 RICH_MENU_COACH_ID=richmenu-xxx
-# REPORT_SHARE_EMAIL=fallback@example.com  # （已棄用，HTML 報表不需要）
+# REPORT_SHARE_EMAIL=fallback@example.com  # （已棄用）
 ```
 
 ---
