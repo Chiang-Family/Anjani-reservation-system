@@ -19,8 +19,11 @@ const printer = new PdfPrinter({
 });
 
 // A4 = 595.28pt; margins [56, 40, 56, 60] → content width ≈ 483pt
+// pdfmake column widths are content-only; padding is added outside.
+// With padding 8+8 per column × 5 cols = 80pt, column widths must sum to 403.
 const MARGIN_LR = 56;
 const CONTENT_WIDTH = 483;
+const COL_WIDTH_TOTAL = 403; // CONTENT_WIDTH - 5 cols × 16pt padding
 
 const COLORS = {
   headerBg: '#3A6B8A',
@@ -144,9 +147,8 @@ function buildTable(
         if (rowColors && rowColors[rowIndex - 1]) return rowColors[rowIndex - 1];
         return null;
       },
-      // Generous padding matching HTML (td: 6px 10px)
-      paddingLeft: () => 10,
-      paddingRight: () => 10,
+      paddingLeft: () => 8,
+      paddingRight: () => 8,
       paddingTop: () => 6,
       paddingBottom: () => 6,
     },
@@ -183,7 +185,7 @@ export async function generateReportPdf(data: ReportData): Promise<Uint8Array> {
       data.summary.headers,
       data.summary.rows,
       false,
-      [70, 85, 85, 122, 121],
+      [55, 68, 68, 106, 106],
       summaryColors,
     ));
   } else {
@@ -208,7 +210,7 @@ export async function generateReportPdf(data: ReportData): Promise<Uint8Array> {
       checkinHeaders,
       checkinRows,
       true,
-      [70, 50, 130, 130, 103],
+      [55, 35, 112, 112, 89],
       checkinRowColors,
       new Set([1, 2, 3]),
     ));
@@ -225,7 +227,7 @@ export async function generateReportPdf(data: ReportData): Promise<Uint8Array> {
       data.payments.headers,
       data.payments.rows,
       true,
-      [70, 123, 70, 110, 110],
+      [55, 108, 55, 93, 92],
       paymentColors,
     ));
   } else {
