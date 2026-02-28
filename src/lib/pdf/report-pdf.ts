@@ -12,9 +12,9 @@ const FONT_DIR = path.join(process.cwd(), 'fonts');
 const printer = new PdfPrinter({
   NotoSansTC: {
     normal: path.join(FONT_DIR, 'NotoSansTC-Regular.otf'),
-    bold: path.join(FONT_DIR, 'NotoSansTC-Regular.otf'),
+    bold: path.join(FONT_DIR, 'NotoSansTC-Bold.otf'),
     italics: path.join(FONT_DIR, 'NotoSansTC-Regular.otf'),
-    bolditalics: path.join(FONT_DIR, 'NotoSansTC-Regular.otf'),
+    bolditalics: path.join(FONT_DIR, 'NotoSansTC-Bold.otf'),
   },
 });
 
@@ -161,19 +161,32 @@ export async function generateReportPdf(data: ReportData): Promise<Uint8Array> {
   const monthStr = `${data.year}年${data.month}月`;
 
   const content: Content[] = [
+    // Title banner with accent bar
+    {
+      canvas: [{
+        type: 'rect' as const,
+        x: 0, y: 0,
+        w: 4, h: 52,
+        color: COLORS.headerBg,
+      }],
+      margin: [0, 0, 0, -52] as [number, number, number, number],
+    },
     {
       text: `安傑力月報表 ${monthStr}`,
       style: 'title',
+      margin: [14, 0, 0, 2] as [number, number, number, number],
     },
     {
       text: `${data.coachName} 教練`,
       style: 'subtitle',
+      margin: [14, 0, 0, 2] as [number, number, number, number],
     },
     {
       text: `報表產生時間：${generatedAt}`,
       style: 'meta',
+      margin: [14, 0, 0, 0] as [number, number, number, number],
     },
-    { text: '', margin: [0, 12, 0, 0] as [number, number, number, number] },
+    { text: '', margin: [0, 16, 0, 0] as [number, number, number, number] },
   ];
 
   // Summary table
@@ -261,13 +274,15 @@ export async function generateReportPdf(data: ReportData): Promise<Uint8Array> {
     content,
     styles: {
       title: {
-        fontSize: 20,
-        color: '#2C3E50',
+        fontSize: 22,
+        bold: true,
+        color: '#1A3A4F',
         margin: [0, 0, 0, 4],
       },
       subtitle: {
         fontSize: 14,
-        color: '#777777',
+        bold: true,
+        color: '#555555',
         margin: [0, 0, 0, 4],
       },
       meta: {
