@@ -18,11 +18,15 @@ const printer = new PdfPrinter({
   },
 });
 
+// A4 = 595.28pt; margins [56, 40, 56, 60] → content width ≈ 483pt
+const MARGIN_LR = 56;
+const CONTENT_WIDTH = 483;
+
 const COLORS = {
   headerBg: '#3A6B8A',
   headerText: '#FFFFFF',
   totalBg: '#D5E3ED',
-  border: '#CCCCCC',
+  separator: '#E0E0E0',
   sectionTitle: '#3A6B8A',
 };
 
@@ -50,11 +54,32 @@ function formatNumber(val: string | number, colIndex: number): string {
   return String(val);
 }
 
+/** Section title with bottom border line (matches HTML h2 style) */
+function sectionTitle(text: string, pageBreak?: boolean): Content[] {
+  return [
+    {
+      text,
+      style: 'sectionTitle',
+      ...(pageBreak ? { pageBreak: 'before' as const } : {}),
+    },
+    {
+      canvas: [{
+        type: 'line' as const,
+        x1: 0, y1: 0,
+        x2: CONTENT_WIDTH, y2: 0,
+        lineWidth: 2,
+        lineColor: COLORS.sectionTitle,
+      }],
+      margin: [0, 0, 0, 8] as [number, number, number, number],
+    },
+  ];
+}
+
 function buildTable(
   headers: string[],
   rows: (string | number)[][],
   dedup1stCol: boolean,
-  widths: (string | number)[],
+  widths: number[],
   rowColors?: (string | null)[],
   centerCols?: Set<number>,
 ): Content {
@@ -63,6 +88,8 @@ function buildTable(
     style: 'tableHeader',
     alignment: centerCols?.has(i) ? 'center' as const : undefined,
   }));
+
+  const hasTotal = rows.length > 0 && rows[rows.length - 1][0] === '合計';
 
   let prevFirst = '';
   const bodyCells: TableCell[][] = rows
@@ -87,7 +114,7 @@ function buildTable(
 
         if (isTotal) {
           cellDef.fillColor = COLORS.totalBg;
-          cellDef.fontSize = 10;
+          cellDef.bold = true;
         }
 
         return cellDef;
@@ -101,20 +128,27 @@ function buildTable(
       body: [headerCells, ...bodyCells],
     },
     layout: {
-      hLineWidth: (i: number, node: { table: { body: TableCell[][] } }) =>
-        i === 0 || i === 1 || i === node.table.body.length ? 1 : 0.5,
-      vLineWidth: () => 0.5,
-      hLineColor: (i: number) => (i <= 1 ? COLORS.headerBg : COLORS.border),
-      vLineColor: () => COLORS.border,
+      // Clean horizontal lines only — no vertical lines (matches HTML)
+      hLineWidth: (i: number, node: { table: { body: TableCell[][] } }) => {
+        const total = node.table.body.length;
+        if (i === 0) return 0;                             // no top border
+        if (i === 1) return 2;                             // thick below header
+        if (i === total) return 0;                         // no bottom border
+        if (hasTotal && i === total - 1) return 1.5;       // above total row
+        return 0.5;                                        // thin separators
+      },
+      vLineWidth: () => 0,
+      hLineColor: (i: number) => (i <= 1 ? COLORS.headerBg : COLORS.separator),
       fillColor: (rowIndex: number) => {
         if (rowIndex === 0) return COLORS.headerBg;
         if (rowColors && rowColors[rowIndex - 1]) return rowColors[rowIndex - 1];
         return null;
       },
-      paddingLeft: () => 6,
-      paddingRight: () => 6,
-      paddingTop: () => 4,
-      paddingBottom: () => 4,
+      // Generous padding matching HTML (td: 6px 10px)
+      paddingLeft: () => 10,
+      paddingRight: () => 10,
+      paddingTop: () => 6,
+      paddingBottom: () => 6,
     },
     margin: [0, 0, 0, 16] as [number, number, number, number],
   };
@@ -137,26 +171,28 @@ export async function generateReportPdf(data: ReportData): Promise<Uint8Array> {
       text: `報表產生時間：${generatedAt}`,
       style: 'meta',
     },
-    { text: '', margin: [0, 8, 0, 0] as [number, number, number, number] },
+    { text: '', margin: [0, 12, 0, 0] as [number, number, number, number] },
   ];
 
-  // Summary table — student group coloring
-  content.push({ text: '彙總', style: 'sectionTitle' });
+  // Summary table
+  // 學員 | 執行堂數 | 執行時數 | 執行收入 | 繳費金額
+  content.push(...sectionTitle('彙總'));
   if (data.summary.rows.length > 0) {
     const summaryColors = buildGroupColors(data.summary.rows);
     content.push(buildTable(
       data.summary.headers,
       data.summary.rows,
       false,
-      [60, '*', '*', 70, 70],
+      [70, 85, 85, 122, 121],
       summaryColors,
     ));
   } else {
     content.push({ text: '本月無資料', style: 'empty' });
   }
 
-  // Checkins table — page break + per-student lesson number + group coloring
-  content.push({ text: '上課明細', style: 'sectionTitle', pageBreak: 'before' as const });
+  // Checkins table
+  // 學員 | 堂次 | 上課日期 | 上課時間 | 時長(分)
+  content.push(...sectionTitle('上課明細', true));
   if (data.checkins.rows.length > 0) {
     const checkinHeaders = [data.checkins.headers[0], '堂次', ...data.checkins.headers.slice(1)];
     const studentCounter = new Map<string, number>();
@@ -172,7 +208,7 @@ export async function generateReportPdf(data: ReportData): Promise<Uint8Array> {
       checkinHeaders,
       checkinRows,
       true,
-      [60, 35, '*', '*', 50],
+      [70, 50, 130, 130, 103],
       checkinRowColors,
       new Set([1, 2, 3]),
     ));
@@ -180,15 +216,16 @@ export async function generateReportPdf(data: ReportData): Promise<Uint8Array> {
     content.push({ text: '本月無上課紀錄', style: 'empty' });
   }
 
-  // Payments table — page break + student group coloring
-  content.push({ text: '繳費明細', style: 'sectionTitle', pageBreak: 'before' as const });
+  // Payments table
+  // 學員 | 繳費日期 | 購買時數 | 每小時單價 | 繳費金額
+  content.push(...sectionTitle('繳費明細', true));
   if (data.payments.rows.length > 0) {
     const paymentColors = buildGroupColors(data.payments.rows);
     content.push(buildTable(
       data.payments.headers,
       data.payments.rows,
       true,
-      [60, '*', 60, '*', '*'],
+      [70, 123, 70, 110, 110],
       paymentColors,
     ));
   } else {
@@ -197,7 +234,7 @@ export async function generateReportPdf(data: ReportData): Promise<Uint8Array> {
 
   const docDefinition: TDocumentDefinitions = {
     pageSize: 'A4',
-    pageMargins: [48, 40, 48, 60],
+    pageMargins: [MARGIN_LR, 40, MARGIN_LR, 60],
     defaultStyle: {
       font: 'NotoSansTC',
       fontSize: 10,
@@ -217,19 +254,19 @@ export async function generateReportPdf(data: ReportData): Promise<Uint8Array> {
           color: '#888888',
         },
       ],
-      margin: [48, 10, 48, 0] as [number, number, number, number],
+      margin: [MARGIN_LR, 10, MARGIN_LR, 0] as [number, number, number, number],
     }),
     content,
     styles: {
       title: {
-        fontSize: 18,
+        fontSize: 20,
         color: '#2C3E50',
-        margin: [0, 0, 0, 2],
+        margin: [0, 0, 0, 4],
       },
       subtitle: {
         fontSize: 14,
-        color: '#555555',
-        margin: [0, 0, 0, 2],
+        color: '#777777',
+        margin: [0, 0, 0, 4],
       },
       meta: {
         fontSize: 9,
@@ -237,13 +274,14 @@ export async function generateReportPdf(data: ReportData): Promise<Uint8Array> {
         margin: [0, 0, 0, 0],
       },
       sectionTitle: {
-        fontSize: 13,
+        fontSize: 14,
         color: COLORS.sectionTitle,
-        margin: [0, 8, 0, 6],
+        margin: [0, 16, 0, 4],
       },
       tableHeader: {
         fontSize: 10,
         color: COLORS.headerText,
+        bold: true,
       },
       empty: {
         fontSize: 10,
