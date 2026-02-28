@@ -15,8 +15,8 @@ async function main() {
 
   const year = 2026;
   const month = 2;
-  const host = process.env.VERCEL_PROJECT_PRODUCTION_URL || process.env.VERCEL_URL || 'localhost:3000';
-  const protocol = host.startsWith('localhost') ? 'http' : 'https';
+  const host = process.env.VERCEL_PROJECT_PRODUCTION_URL || 'anjani-reservation-system.vercel.app';
+  const protocol = 'https';
   const token = generateReportToken(coach.id, year, month);
   const reportUrl = `${protocol}://${host}/api/report?coach=${coach.id}&year=${year}&month=${month}&token=${token}`;
 
