@@ -2,6 +2,7 @@ import { findCoachByLineId, getCoachById } from '@/lib/notion/coaches';
 import { getStudentsByCoachId } from '@/lib/notion/students';
 import { getPaymentsByStudents } from '@/lib/notion/payments';
 import { getCheckinsByCoach } from '@/lib/notion/checkins';
+import { assignCheckinsToBuckets } from '@/lib/notion/hours';
 import { nowTaipei } from '@/lib/utils/date';
 import type { CheckinRecord, PaymentRecord, Student } from '@/types';
 
@@ -64,6 +65,8 @@ function compileRows(
   students: Student[],
   monthCheckins: CheckinRecord[],
   monthPayments: PaymentRecord[],
+  allCheckins: CheckinRecord[],
+  allPayments: PaymentRecord[],
   priceMap: Map<string, number>,
   priceByStudentId: Map<string, number>,
 ) {
@@ -78,6 +81,31 @@ function compileRows(
     const arr = paymentsByStudentId.get(p.studentId) ?? [];
     arr.push(p);
     paymentsByStudentId.set(p.studentId, arr);
+  }
+
+  // Build FIFO lesson number map: checkinId → position within its bucket
+  const allCheckinsByStudentId = new Map<string, CheckinRecord[]>();
+  for (const c of allCheckins) {
+    const arr = allCheckinsByStudentId.get(c.studentId) ?? [];
+    arr.push(c);
+    allCheckinsByStudentId.set(c.studentId, arr);
+  }
+  const allPaymentsByStudentId = new Map<string, PaymentRecord[]>();
+  for (const p of allPayments) {
+    const arr = allPaymentsByStudentId.get(p.studentId) ?? [];
+    arr.push(p);
+    allPaymentsByStudentId.set(p.studentId, arr);
+  }
+  const lessonNumberMap = new Map<string, number>();
+  for (const student of students) {
+    const studentPayments = allPaymentsByStudentId.get(student.id) ?? [];
+    const studentCheckins = allCheckinsByStudentId.get(student.id) ?? [];
+    if (studentPayments.length === 0 || studentCheckins.length === 0) continue;
+    const { buckets, overflowCheckins } = assignCheckinsToBuckets(studentPayments, studentCheckins);
+    for (const bucket of buckets) {
+      bucket.checkins.forEach((c, idx) => lessonNumberMap.set(c.id, idx + 1));
+    }
+    overflowCheckins.forEach((c, idx) => lessonNumberMap.set(c.id, idx + 1));
   }
 
   const summaryRows: (string | number)[][] = [];
@@ -112,7 +140,8 @@ function compileRows(
     ]);
 
     for (const c of checkins) {
-      checkinRows.push([student.name, c.classDate, c.classTimeSlot ?? '', c.durationMinutes]);
+      const lessonNum = lessonNumberMap.get(c.id) ?? 0;
+      checkinRows.push([student.name, `#${lessonNum}`, c.classDate, c.classTimeSlot ?? '', c.durationMinutes]);
     }
 
     for (const p of pays) {
@@ -172,7 +201,7 @@ export async function compileMonthlyReport(
   );
 
   const { summaryRows, checkinRows, paymentRows } = compileRows(
-    students, monthCheckins, monthPayments, priceMap, priceByStudentId,
+    students, monthCheckins, monthPayments, allCoachCheckins, payments, priceMap, priceByStudentId,
   );
 
   return {
@@ -185,7 +214,7 @@ export async function compileMonthlyReport(
       rows: summaryRows,
     },
     checkins: {
-      headers: ['學員', '上課日期', '上課時段', '時長(分)'],
+      headers: ['學員', '堂次', '上課日期', '上課時段', '時長(分)'],
       rows: checkinRows,
     },
     payments: {

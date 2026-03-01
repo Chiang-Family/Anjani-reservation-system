@@ -206,22 +206,14 @@ export async function generateReportPdf(data: ReportData): Promise<Uint8Array> {
   }
 
   // Checkins table
-  // 學員 | 堂次 | 上課日期 | 上課時間 | 時長(分)
+  // 學員 | 堂次 | 上課日期 | 上課時段 | 時長(分)
   content.push(...sectionTitle('上課明細', true));
   if (data.checkins.rows.length > 0) {
-    const checkinHeaders = [data.checkins.headers[0], '堂次', ...data.checkins.headers.slice(1)];
-    const studentCounter = new Map<string, number>();
-    const checkinRows = data.checkins.rows.map(row => {
-      const name = String(row[0]);
-      const count = (studentCounter.get(name) ?? 0) + 1;
-      studentCounter.set(name, count);
-      return [row[0], `#${count}`, ...row.slice(1)];
-    });
-    const checkinRowColors = buildGroupColors(checkinRows);
+    const checkinRowColors = buildGroupColors(data.checkins.rows);
 
     content.push(buildTable(
-      checkinHeaders,
-      checkinRows,
+      data.checkins.headers,
+      data.checkins.rows,
       true,
       [55, 35, 112, 112, 89],
       checkinRowColors,
