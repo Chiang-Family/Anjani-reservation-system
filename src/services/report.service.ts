@@ -178,14 +178,13 @@ function compileRows(
     }
   }
 
-  // Add total row to summary
+  // Add total row at top of summary so it's visible on page 1
   if (summaryRows.length > 0) {
     const totalCheckedIn = summaryRows.reduce((s, r) => s + (r[1] as number), 0);
     const totalHours = summaryRows.reduce((s, r) => s + (r[2] as number), 0);
     const totalRevenue = summaryRows.reduce((s, r) => s + (r[3] as number), 0);
     const totalCollected = summaryRows.reduce((s, r) => s + (r[4] as number), 0);
-    summaryRows.push([]);
-    summaryRows.push(['合計', totalCheckedIn, +totalHours.toFixed(1), totalRevenue, totalCollected]);
+    summaryRows.unshift(['合計', totalCheckedIn, +totalHours.toFixed(1), totalRevenue, totalCollected]);
   }
 
   return { summaryRows, checkinRows, paymentRows };

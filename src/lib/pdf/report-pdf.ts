@@ -92,7 +92,10 @@ function buildTable(
     alignment: centerCols?.has(i) ? 'center' as const : undefined,
   }));
 
-  const hasTotal = rows.length > 0 && rows[rows.length - 1][0] === '合計';
+  const filteredRows = rows.filter(row => row.length > 0);
+  const totalIdx = filteredRows.findIndex(row => row[0] === '合計');
+  const hasTotal = totalIdx >= 0;
+  const totalAtTop = hasTotal && totalIdx === 0;
 
   let prevFirst = '';
   const bodyCells: TableCell[][] = rows
@@ -137,7 +140,8 @@ function buildTable(
         if (i === 0) return 0;                             // no top border
         if (i === 1) return 2;                             // thick below header
         if (i === total) return 0;                         // no bottom border
-        if (hasTotal && i === total - 1) return 1.5;       // above total row
+        if (hasTotal && totalAtTop && i === 2) return 1.5; // below total row (top)
+        if (hasTotal && !totalAtTop && i === total - 1) return 1.5; // above total row (bottom)
         return 0.5;                                        // thin separators
       },
       vLineWidth: () => 0,
