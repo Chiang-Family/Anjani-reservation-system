@@ -198,7 +198,7 @@ export async function generateReportPdf(data: ReportData): Promise<Uint8Array> {
       data.summary.headers,
       data.summary.rows,
       false,
-      [55, 68, 68, 106, 106],
+      [70, 68, 68, 91, 106],
       summaryColors,
     ));
   } else {
@@ -215,7 +215,7 @@ export async function generateReportPdf(data: ReportData): Promise<Uint8Array> {
       data.checkins.headers,
       data.checkins.rows,
       true,
-      [55, 35, 112, 112, 89],
+      [70, 35, 112, 112, 74],
       checkinRowColors,
       new Set([1, 2, 3]),
     ));
@@ -232,7 +232,7 @@ export async function generateReportPdf(data: ReportData): Promise<Uint8Array> {
       data.payments.headers,
       data.payments.rows,
       true,
-      [55, 108, 55, 93, 92],
+      [70, 108, 55, 78, 92],
       paymentColors,
     ));
   } else {

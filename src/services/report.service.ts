@@ -84,6 +84,7 @@ function compileRows(
   }
 
   // Build FIFO lesson number map: checkinId → position within its bucket
+  // 共用時數的學員需合併處理（副學員的 checkin 歸入主學員的付款桶）
   const allCheckinsByStudentId = new Map<string, CheckinRecord[]>();
   for (const c of allCheckins) {
     const arr = allCheckinsByStudentId.get(c.studentId) ?? [];
@@ -97,11 +98,32 @@ function compileRows(
     allPaymentsByStudentId.set(p.studentId, arr);
   }
   const lessonNumberMap = new Map<string, number>();
+  const processedStudentIds = new Set<string>();
   for (const student of students) {
-    const studentPayments = allPaymentsByStudentId.get(student.id) ?? [];
-    const studentCheckins = allCheckinsByStudentId.get(student.id) ?? [];
-    if (studentPayments.length === 0 || studentCheckins.length === 0) continue;
-    const { buckets, overflowCheckins } = assignCheckinsToBuckets(studentPayments, studentCheckins);
+    if (processedStudentIds.has(student.id)) continue;
+
+    // 找出共用時數池的所有成員
+    const poolIds = [student.id, ...(student.relatedStudentIds ?? [])];
+    poolIds.forEach(id => processedStudentIds.add(id));
+
+    // 找到主學員（持有付款紀錄的那位）
+    let primaryPayments: PaymentRecord[] = [];
+    for (const id of poolIds) {
+      const payments = allPaymentsByStudentId.get(id) ?? [];
+      if (payments.length > 0) {
+        primaryPayments = payments;
+        break;
+      }
+    }
+
+    // 合併所有成員的上課紀錄
+    const poolCheckins: CheckinRecord[] = [];
+    for (const id of poolIds) {
+      poolCheckins.push(...(allCheckinsByStudentId.get(id) ?? []));
+    }
+
+    if (primaryPayments.length === 0 || poolCheckins.length === 0) continue;
+    const { buckets, overflowCheckins } = assignCheckinsToBuckets(primaryPayments, poolCheckins);
     for (const bucket of buckets) {
       bucket.checkins.forEach((c, idx) => lessonNumberMap.set(c.id, idx + 1));
     }
