@@ -5,6 +5,7 @@ import { getCheckinsByStudent } from '@/lib/notion/checkins';
 import { getStudentOverflowInfo, resolveOverflowIds } from '@/lib/notion/hours';
 import { formatHours, formatDateTime, nowTaipei } from '@/lib/utils/date';
 import { pushText } from '@/lib/line/push';
+import { studentQuickReply } from '@/templates/quick-reply';
 import { paymentPeriodChoiceCard } from '@/templates/flex/payment-confirm';
 import { unpaidSessionDatesCard } from '@/templates/flex/unpaid-session-dates';
 import type { messagingApi } from '@line/bot-sdk';
@@ -307,7 +308,7 @@ export async function executeConfirmPayment(
       `📊 加值時數：${hours} 小時`,
       `📊 剩餘時數：${formatHours(summary.remainingHours)}`,
     ].join('\n');
-    pushText(student.lineUserId, studentMsg).catch((err) =>
+    pushText(student.lineUserId, studentMsg, studentQuickReply(student.paymentType)).catch((err) =>
       console.error('Push payment notification to student failed:', err)
     );
   }

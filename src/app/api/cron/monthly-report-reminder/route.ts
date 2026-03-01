@@ -8,6 +8,7 @@ import { NextResponse } from 'next/server';
 import { verifyCronSecret } from '@/lib/cron/auth';
 import { getAllCoaches } from '@/lib/notion/coaches';
 import { pushText } from '@/lib/line/push';
+import { coachQuickReply } from '@/templates/quick-reply';
 import { generateReportToken } from '@/lib/utils/report-token';
 import { nowTaipei } from '@/lib/utils/date';
 
@@ -40,6 +41,7 @@ export async function GET(req: Request) {
       await pushText(
         coach.lineUserId,
         `📋 上月報表提醒\n\n${coach.name} 教練，${year}年${month}月的上課明細報表已完成。\n\n⚠️ 強烈建議列印留存備份 ⚠️\n\n若有錯誤請聯繫Winnie。\n\n📄 點此查看報表：\n${reportUrl}`,
+        coachQuickReply(),
       );
 
       results.push({ coach: coach.name, ok: true });

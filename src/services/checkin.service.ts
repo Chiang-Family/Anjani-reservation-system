@@ -6,6 +6,7 @@ import { getStudentOverflowInfo } from '@/lib/notion/hours';
 import { findStudentEventToday, findStudentEventForDate } from './calendar.service';
 import { todayDateString, formatDateTime, nowTaipei, nowTaipeiISO, computeDurationMinutes, formatHours } from '@/lib/utils/date';
 import { pushText } from '@/lib/line/push';
+import { studentQuickReply } from '@/templates/quick-reply';
 
 export interface CheckinResult {
   success: boolean;
@@ -105,7 +106,8 @@ export async function coachCheckinForStudent(
       `📊 剩餘時數：${formatHours(summary.remainingHours)}`,
       ...(summary.remainingHours <= 1 && !periodJustEnded ? [`\n⚠️ 剩餘時數不多，請盡早聯繫教練續約。`] : []),
     ].join('\n');
-    pushText(student.lineUserId, studentMsg).catch((err) =>
+    const qr = studentQuickReply(student.paymentType);
+    pushText(student.lineUserId, studentMsg, qr).catch((err) =>
       console.error('Push checkin notification to student failed:', err)
     );
 
@@ -117,7 +119,7 @@ export async function coachCheckinForStudent(
         `您的當期課程時數已全部使用完畢，`,
         `請盡早聯繫教練續購下一期課程，以免影響上課權益。`,
       ].join('\n');
-      pushText(student.lineUserId, reminderMsg).catch((err) =>
+      pushText(student.lineUserId, reminderMsg, qr).catch((err) =>
         console.error('Push payment reminder to student failed:', err)
       );
     }
@@ -222,7 +224,7 @@ export async function recordSessionPayment(
       `💵 金額：$${fee}`,
       `⏰ 紀錄時間：${formatDateTime(now)}`,
     ].join('\n');
-    pushText(student.lineUserId, studentMsg).catch((err) =>
+    pushText(student.lineUserId, studentMsg, studentQuickReply(student.paymentType)).catch((err) =>
       console.error('Push session payment notification failed:', err)
     );
   }

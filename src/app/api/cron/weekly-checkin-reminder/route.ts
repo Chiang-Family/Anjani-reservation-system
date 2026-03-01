@@ -11,6 +11,7 @@ import { getStudentsByCoachId } from '@/lib/notion/students';
 import { getEventsForDateRange } from '@/lib/google/calendar';
 import { getCheckinsByCoach } from '@/lib/notion/checkins';
 import { pushFlex } from '@/lib/line/push';
+import { coachQuickReply } from '@/templates/quick-reply';
 import { checkinReminderCard } from '@/templates/flex/checkin-reminder';
 import { nowTaipei } from '@/lib/utils/date';
 import { format, subDays } from 'date-fns';
@@ -93,7 +94,7 @@ export async function GET(req: Request) {
       missing.sort((a, b) => a.date.localeCompare(b.date) || a.time.localeCompare(b.time));
 
       const card = checkinReminderCard(weekStart, weekEnd, missing);
-      await pushFlex(coach.lineUserId, '本週打卡確認提醒', card);
+      await pushFlex(coach.lineUserId, '本週打卡確認提醒', card, coachQuickReply());
       results.push({ coach: coach.name, missing: missing.length });
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
