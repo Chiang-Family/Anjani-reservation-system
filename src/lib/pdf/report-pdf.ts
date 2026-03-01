@@ -240,12 +240,13 @@ export async function generateReportPdf(data: ReportData): Promise<Uint8Array> {
       });
     }
 
-    // Detail table (students only, no total row)
+    // Detail table with total row at bottom
     if (detailRows.length > 0) {
-      const summaryColors = buildGroupColors(detailRows);
+      const detailWithTotal = [...detailRows, [], ...(totalRow ? [totalRow] : [])];
+      const summaryColors = buildGroupColors(detailWithTotal);
       content.push(buildTable(
         data.summary.headers,
-        detailRows,
+        detailWithTotal,
         false,
         [70, 68, 68, 91, 106],
         summaryColors,
