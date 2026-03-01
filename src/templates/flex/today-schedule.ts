@@ -6,7 +6,7 @@ import type { ScheduleItem } from '@/services/coach.service';
 type FlexBubble = messagingApi.FlexBubble;
 type FlexComponent = messagingApi.FlexComponent;
 
-export type ScheduleMode = 'schedule' | 'checkin';
+type ScheduleMode = 'schedule' | 'checkin';
 
 export function scheduleList(items: ScheduleItem[], dateStr: string, mode: ScheduleMode = 'schedule'): FlexBubble {
   const today = todayDateString();

@@ -133,18 +133,6 @@ export async function createStudent(params: {
   return extractStudent(page as unknown as Record<string, unknown>);
 }
 
-export async function getAllStudents(): Promise<Student[]> {
-  const notion = getNotionClient();
-  const res = await notion.databases.query({
-    database_id: getEnv().NOTION_STUDENTS_DB_ID,
-    sorts: [{ property: STUDENT_PROPS.NAME, direction: 'ascending' }],
-  });
-
-  return res.results.map((page) =>
-    extractStudent(page as unknown as Record<string, unknown>)
-  );
-}
-
 export async function getStudentsByCoachId(coachId: string): Promise<Student[]> {
   const notion = getNotionClient();
   const res = await notion.databases.query({

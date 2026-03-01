@@ -1,4 +1,4 @@
-export const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 /**
  * Like Promise.all but limits concurrency to avoid overwhelming external APIs.

@@ -11,10 +11,6 @@ function toTaipei(date: Date | string): Date {
   return toZonedTime(new Date(date), TZ);
 }
 
-export function formatDate(date: Date | string): string {
-  return format(toTaipei(date), 'yyyy/MM/dd');
-}
-
 export function formatDateTime(date: Date | string): string {
   return format(toTaipei(date), 'yyyy/MM/dd HH:mm');
 }
