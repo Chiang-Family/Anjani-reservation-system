@@ -193,18 +193,64 @@ export async function generateReportPdf(data: ReportData): Promise<Uint8Array> {
     { text: '', margin: [0, 16, 0, 0] as [number, number, number, number] },
   ];
 
-  // Summary table
-  // 學員 | 執行堂數 | 執行時數 | 執行收入 | 繳費金額
+  // Summary section
   content.push(...sectionTitle('彙總'));
   if (data.summary.rows.length > 0) {
-    const summaryColors = buildGroupColors(data.summary.rows);
-    content.push(buildTable(
-      data.summary.headers,
-      data.summary.rows,
-      false,
-      [70, 68, 68, 91, 106],
-      summaryColors,
-    ));
+    const totalRow = data.summary.rows.find(r => r[0] === '合計');
+    const detailRows = data.summary.rows.filter(r => r.length > 0 && r[0] !== '合計');
+
+    // Total banner — dashboard-style metrics
+    if (totalRow) {
+      const metrics = [
+        { value: String(totalRow[1]), label: '執行堂數' },
+        { value: String(totalRow[2]), label: '執行時數(時)' },
+        { value: `$${(totalRow[3] as number).toLocaleString()}`, label: '執行收入' },
+        { value: `$${(totalRow[4] as number).toLocaleString()}`, label: '繳費金額' },
+      ];
+      content.push({
+        table: {
+          widths: ['*', '*', '*', '*'],
+          body: [
+            metrics.map(m => ({
+              text: m.value,
+              bold: true,
+              fontSize: 16,
+              alignment: 'center' as const,
+              color: '#1A3A4F',
+            })),
+            metrics.map(m => ({
+              text: m.label,
+              fontSize: 8,
+              alignment: 'center' as const,
+              color: '#888888',
+            })),
+          ],
+        },
+        layout: {
+          hLineWidth: (i: number) => (i === 0 || i === 2) ? 1.5 : 0,
+          vLineWidth: () => 0,
+          hLineColor: () => COLORS.headerBg,
+          fillColor: () => COLORS.totalBg,
+          paddingLeft: () => 8,
+          paddingRight: () => 8,
+          paddingTop: (i: number) => i === 0 ? 10 : 2,
+          paddingBottom: (i: number) => i === 0 ? 2 : 8,
+        },
+        margin: [0, 0, 0, 12] as [number, number, number, number],
+      });
+    }
+
+    // Detail table (students only, no total row)
+    if (detailRows.length > 0) {
+      const summaryColors = buildGroupColors(detailRows);
+      content.push(buildTable(
+        data.summary.headers,
+        detailRows,
+        false,
+        [70, 68, 68, 91, 106],
+        summaryColors,
+      ));
+    }
   } else {
     content.push({ text: '本月無資料', style: 'empty' });
   }
