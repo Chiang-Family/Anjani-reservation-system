@@ -237,12 +237,15 @@ async function handleStudentMessage(
       return;
     }
 
-    case KEYWORD.MENU:
-    default: {
+    case KEYWORD.MENU: {
       const student = await findStudentByLineId(lineUserId);
       const coach = student?.coachId ? await getCoachById(student.coachId) : null;
       await replyFlex(replyToken, '安傑力課程管理系統', studentMenu(name, coach?.lineUrl, student?.paymentType), studentQuickReply(student?.paymentType));
+      return;
     }
+
+    default:
+      await replyText(replyToken, '如有任何課程問題、請假及調課需求，請直接聯繫教練，謝謝！');
   }
 }
 
