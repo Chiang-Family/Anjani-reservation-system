@@ -24,6 +24,7 @@ export async function startAddStudent(coachLineUserId: string): Promise<string> 
     '',
     '多堂：姓名 購買時數 每小時單價',
     '範例：王大明 10 1400',
+    '（輸入 0 時數可先建檔不購買）',
     '',
     '單堂：姓名 1 單堂費用',
     '範例：李小花 1 700',
@@ -39,7 +40,7 @@ export function parseAddStudentInput(text: string): ParsedStudent | null {
   const hours = parseFloat(parts[parts.length - 2]);
   const name = parts.slice(0, -2).join(' ');
 
-  if (!name || isNaN(hours) || hours <= 0 || isNaN(price) || price <= 0) return null;
+  if (!name || isNaN(hours) || hours < 0 || isNaN(price) || price <= 0) return null;
 
   if (hours === 1) {
     return { name, type: '單堂', perSessionFee: price };
@@ -94,6 +95,18 @@ export async function executeAddStudent(
     status: '已繳費',
     paidAmount: totalAmount,
   });
+
+  if (parsed.hours === 0) {
+    return [
+      '學員建立成功！',
+      '',
+      `姓名：${student.name}`,
+      `每小時單價：${parsed.price} 元`,
+      `購買時數：0（尚未購買）`,
+      '',
+      '學員加入 LINE 好友後，輸入姓名即可完成綁定。',
+    ].join('\n');
+  }
 
   return [
     '學員建立成功！',
