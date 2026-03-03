@@ -34,6 +34,7 @@ export const ACTION = {
   VIEW_MONTH_STATS: 'view_month_stats',
   VIEW_WEEK_STATS: 'view_week_stats',
   GENERATE_REPORT: 'gen_report',
+  ADJUST_PRICE: 'adjust_price',
 } as const;
 
 // 角色

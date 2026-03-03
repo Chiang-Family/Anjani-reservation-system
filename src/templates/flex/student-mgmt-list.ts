@@ -15,20 +15,20 @@ export function studentMgmtList(students: Array<Student & { summary: StudentHour
     const historicalUnpaid = student.historicalUnpaidCount ?? 0;
     const bodyContents: FlexComponent[] = isPerSession
       ? [
-          infoRow('單堂費用', `$${(student.perSessionFee ?? 0).toLocaleString()}`),
-          infoRow('當月上課', `${student.monthlyCheckinCount ?? 0} 堂`),
-          ...(monthlyUnpaid > 0
-            ? [infoRow('當月欠費', `${monthlyUnpaid} 堂`, '#D4524A')]
-            : []),
-          ...(historicalUnpaid > 0
-            ? [infoRow('歷史欠費', `${historicalUnpaid} 堂`, '#D4524A')]
-            : []),
-        ]
+        infoRow('單堂費用', `$${(student.perSessionFee ?? 0).toLocaleString()}`),
+        infoRow('當月上課', `${student.monthlyCheckinCount ?? 0} 堂`),
+        ...(monthlyUnpaid > 0
+          ? [infoRow('當月欠費', `${monthlyUnpaid} 堂`, '#D4524A')]
+          : []),
+        ...(historicalUnpaid > 0
+          ? [infoRow('歷史欠費', `${historicalUnpaid} 堂`, '#D4524A')]
+          : []),
+      ]
       : [
-          infoRow('購買時數', formatHours(summary.purchasedHours)),
-          infoRow('已上時數', formatHours(summary.completedHours)),
-          infoRow('剩餘時數', formatHours(summary.remainingHours)),
-        ];
+        infoRow('購買時數', formatHours(summary.purchasedHours)),
+        infoRow('已上時數', formatHours(summary.completedHours)),
+        infoRow('剩餘時數', formatHours(summary.remainingHours)),
+      ];
 
     return {
       type: 'bubble',
@@ -86,18 +86,31 @@ export function studentMgmtList(students: Array<Student & { summary: StudentHour
             height: 'sm',
           },
           ...(!isPerSession
-            ? [{
-              type: 'button',
-              action: {
-                type: 'postback',
-                label: '繳費紀錄',
-                data: `${ACTION.VIEW_PAYMENT_HISTORY}:${student.id}`,
-                displayText: `查看 ${student.name} 的繳費紀錄`,
-              },
-              style: 'primary',
-              color: '#6D5D85',
-              height: 'sm',
-            } as FlexComponent]
+            ? [
+              {
+                type: 'button',
+                action: {
+                  type: 'postback',
+                  label: '繳費紀錄',
+                  data: `${ACTION.VIEW_PAYMENT_HISTORY}:${student.id}`,
+                  displayText: `查看 ${student.name} 的繳費紀錄`,
+                },
+                style: 'primary',
+                color: '#6D5D85',
+                height: 'sm',
+              } as FlexComponent,
+              {
+                type: 'button',
+                action: {
+                  type: 'postback',
+                  label: '調整單價',
+                  data: `${ACTION.ADJUST_PRICE}:${student.id}`,
+                  displayText: `調整 ${student.name} 的每小時單價`,
+                },
+                style: 'secondary',
+                height: 'sm',
+              } as FlexComponent,
+            ]
             : []),
         ] as FlexComponent[],
         paddingAll: '12px',

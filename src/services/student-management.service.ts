@@ -126,7 +126,7 @@ interface CollectAndAddState {
   studentName: string;
   coachId: string;
   pricePerHour: number | null; // null = 無歷史紀錄，需先問單價
-  step: 'price' | 'amount';
+  step: 'price' | 'price_adjust' | 'amount';
   relatedStudentIds?: string[];
 }
 
@@ -202,6 +202,43 @@ export async function startCollectAndAdd(studentId: string, lineUserId: string):
   };
 }
 
+/** 發起「調整單價」流程，將現有收款狀態切換到 price_adjust 步驟 */
+export async function startPriceAdjust(
+  studentId: string,
+  lineUserId: string
+): Promise<{ type: 'text'; message: string }> {
+  const student = await getStudentById(studentId);
+  if (!student) return { type: 'text', message: '找不到該學員資料。' };
+
+  const { primaryId, relatedIds } = await resolveOverflowIds(student);
+  const latestPayment = await getLatestPaymentByStudent(primaryId);
+  const currentPrice = latestPayment?.pricePerHour ?? null;
+
+  // 設定（或重置）狀態機，進入 price_adjust 步驟
+  collectAndAddStates.set(lineUserId, {
+    studentId: primaryId,
+    studentName: student.name,
+    coachId: student.coachId || '',
+    pricePerHour: currentPrice,
+    step: 'price_adjust',
+    relatedStudentIds: relatedIds,
+  });
+
+  const currentPriceText = currentPrice
+    ? `目前單價：$${currentPrice.toLocaleString()}/hr`
+    : '目前無單價紀錄';
+
+  return {
+    type: 'text',
+    message: [
+      `${student.name}`,
+      currentPriceText,
+      '',
+      '請輸入新的每小時單價（數字，或輸入「取消」放棄）：',
+    ].join('\n'),
+  };
+}
+
 export interface CollectStepResult {
   message: string;
   done: boolean;
@@ -220,6 +257,16 @@ export async function handleCollectAndAddStep(
   if (input.trim() === '取消') {
     collectAndAddStates.delete(lineUserId);
     return { message: '已取消收款。', done: true };
+  }
+
+  if (state.step === 'price_adjust') {
+    const price = parseInt(input.trim(), 10);
+    if (isNaN(price) || price <= 0) {
+      return { message: '請輸入有效的正整數（或輸入「取消」放棄）：', done: false };
+    }
+    state.pricePerHour = price;
+    state.step = 'amount';
+    return { message: `✅ 單價已更新為 $${price.toLocaleString()}/hr\n\n請輸入收款金額（或輸入「取消」放棄）：`, done: false };
   }
 
   if (state.step === 'price') {

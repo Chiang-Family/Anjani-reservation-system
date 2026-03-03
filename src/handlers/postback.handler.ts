@@ -1,7 +1,7 @@
 import type { PostbackEvent } from '@line/bot-sdk';
 import { coachCheckinForStudent, recordSessionPayment } from '@/services/checkin.service';
 import { getCoachScheduleForDate } from '@/services/coach.service';
-import { startCollectAndAdd, executeAddStudent, executeConfirmPayment } from '@/services/student-management.service';
+import { startCollectAndAdd, executeAddStudent, executeConfirmPayment, startPriceAdjust } from '@/services/student-management.service';
 import { getStudentById } from '@/lib/notion/students';
 import { getCheckinsByStudent } from '@/lib/notion/checkins';
 import { getStudentOverflowInfo, resolveOverflowIds } from '@/lib/notion/hours';
@@ -111,6 +111,13 @@ export async function handlePostback(event: PostbackEvent): Promise<void> {
         } else {
           await replyText(event.replyToken, collectResult.message, menuQuickReply());
         }
+        return;
+      }
+
+      case ACTION.ADJUST_PRICE: {
+        // data = adjust_price:{studentId}
+        const result = await startPriceAdjust(id, lineUserId);
+        await replyText(event.replyToken, result.message, menuQuickReply());
         return;
       }
 
