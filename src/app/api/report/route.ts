@@ -33,11 +33,12 @@ export async function GET(req: NextRequest) {
 
   const pdfBuffer = await generateReportPdf(data);
   const filename = `${data.year}-${String(data.month).padStart(2, '0')}-${data.coachName}.pdf`;
+  const encodedFilename = encodeURIComponent(filename);
 
   return new Response(Buffer.from(pdfBuffer), {
     headers: {
       'Content-Type': 'application/pdf',
-      'Content-Disposition': `inline; filename="${filename}"`,
+      'Content-Disposition': `inline; filename*=UTF-8''${encodedFilename}`,
     },
   });
 }
