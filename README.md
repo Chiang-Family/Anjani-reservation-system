@@ -145,6 +145,12 @@ handleEvent() 事件分發
    - remainingHours = purchasedHours - completedHours
 ```
 
+### Bucket-aware 執行收入計算
+
+每個 bucket 記錄繳費當下的 `pricePerHour`（每小時單價）。週/月/年統計和 PDF 報表的「已執行收入」以打卡記錄所屬 bucket 的單價計算，而非一律使用最新單價。這確保單價調整後，歷史堂次收入不會被回溯修改。
+
+> Overflow checkins（超出已購時數的打卡）無對應 bucket，fallback 使用最新一筆付款的單價。
+
 ### 範例
 
 | 場景 | 購買 | 已上 | 剩餘 |
@@ -325,7 +331,7 @@ paymentPeriodSelector()
 
 1. 根據教練 ID、年、月產生 HMAC-SHA256 簽名 token（以 `LINE_CHANNEL_SECRET` 為 key）
 2. 回覆教練一個報表 URL：`/api/report?coach={id}&year={y}&month={m}&token={hmac}`
-3. 教練在瀏覽器開啟 URL，後端即時從 Notion 抓取資料並以 pdfmake 生成 A4 PDF
+3. 教練在瀏覽器開啟 URL，後端即時從 Notion 抓取資料並以 pdfmake 生成 A4 PDF；回應 header 使用 RFC 5987 encoding（`filename*=UTF-8''...`）支援中文教練名稱
 4. 報表包含三個表格（各佔獨立頁面）：
    - **彙總**：頂部 dashboard 合計看板（執行堂數/時數/收入/繳費金額）+ 學員明細表（含底部合計列）
    - **上課明細**：學員、堂次（FIFO 當期第 #1, #2...，共用時數學員合併計算）、上課日期、上課時段、時長（分）
