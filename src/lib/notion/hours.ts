@@ -15,7 +15,7 @@ export function assignCheckinsToBuckets(
   payments: PaymentRecord[],
   checkins: CheckinRecord[]
 ): {
-  buckets: { paymentDate: string; purchasedHours: number; checkins: CheckinRecord[]; consumedMinutes: number }[];
+  buckets: { paymentDate: string; purchasedHours: number; checkins: CheckinRecord[]; consumedMinutes: number; pricePerHour: number }[];
   overflowCheckins: CheckinRecord[];
 } {
   const uniquePayDates = [...new Set(payments.map(p => p.createdAt))].sort();
@@ -26,6 +26,7 @@ export function assignCheckinsToBuckets(
       purchasedHours: periodPayments.reduce((sum, p) => sum + p.purchasedHours, 0),
       checkins: [] as CheckinRecord[],
       consumedMinutes: 0,
+      pricePerHour: periodPayments[0]?.pricePerHour ?? 0,
     };
   });
 

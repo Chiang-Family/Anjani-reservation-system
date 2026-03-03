@@ -25,41 +25,6 @@ export interface ReportData {
   };
 }
 
-function buildPriceMaps(
-  students: Student[],
-  payments: PaymentRecord[],
-): { priceMap: Map<string, number>; priceByStudentId: Map<string, number> } {
-  const paymentsByStudentId = new Map<string, PaymentRecord[]>();
-  for (const p of payments) {
-    const arr = paymentsByStudentId.get(p.studentId) ?? [];
-    arr.push(p);
-    paymentsByStudentId.set(p.studentId, arr);
-  }
-  const studentById = new Map(students.map(s => [s.id, s]));
-
-  const priceMap = new Map<string, number>();
-  for (const s of students) {
-    const sp = paymentsByStudentId.get(s.id);
-    if (sp?.length) priceMap.set(s.name, sp[0].pricePerHour);
-  }
-  // 副學員（無付款）繼承主學員單價
-  for (const s of students) {
-    if (!priceMap.has(s.name) && s.relatedStudentIds?.length) {
-      for (const relatedId of s.relatedStudentIds) {
-        const related = studentById.get(relatedId);
-        if (related && priceMap.has(related.name)) {
-          priceMap.set(s.name, priceMap.get(related.name)!);
-          break;
-        }
-      }
-    }
-  }
-  const priceByStudentId = new Map<string, number>();
-  for (const s of students) {
-    if (priceMap.has(s.name)) priceByStudentId.set(s.id, priceMap.get(s.name)!);
-  }
-  return { priceMap, priceByStudentId };
-}
 
 function compileRows(
   students: Student[],
@@ -67,8 +32,6 @@ function compileRows(
   monthPayments: PaymentRecord[],
   allCheckins: CheckinRecord[],
   allPayments: PaymentRecord[],
-  priceMap: Map<string, number>,
-  priceByStudentId: Map<string, number>,
 ) {
   const checkinsByStudentId = new Map<string, CheckinRecord[]>();
   for (const c of monthCheckins) {
@@ -98,6 +61,7 @@ function compileRows(
     allPaymentsByStudentId.set(p.studentId, arr);
   }
   const lessonNumberMap = new Map<string, number>();
+  const checkinPriceMap = new Map<string, number>();
   const processedStudentIds = new Set<string>();
   for (const student of students) {
     if (processedStudentIds.has(student.id)) continue;
@@ -123,11 +87,18 @@ function compileRows(
     }
 
     if (primaryPayments.length === 0 || poolCheckins.length === 0) continue;
+    const fallbackPrice = primaryPayments[0]?.pricePerHour ?? 0;
     const { buckets, overflowCheckins } = assignCheckinsToBuckets(primaryPayments, poolCheckins);
     for (const bucket of buckets) {
-      bucket.checkins.forEach((c, idx) => lessonNumberMap.set(c.id, idx + 1));
+      bucket.checkins.forEach((c, idx) => {
+        lessonNumberMap.set(c.id, idx + 1);
+        checkinPriceMap.set(c.id, bucket.pricePerHour);
+      });
     }
-    overflowCheckins.forEach((c, idx) => lessonNumberMap.set(c.id, idx + 1));
+    overflowCheckins.forEach((c, idx) => {
+      lessonNumberMap.set(c.id, idx + 1);
+      checkinPriceMap.set(c.id, fallbackPrice);
+    });
   }
 
   const summaryRows: (string | number)[][] = [];
@@ -147,7 +118,7 @@ function compileRows(
     let executedRevenue = 0;
     let totalMinutes = 0;
     for (const c of checkins) {
-      const price = priceByStudentId.get(c.studentId) ?? priceMap.get(c.studentName ?? '') ?? 0;
+      const price = checkinPriceMap.get(c.id) ?? 0;
       executedRevenue += (c.durationMinutes / 60) * price;
       totalMinutes += c.durationMinutes;
     }
@@ -214,15 +185,13 @@ export async function compileMonthlyReport(
     getPaymentsByStudents(students.map(s => s.id)),
   ]);
 
-  const { priceMap, priceByStudentId } = buildPriceMaps(students, payments);
-
   const monthCheckins = allCoachCheckins.filter(c => c.classDate.startsWith(monthPrefix));
   const monthPayments = payments.filter(
     p => p.actualDate.startsWith(monthPrefix) || p.createdAt.startsWith(monthPrefix),
   );
 
   const { summaryRows, checkinRows, paymentRows } = compileRows(
-    students, monthCheckins, monthPayments, allCoachCheckins, payments, priceMap, priceByStudentId,
+    students, monthCheckins, monthPayments, allCoachCheckins, payments,
   );
 
   return {

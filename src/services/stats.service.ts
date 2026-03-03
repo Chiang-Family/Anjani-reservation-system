@@ -120,6 +120,64 @@ function buildPriceMaps(
 }
 
 /**
+ * 從 FIFO 分桶結果建立 checkinId → pricePerHour 映射。
+ * 每筆打卡對應其所屬 bucket 的單價；overflow checkins fallback 到最新付款單價。
+ */
+function buildCheckinPriceMap(
+  students: Student[],
+  payments: PaymentRecord[],
+  allCheckins: CheckinRecord[],
+): Map<string, number> {
+  const paymentsByStudentId = new Map<string, PaymentRecord[]>();
+  for (const p of payments) {
+    const arr = paymentsByStudentId.get(p.studentId) ?? [];
+    arr.push(p);
+    paymentsByStudentId.set(p.studentId, arr);
+  }
+  const checkinsByStudentId = new Map<string, CheckinRecord[]>();
+  for (const c of allCheckins) {
+    const arr = checkinsByStudentId.get(c.studentId) ?? [];
+    arr.push(c);
+    checkinsByStudentId.set(c.studentId, arr);
+  }
+
+  const checkinPriceMap = new Map<string, number>();
+  const processed = new Set<string>();
+
+  for (const student of students) {
+    if (processed.has(student.id)) continue;
+    const poolIds = [student.id, ...(student.relatedStudentIds ?? [])];
+    poolIds.forEach(id => processed.add(id));
+
+    let primaryPayments: PaymentRecord[] = [];
+    for (const id of poolIds) {
+      const ps = paymentsByStudentId.get(id) ?? [];
+      if (ps.length > 0) { primaryPayments = ps; break; }
+    }
+    if (primaryPayments.length === 0) continue;
+
+    const fallbackPrice = primaryPayments[0]?.pricePerHour ?? 0;
+
+    const poolCheckins: CheckinRecord[] = [];
+    for (const id of poolIds) {
+      poolCheckins.push(...(checkinsByStudentId.get(id) ?? []));
+    }
+
+    const { buckets, overflowCheckins } = assignCheckinsToBuckets(primaryPayments, poolCheckins);
+    for (const bucket of buckets) {
+      for (const c of bucket.checkins) {
+        checkinPriceMap.set(c.id, bucket.pricePerHour);
+      }
+    }
+    for (const c of overflowCheckins) {
+      checkinPriceMap.set(c.id, fallbackPrice);
+    }
+  }
+
+  return checkinPriceMap;
+}
+
+/**
  * Filter calendar events by student names (in-memory, no Notion call)
  */
 function filterEventsByStudentNames(events: CalendarEvent[], studentNames: Set<string>): CalendarEvent[] {
@@ -437,11 +495,11 @@ export async function getCoachMonthlyStats(
   }
   estimatedRevenue = Math.round(estimatedRevenue);
 
-  // --- 已執行收入: checked-in classes × student hourly rate ---
-  // 優先用 studentId 查（避免歷史打卡記錄標題仍是舊合名），其次用 studentName
+  // --- 已執行收入: checked-in classes × 所屬付款 bucket 的單價 ---
+  const checkinPriceMap = buildCheckinPriceMap(students, payments, allCoachCheckins);
   let executedRevenue = 0;
   for (const checkin of monthCheckins) {
-    const price = priceByStudentId.get(checkin.studentId) ?? priceMap.get(checkin.studentName ?? '') ?? 0;
+    const price = checkinPriceMap.get(checkin.id) ?? 0;
     executedRevenue += (checkin.durationMinutes / 60) * price;
   }
   executedRevenue = Math.round(executedRevenue);
@@ -656,7 +714,7 @@ export async function getCoachWeeklyStats(
     c => c.classDate >= weekStart && c.classDate <= weekEnd
   );
 
-  const { priceMap, priceByStudentId } = buildPriceMaps(students, payments);
+  const checkinPriceMap = buildCheckinPriceMap(students, payments, allCoachCheckins);
 
   // Build daily breakdown (Sun to Sat) alongside totals
   const dailyMap = new Map<string, { checkedIn: number; executedRevenue: number; collected: number }>();
@@ -667,7 +725,7 @@ export async function getCoachWeeklyStats(
 
   let executedRevenue = 0;
   for (const checkin of weekCheckins) {
-    const price = priceByStudentId.get(checkin.studentId) ?? priceMap.get(checkin.studentName ?? '') ?? 0;
+    const price = checkinPriceMap.get(checkin.id) ?? 0;
     const rev = (checkin.durationMinutes / 60) * price;
     executedRevenue += rev;
     const d = ensureDay(checkin.classDate);
@@ -723,7 +781,7 @@ export async function getCoachAnnualStats(
     getPaymentsByStudents(students.map(s => s.id)),
   ]);
 
-  const { priceMap, priceByStudentId } = buildPriceMaps(students, payments);
+  const checkinPriceMap = buildCheckinPriceMap(students, payments, allCoachCheckins);
 
   // Aggregate per-month data
   const monthlyData = new Map<number, { checkedIn: number; executedRevenue: number; collected: number }>();
@@ -738,7 +796,7 @@ export async function getCoachAnnualStats(
     if (month < startMonth || month > endMonth) continue;
     const d = ensureMonth(month);
     d.checkedIn += 1;
-    const price = priceByStudentId.get(checkin.studentId) ?? priceMap.get(checkin.studentName ?? '') ?? 0;
+    const price = checkinPriceMap.get(checkin.id) ?? 0;
     d.executedRevenue += (checkin.durationMinutes / 60) * price;
   }
 
