@@ -126,10 +126,10 @@ export async function coachCheckinForStudent(
     }
   }
 
-  // 合課學員通知：合課帳號（如「李容甄陸秀儀」）無 LINE ID，需通知各個關聯的個人帳號
+  // 共課學員通知：共課帳號（如「李容甄陸秀儀」）無 LINE ID，需通知各個關聯的個人帳號
   if (student.relatedStudentIds?.length) {
     const sharedMsg = [
-      `✅ ${dateLabel}合課已完成打卡！`,
+      `✅ ${dateLabel}共課已完成打卡！`,
       `📅 課程時段：${event.startTime}–${event.endTime}`,
       `⏱️ 課程時長：${durationMinutes} 分鐘`,
     ].join('\n');
