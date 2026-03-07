@@ -81,6 +81,7 @@ export function studentMenu(name: string, coachLineUrl?: string, paymentType?: s
         ...(!isPerSession
           ? [menuButton(KEYWORD.PAYMENT_HISTORY, '#6D597A')]
           : []),
+        menuButton(KEYWORD.CLASS_NOTES, '#708090'),
         ...(coachLineUrl
           ? [uriButton('聯繫教練', coachLineUrl, '#C0392B')]
           : []),

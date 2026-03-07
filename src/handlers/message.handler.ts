@@ -22,7 +22,7 @@ import { replyText, replyFlex, replyMessages } from '@/lib/line/reply';
 import { generateReportToken } from '@/lib/utils/report-token';
 import { pMap } from '@/lib/utils/concurrency';
 import { KEYWORD, ROLE } from '@/lib/config/constants';
-import { TEXT } from '@/templates/text-messages';
+import { TEXT, CLASS_NOTES_TEXT } from '@/templates/text-messages';
 import { paymentHistoryCard } from '@/templates/flex/payment-history';
 import { studentMenu, coachMenu } from '@/templates/flex/main-menu';
 import { scheduleList } from '@/templates/flex/today-schedule';
@@ -79,7 +79,15 @@ export async function handleMessage(event: MessageEvent): Promise<void> {
           const student = await getStudentInfo(lineUserId);
           if (student) {
             const coach = student.coachId ? await getCoachById(student.coachId) : null;
-            await replyFlex(event.replyToken, '安傑力課程管理系統', studentMenu(student.name, coach?.lineUrl, student.paymentType), studentQuickReply(student.paymentType));
+            await replyMessages(event.replyToken, [
+              { type: 'text', text: CLASS_NOTES_TEXT },
+              {
+                type: 'flex',
+                altText: '安傑力課程管理系統',
+                contents: studentMenu(student.name, coach?.lineUrl, student.paymentType),
+                quickReply: { items: studentQuickReply(student.paymentType) },
+              },
+            ]);
             return;
           }
           const coach = await findCoachByLineId(lineUserId);
@@ -234,6 +242,11 @@ async function handleStudentMessage(
         .filter(e => !checkedDates.has(e.date))
         .slice(0, 2);
       await replyFlex(replyToken, '近期預約', studentScheduleCard(student.name, upcoming), studentQuickReply(student.paymentType));
+      return;
+    }
+
+    case KEYWORD.CLASS_NOTES: {
+      await replyText(replyToken, CLASS_NOTES_TEXT, studentQuickReply());
       return;
     }
 

@@ -9,6 +9,7 @@ export function studentQuickReply(paymentType?: string): QuickReplyItem[] {
     quickReplyButton(KEYWORD.UPCOMING_CLASSES),
     quickReplyButton(isPerSession ? KEYWORD.SESSION_CLASS_HISTORY : KEYWORD.CLASS_HISTORY),
     ...(!isPerSession ? [quickReplyButton(KEYWORD.PAYMENT_HISTORY)] : []),
+    quickReplyButton(KEYWORD.CLASS_NOTES),
     quickReplyButton(KEYWORD.MENU),
   ];
 }
