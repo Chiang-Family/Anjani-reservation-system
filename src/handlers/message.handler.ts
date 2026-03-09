@@ -23,6 +23,7 @@ import { generateReportToken } from '@/lib/utils/report-token';
 import { pMap } from '@/lib/utils/concurrency';
 import { KEYWORD, ROLE } from '@/lib/config/constants';
 import { TEXT, CLASS_NOTES_TEXT } from '@/templates/text-messages';
+import { classNotesCard } from '@/templates/flex/class-notes';
 import { paymentHistoryCard } from '@/templates/flex/payment-history';
 import { studentMenu, coachMenu } from '@/templates/flex/main-menu';
 import { scheduleList } from '@/templates/flex/today-schedule';
@@ -80,7 +81,7 @@ export async function handleMessage(event: MessageEvent): Promise<void> {
           if (student) {
             const coach = student.coachId ? await getCoachById(student.coachId) : null;
             await replyMessages(event.replyToken, [
-              { type: 'text', text: CLASS_NOTES_TEXT },
+              { type: 'flex', altText: CLASS_NOTES_TEXT, contents: classNotesCard() },
               {
                 type: 'flex',
                 altText: '安傑力課程管理系統',
@@ -246,7 +247,7 @@ async function handleStudentMessage(
     }
 
     case KEYWORD.CLASS_NOTES: {
-      await replyText(replyToken, CLASS_NOTES_TEXT, studentQuickReply());
+      await replyFlex(replyToken, '上課注意事項', classNotesCard(), studentQuickReply());
       return;
     }
 
