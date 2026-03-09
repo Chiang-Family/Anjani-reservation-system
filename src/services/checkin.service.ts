@@ -4,7 +4,7 @@ import { createCheckinRecord, findCheckinToday } from '@/lib/notion/checkins';
 import { createPaymentRecord, getPaymentsByDate, getLatestPaymentByStudent } from '@/lib/notion/payments';
 import { getStudentOverflowInfo } from '@/lib/notion/hours';
 import { findStudentEventToday, findStudentEventForDate } from './calendar.service';
-import { todayDateString, formatDateTime, nowTaipei, nowTaipeiISO, computeDurationMinutes, formatHours } from '@/lib/utils/date';
+import { todayDateString, formatDateTime, nowTaipeiISO, computeDurationMinutes, formatHours } from '@/lib/utils/date';
 import { pushText } from '@/lib/line/push';
 import { studentQuickReply } from '@/templates/quick-reply';
 
@@ -43,7 +43,7 @@ export async function coachCheckinForStudent(
     return { success: false, message: `${targetDate} 沒有 ${student.name} 的課程安排。` };
   }
 
-  const now = nowTaipei();
+  const now = new Date();
   const checkinTime = nowTaipeiISO();
   const durationMinutes = computeDurationMinutes(event.startTime, event.endTime);
   const classStartTime = `${targetDate}T${event.startTime}:00+08:00`;
@@ -235,7 +235,7 @@ export async function recordSessionPayment(
 
   // 推播通知學員
   if (student.lineUserId) {
-    const now = nowTaipei();
+    const now = new Date();
     const studentMsg = [
       `💰 繳費紀錄`,
       `📅 日期：${targetDate}`,

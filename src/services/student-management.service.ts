@@ -3,7 +3,7 @@ import { findCoachByLineId, findCoachByName, bindCoachLineId } from '@/lib/notio
 import { createPaymentRecord, getLatestPaymentByStudent, getPaymentsByStudent } from '@/lib/notion/payments';
 import { getCheckinsByStudent } from '@/lib/notion/checkins';
 import { getStudentOverflowInfo, resolveOverflowIds } from '@/lib/notion/hours';
-import { formatHours, formatDateTime, nowTaipei } from '@/lib/utils/date';
+import { formatHours, formatDateTime } from '@/lib/utils/date';
 import { pushText } from '@/lib/line/push';
 import { studentQuickReply } from '@/templates/quick-reply';
 import { paymentPeriodChoiceCard } from '@/templates/flex/payment-confirm';
@@ -363,7 +363,7 @@ export async function executeConfirmPayment(
   if (student.lineUserId) {
     const studentMsg = [
       `💰 已收到繳費通知！`,
-      `🕐 收款時間：${formatDateTime(nowTaipei())}`,
+      `🕐 收款時間：${formatDateTime(new Date())}`,
       `💵 收款金額：$${amount.toLocaleString()}`,
       `📊 加值時數：${hours} 小時`,
       `📊 剩餘時數：${formatHours(summary.remainingHours)}`,
