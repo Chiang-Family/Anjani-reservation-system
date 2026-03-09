@@ -512,13 +512,21 @@ export async function getCoachMonthlyStats(
   // --- 預計執行收入: all scheduled events × student hourly rate ---
   // 建立學員名稱 → Student 對應表（用於判斷單堂學員）
   const studentByName = new Map(students.map(s => [s.name, s]));
+  // 單堂已繳費：studentId:date → paidAmount（已調整的金額優先）
+  const sessionPaidMap = new Map<string, number>();
+  for (const p of payments) {
+    if (p.isSessionPayment) {
+      sessionPaidMap.set(`${p.studentId}:${p.actualDate}`, p.paidAmount);
+    }
+  }
   let estimatedRevenue = 0;
   for (const event of events) {
     const name = event.summary.trim();
     const stu = studentByName.get(name);
     if (stu?.paymentType === '單堂' && stu.perSessionFee) {
-      // 單堂學員：固定用預設單堂費
-      estimatedRevenue += stu.perSessionFee;
+      // 單堂學員：已繳費用實際金額，未繳費用預設單堂費
+      const paidAmount = sessionPaidMap.get(`${stu.id}:${event.date}`);
+      estimatedRevenue += paidAmount ?? stu.perSessionFee;
     } else {
       const durationHours = computeDurationMinutes(event.startTime, event.endTime) / 60;
       const price = priceMap.get(name) ?? 0;
