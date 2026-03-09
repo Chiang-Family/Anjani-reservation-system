@@ -18,6 +18,7 @@ import {
   getBindingState,
   startBinding,
 } from '@/services/student-management.service';
+import { getSessionPayCustomState, handleSessionPayCustomStep } from '@/services/checkin.service';
 import { replyText, replyFlex, replyMessages } from '@/lib/line/reply';
 import { generateReportToken } from '@/lib/utils/report-token';
 import { pMap } from '@/lib/utils/concurrency';
@@ -64,6 +65,21 @@ export async function handleMessage(event: MessageEvent): Promise<void> {
         }
       } catch (error) {
         console.error('Collect and add step error:', error);
+        await replyText(event.replyToken, TEXT.ERROR, coachQuickReply());
+      }
+      return;
+    }
+
+    const sessionPayState = getSessionPayCustomState(lineUserId);
+    if (sessionPayState) {
+      try {
+        const result = await handleSessionPayCustomStep(lineUserId, text);
+        const qr = coachQuickReply();
+        await replyMessages(event.replyToken, [
+          { type: 'text', text: result.message, quickReply: { items: qr } },
+        ]);
+      } catch (error) {
+        console.error('Session pay custom step error:', error);
         await replyText(event.replyToken, TEXT.ERROR, coachQuickReply());
       }
       return;

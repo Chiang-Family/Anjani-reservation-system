@@ -86,7 +86,28 @@ function compileRows(
       poolCheckins.push(...(allCheckinsByStudentId.get(id) ?? []));
     }
 
-    if (primaryPayments.length === 0 || poolCheckins.length === 0) continue;
+    if (poolCheckins.length === 0) continue;
+
+    const isPerSession = poolIds.some(pid => {
+      const s = students.find(st => st.id === pid);
+      return s?.paymentType === '單堂' && s.perSessionFee;
+    });
+    const sessionFee = isPerSession
+      ? students.find(s => poolIds.includes(s.id) && s.perSessionFee)?.perSessionFee ?? 0
+      : 0;
+
+    if (primaryPayments.length === 0) {
+      // 單堂學員無付款紀錄：用 perSessionFee 估算
+      if (isPerSession && sessionFee > 0) {
+        poolCheckins.forEach((c, idx) => {
+          lessonNumberMap.set(c.id, idx + 1);
+          const durHours = c.durationMinutes / 60;
+          checkinPriceMap.set(c.id, durHours > 0 ? sessionFee / durHours : 0);
+        });
+      }
+      continue;
+    }
+
     const fallbackPrice = primaryPayments[0]?.pricePerHour ?? 0;
     const { buckets, overflowCheckins } = assignCheckinsToBuckets(primaryPayments, poolCheckins);
     for (const bucket of buckets) {
@@ -97,7 +118,12 @@ function compileRows(
     }
     overflowCheckins.forEach((c, idx) => {
       lessonNumberMap.set(c.id, idx + 1);
-      checkinPriceMap.set(c.id, fallbackPrice);
+      if (isPerSession && sessionFee > 0) {
+        const durHours = c.durationMinutes / 60;
+        checkinPriceMap.set(c.id, durHours > 0 ? sessionFee / durHours : 0);
+      } else {
+        checkinPriceMap.set(c.id, fallbackPrice);
+      }
     });
   }
 

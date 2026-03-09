@@ -154,14 +154,31 @@ function buildCheckinPriceMap(
       const ps = paymentsByStudentId.get(id) ?? [];
       if (ps.length > 0) { primaryPayments = ps; break; }
     }
-    if (primaryPayments.length === 0) continue;
-
-    const fallbackPrice = primaryPayments[0]?.pricePerHour ?? 0;
+    const isPerSession = poolIds.some(pid => {
+      const s = students.find(st => st.id === pid);
+      return s?.paymentType === '單堂' && s.perSessionFee;
+    });
+    const sessionFee = isPerSession
+      ? students.find(s => poolIds.includes(s.id) && s.perSessionFee)?.perSessionFee ?? 0
+      : 0;
 
     const poolCheckins: CheckinRecord[] = [];
     for (const id of poolIds) {
       poolCheckins.push(...(checkinsByStudentId.get(id) ?? []));
     }
+
+    if (primaryPayments.length === 0) {
+      // 單堂學員無付款紀錄：用 perSessionFee 估算
+      if (isPerSession && sessionFee > 0) {
+        for (const c of poolCheckins) {
+          const durHours = c.durationMinutes / 60;
+          checkinPriceMap.set(c.id, durHours > 0 ? sessionFee / durHours : 0);
+        }
+      }
+      continue;
+    }
+
+    const fallbackPrice = primaryPayments[0]?.pricePerHour ?? 0;
 
     const { buckets, overflowCheckins } = assignCheckinsToBuckets(primaryPayments, poolCheckins);
     for (const bucket of buckets) {
@@ -170,7 +187,13 @@ function buildCheckinPriceMap(
       }
     }
     for (const c of overflowCheckins) {
-      checkinPriceMap.set(c.id, fallbackPrice);
+      if (isPerSession && sessionFee > 0) {
+        // 單堂未繳費 checkin：用 perSessionFee 估算
+        const durHours = c.durationMinutes / 60;
+        checkinPriceMap.set(c.id, durHours > 0 ? sessionFee / durHours : 0);
+      } else {
+        checkinPriceMap.set(c.id, fallbackPrice);
+      }
     }
   }
 
@@ -487,11 +510,20 @@ export async function getCoachMonthlyStats(
   }
 
   // --- 預計執行收入: all scheduled events × student hourly rate ---
+  // 建立學員名稱 → Student 對應表（用於判斷單堂學員）
+  const studentByName = new Map(students.map(s => [s.name, s]));
   let estimatedRevenue = 0;
   for (const event of events) {
-    const durationHours = computeDurationMinutes(event.startTime, event.endTime) / 60;
-    const price = priceMap.get(event.summary.trim()) ?? 0;
-    estimatedRevenue += durationHours * price;
+    const name = event.summary.trim();
+    const stu = studentByName.get(name);
+    if (stu?.paymentType === '單堂' && stu.perSessionFee) {
+      // 單堂學員：固定用預設單堂費
+      estimatedRevenue += stu.perSessionFee;
+    } else {
+      const durationHours = computeDurationMinutes(event.startTime, event.endTime) / 60;
+      const price = priceMap.get(name) ?? 0;
+      estimatedRevenue += durationHours * price;
+    }
   }
   estimatedRevenue = Math.round(estimatedRevenue);
 

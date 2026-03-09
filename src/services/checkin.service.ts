@@ -173,7 +173,8 @@ export async function coachCheckinForStudent(
 export async function recordSessionPayment(
   coachLineUserId: string,
   studentNotionId: string,
-  dateStr?: string
+  dateStr?: string,
+  customFee?: number,
 ): Promise<CheckinResult> {
   const coach = await findCoachByLineId(coachLineUserId);
   if (!coach) {
@@ -215,7 +216,7 @@ export async function recordSessionPayment(
   }
 
   const durationHours = Math.round((durationMinutes / 60) * 10) / 10;
-  const fee = student.perSessionFee;
+  const fee = customFee ?? student.perSessionFee;
   const pricePerHour = Math.round((fee / durationHours) * 100) / 100;
 
   // 建立繳費紀錄（overrideDate 讓建立日期對齊課程日期，確保查詢正確）
@@ -257,4 +258,42 @@ export async function recordSessionPayment(
       `💵 金額：$${fee}`,
     ].join('\n'),
   };
+}
+
+// --- 自訂金額 State Machine ---
+
+interface SessionPayCustomState {
+  studentId: string;
+  dateStr: string;
+}
+
+const sessionPayCustomStates = new Map<string, SessionPayCustomState>();
+
+export function startSessionPayCustom(lineUserId: string, studentId: string, dateStr: string): void {
+  sessionPayCustomStates.set(lineUserId, { studentId, dateStr });
+}
+
+export function getSessionPayCustomState(lineUserId: string): SessionPayCustomState | undefined {
+  return sessionPayCustomStates.get(lineUserId);
+}
+
+export async function handleSessionPayCustomStep(
+  lineUserId: string,
+  input: string,
+): Promise<CheckinResult> {
+  const state = sessionPayCustomStates.get(lineUserId);
+  if (!state) return { success: false, message: '沒有進行中的繳費流程。' };
+
+  if (input.trim() === '取消') {
+    sessionPayCustomStates.delete(lineUserId);
+    return { success: true, message: '已取消繳費。' };
+  }
+
+  const fee = parseInt(input.trim(), 10);
+  if (isNaN(fee) || fee <= 0) {
+    return { success: false, message: '請輸入有效的正整數金額（或輸入「取消」放棄）：' };
+  }
+
+  sessionPayCustomStates.delete(lineUserId);
+  return recordSessionPayment(lineUserId, state.studentId, state.dateStr, fee);
 }

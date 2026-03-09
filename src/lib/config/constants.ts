@@ -32,6 +32,8 @@ export const ACTION = {
   VIEW_RENEWAL_UNPAID: 'renewal_unpaid',
   VIEW_RENEWAL_PAID: 'renewal_paid',
   SESSION_PAYMENT: 'session_pay',
+  CONFIRM_SESSION_PAY: 'confirm_session_pay',
+  SESSION_PAY_CUSTOM: 'session_pay_custom',
   VIEW_MONTH_STATS: 'view_month_stats',
   VIEW_WEEK_STATS: 'view_week_stats',
   GENERATE_REPORT: 'gen_report',

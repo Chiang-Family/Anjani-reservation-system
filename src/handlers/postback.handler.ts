@@ -1,9 +1,9 @@
 import type { PostbackEvent } from '@line/bot-sdk';
-import { coachCheckinForStudent, recordSessionPayment } from '@/services/checkin.service';
+import { coachCheckinForStudent, recordSessionPayment, startSessionPayCustom } from '@/services/checkin.service';
 import { getCoachScheduleForDate } from '@/services/coach.service';
 import { startCollectAndAdd, executeAddStudent, executeConfirmPayment, startPriceAdjust } from '@/services/student-management.service';
 import { getStudentById } from '@/lib/notion/students';
-import { getCheckinsByStudent } from '@/lib/notion/checkins';
+import { getCheckinsByStudent, findCheckinToday } from '@/lib/notion/checkins';
 import { getStudentOverflowInfo, resolveOverflowIds } from '@/lib/notion/hours';
 import { replyText, replyFlex, replyMessages } from '@/lib/line/reply';
 import { findCoachByLineId } from '@/lib/notion/coaches';
@@ -12,11 +12,13 @@ import { ACTION } from '@/lib/config/constants';
 import { TEXT } from '@/templates/text-messages';
 import { scheduleList } from '@/templates/flex/today-schedule';
 import { classHistoryCard, sessionMonthlyCard, paymentPeriodSelector, paymentDetailCard } from '@/templates/flex/class-history';
-import { getPaymentsByStudent } from '@/lib/notion/payments';
+import { getPaymentsByStudent, getPaymentsByDate } from '@/lib/notion/payments';
+import { sessionPaymentConfirmCard } from '@/templates/flex/session-payment-confirm';
+import { findStudentEventToday, findStudentEventForDate } from '@/services/calendar.service';
 import { renewalStudentListCard, monthlyStatsCard } from '@/templates/flex/monthly-stats';
 import { getCoachMonthlyStats, getCoachWeeklyStats } from '@/services/stats.service';
 import { weeklyStatsCard } from '@/templates/flex/weekly-stats';
-import { formatDateLabel, todayDateString } from '@/lib/utils/date';
+import { formatDateLabel, todayDateString, computeDurationMinutes } from '@/lib/utils/date';
 import { menuQuickReply, coachQuickReply } from '@/templates/quick-reply';
 
 function replyTextWithMenu(replyToken: string, text: string) {
@@ -50,11 +52,70 @@ export async function handlePostback(event: PostbackEvent): Promise<void> {
 
       case ACTION.SESSION_PAYMENT: {
         // data = session_pay:{studentId}:{date?}
+        // 改為顯示繳費確認卡片，讓教練確認或調整金額
+        const dateStr = extra || undefined;
+        const student = await getStudentById(id);
+        if (!student || student.paymentType !== '單堂' || !student.perSessionFee) {
+          await replyTextWithMenu(event.replyToken, student
+            ? `${student.name} 不是單堂收費學員，或尚未設定單堂費用。`
+            : '找不到該學員資料。');
+          return;
+        }
+        const targetDate = dateStr || todayDateString();
+        const existingPayments = await getPaymentsByDate(targetDate);
+        const alreadyPaid = existingPayments.some(p => p.studentId === student.id && p.isSessionPayment);
+        if (alreadyPaid) {
+          const qr = coachQuickReply();
+          await replyMessages(event.replyToken, [
+            { type: 'text', text: `${student.name} 在 ${targetDate} 已有繳費紀錄。`, quickReply: { items: qr } },
+          ]);
+          return;
+        }
+        // 取得課程時長
+        const checkin = await findCheckinToday(student.id, targetDate);
+        let durationMinutes: number;
+        let timeSlot = '';
+        if (checkin && checkin.durationMinutes > 0) {
+          durationMinutes = checkin.durationMinutes;
+          timeSlot = checkin.classTimeSlot ?? '';
+        } else {
+          const calEvent = dateStr
+            ? await findStudentEventForDate(student.name, dateStr)
+            : await findStudentEventToday(student.name);
+          if (!calEvent) {
+            const qr = coachQuickReply();
+            await replyMessages(event.replyToken, [
+              { type: 'text', text: '該堂課尚未執行，請先打卡再進行繳費。', quickReply: { items: qr } },
+            ]);
+            return;
+          }
+          durationMinutes = computeDurationMinutes(calEvent.startTime, calEvent.endTime);
+          timeSlot = `${calEvent.startTime}-${calEvent.endTime}`;
+        }
+        await replyFlex(event.replyToken, '單堂繳費確認',
+          sessionPaymentConfirmCard(student.name, id, targetDate, timeSlot, durationMinutes, student.perSessionFee),
+          coachQuickReply());
+        return;
+      }
+
+      case ACTION.CONFIRM_SESSION_PAY: {
+        // data = confirm_session_pay:{studentId}:{date}
         const dateStr = extra || undefined;
         const result = await recordSessionPayment(lineUserId, id, dateStr);
         const qr = coachQuickReply();
         await replyMessages(event.replyToken, [
           { type: 'text', text: result.message, quickReply: { items: qr } },
+        ]);
+        return;
+      }
+
+      case ACTION.SESSION_PAY_CUSTOM: {
+        // data = session_pay_custom:{studentId}:{date}
+        const dateStr = extra || todayDateString();
+        startSessionPayCustom(lineUserId, id, dateStr);
+        const qr = coachQuickReply();
+        await replyMessages(event.replyToken, [
+          { type: 'text', text: '請輸入實際收費金額（數字），或輸入「取消」放棄：', quickReply: { items: qr } },
         ]);
         return;
       }
