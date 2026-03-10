@@ -563,8 +563,26 @@ export async function getCoachMonthlyStats(
     const summary = summaries[i];
     const studentPayments = paymentsByStudentId.get(student.id) ?? [];
 
-    // 副學員（無付款記錄）跳過，其續約由主學員代表
-    if (buckets.length === 0) continue;
+    // 無付款記錄的學員：副學員跳過（由主學員代表）；單堂學員從行事曆產生未繳費預測
+    if (buckets.length === 0) {
+      if (student.paymentType === '單堂' && student.perSessionFee) {
+        const studentMonthEvents = (futureEventsByStudent.get(student.name) ?? [])
+          .filter(e => e.date.startsWith(monthPrefix));
+        for (const evt of studentMonthEvents) {
+          renewalStudents.push({
+            name: student.name,
+            remainingHours: 0,
+            expectedRenewalHours: 1,
+            expectedRenewalAmount: student.perSessionFee,
+            paidAmount: 0,
+            expiryDate: '',
+            renewalDate: evt.date,
+            isPaid: false,
+          });
+        }
+      }
+      continue;
+    }
 
     // 行事曆無此學員名稱且有關聯學員 → 跳過未來事件模擬（避免未繳費預測重複），但仍保留已繳費 cycle
     const hasOwnCalendarEvents = (futureEventsByStudent.get(student.name) ?? []).length > 0;
