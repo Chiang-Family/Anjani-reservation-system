@@ -1,7 +1,7 @@
 import { getStudentById } from '@/lib/notion/students';
 import { findCoachByLineId } from '@/lib/notion/coaches';
-import { createCheckinRecord, findCheckinToday } from '@/lib/notion/checkins';
-import { createPaymentRecord, getPaymentsByDate, getLatestPaymentByStudent } from '@/lib/notion/payments';
+import { createCheckinRecord, findCheckinToday, getCheckinsByStudent } from '@/lib/notion/checkins';
+import { createPaymentRecord, getPaymentsByDate, getLatestPaymentByStudent, getPaymentsByStudent } from '@/lib/notion/payments';
 import { getStudentOverflowInfo } from '@/lib/notion/hours';
 import { findStudentEventToday, findStudentEventForDate } from './calendar.service';
 import { todayDateString, formatDateTime, nowTaipeiISO, computeDurationMinutes, formatHours } from '@/lib/utils/date';
@@ -95,34 +95,86 @@ export async function coachCheckinForStudent(
     periodJustEnded = durationMinutes >= remainingInBucket && activeIdx === buckets.length - 1;
   }
 
+  const isSessionStudent = student.paymentType === '單堂';
+
   // Push notification to student
   const isToday = targetDate === todayDateString();
   const dateLabel = isToday ? '今日' : targetDate;
 
   if (student.lineUserId) {
-    const studentMsg = [
-      `✅ ${dateLabel}課程已完成打卡！`,
-      `📅 課程時段：${event.startTime}–${event.endTime}`,
-      `⏱️ 課程時長：${durationMinutes} 分鐘`,
-      `📊 剩餘時數：${formatHours(summary.remainingHours)}`,
-      ...(summary.remainingHours <= 1 && !periodJustEnded ? [`\n⚠️ 剩餘時數不多，請盡早聯繫教練續約。`] : []),
-    ].join('\n');
     const qr = studentQuickReply(student.paymentType);
-    pushText(student.lineUserId, studentMsg, qr).catch((err) =>
-      console.error('Push checkin notification to student failed:', err)
-    );
 
-    // 當期時數用完 → 發送繳費提醒
-    if (periodJustEnded) {
-      const reminderMsg = [
-        `💳 繳費提醒`,
-        ``,
-        `您的當期課程時數已全部使用完畢，`,
-        `請盡早聯繫教練續購下一期課程，以免影響上課權益。`,
+    if (isSessionStudent) {
+      // 單堂學員：查詢未繳費課程 + 發送通知（非阻塞）
+      const lineId = student.lineUserId;
+      const fee = student.perSessionFee ?? 0;
+      const sid = student.id;
+      (async () => {
+        try {
+          const [allCheckins, allPayments] = await Promise.all([
+            getCheckinsByStudent(sid),
+            getPaymentsByStudent(sid),
+          ]);
+          const paidDates = new Set(
+            allPayments.filter(p => p.isSessionPayment).map(p => p.createdAt)
+          );
+          // 未繳費的歷史課程（不含本次打卡日期）
+          const unpaidDates = allCheckins
+            .filter(c => c.classDate && c.classDate !== targetDate && !paidDates.has(c.classDate))
+            .map(c => c.classDate)
+            .sort();
+
+          const lines = [
+            `✅ ${dateLabel}課程已完成打卡！`,
+            `📅 課程時段：${event.startTime}–${event.endTime}`,
+            `⏱️ 課程時長：${durationMinutes} 分鐘`,
+            `💵 本堂費用：$${fee.toLocaleString()}`,
+          ];
+          if (unpaidDates.length > 0) {
+            lines.push('', `⚠️ 尚有未繳費課程：`);
+            for (const d of unpaidDates) {
+              lines.push(`  • ${d.slice(5).replace('-', '/')} $${fee.toLocaleString()}`);
+            }
+          }
+          lines.push('', '繳費完成後再麻煩通知教練，謝謝！');
+
+          pushText(lineId, lines.join('\n'), qr).catch((err) =>
+            console.error('Push checkin notification to student failed:', err)
+          );
+        } catch (err) {
+          console.error('Failed to compose session student notification:', err);
+        }
+      })();
+    } else {
+      // 多堂學員：顯示剩餘時數 + 繳費提醒
+      const paymentWarning = summary.remainingHours <= 0 && !periodJustEnded
+        ? `\n⚠️ 目前課程時數已使用完畢，繳費完成後再麻煩通知教練，謝謝！`
+        : summary.remainingHours <= 1 && !periodJustEnded
+          ? `\n⚠️ 剩餘課程時數不多，繳費完成後再麻煩通知教練，謝謝！`
+          : '';
+      const studentMsg = [
+        `✅ ${dateLabel}課程已完成打卡！`,
+        `📅 課程時段：${event.startTime}–${event.endTime}`,
+        `⏱️ 課程時長：${durationMinutes} 分鐘`,
+        `📊 剩餘時數：${formatHours(summary.remainingHours)}`,
+        ...(paymentWarning ? [paymentWarning] : []),
       ].join('\n');
-      pushText(student.lineUserId, reminderMsg, qr).catch((err) =>
-        console.error('Push payment reminder to student failed:', err)
+      pushText(student.lineUserId, studentMsg, qr).catch((err) =>
+        console.error('Push checkin notification to student failed:', err)
       );
+
+      // 當期時數用完 → 發送繳費提醒
+      if (periodJustEnded) {
+        const reminderMsg = [
+          `💳 繳費提醒`,
+          ``,
+          `您的當期課程時數已全部使用完畢，`,
+          `繳費完成後再麻煩通知教練，謝謝！`,
+        ].join('\n');
+        pushText(student.lineUserId, reminderMsg, qr).catch((err) =>
+          console.error('Push payment reminder to student failed:', err)
+        );
+      }
     }
   }
 
@@ -143,8 +195,6 @@ export async function coachCheckinForStudent(
       }
     }
   }
-
-  const isSessionStudent = student.paymentType === '單堂';
 
   let balanceWarning = '';
   if (!isSessionStudent && summary.remainingHours <= 1) {
