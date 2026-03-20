@@ -14,7 +14,7 @@ export function annualStatsCard(stats: CoachAnnualStats): FlexBubble {
       margin: 'none',
     } as FlexComponent,
     statRow('✅ 執行堂數', `${stats.totalCheckedInClasses} 堂`),
-    ...(stats.totalMassageClasses > 0 ? [subStatRow('💆 其中按摩', `${stats.totalMassageClasses} 堂`)] : []),
+    ...(stats.totalMassageClasses > 0 ? [subStatRow('💆 包含按摩', `${stats.totalMassageClasses} 堂`)] : []),
     statRow('🏷️ 執行收入', `$${stats.totalExecutedRevenue.toLocaleString()}`),
     statRow('💰 實際收款', `$${stats.totalCollectedAmount.toLocaleString()}`),
     separator(),
