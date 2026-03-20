@@ -14,6 +14,7 @@ export function weeklyStatsCard(stats: CoachWeeklyStats): FlexBubble {
 
   const bodyContents: FlexComponent[] = [
     statRow('📅 已預約堂數', `${stats.scheduledClasses} 堂`),
+    ...(stats.massageScheduled > 0 ? [subStatRow('💆 其中按摩', `${stats.massageScheduled} 堂`)] : []),
     statRow('✅ 已打卡堂數', `${stats.checkedInClasses} 堂`),
     ...(stats.massageCheckedIn > 0 ? [subStatRow('💆 其中按摩', `${stats.massageCheckedIn} 堂`)] : []),
     separator(),
