@@ -371,7 +371,18 @@ function findRenewalCycles(
       const isSession = payments.some(p => p.isSessionPayment);
 
       if (isSession) {
-        // 單堂計費：每個未來事件都是一次續約
+        // 單堂計費：每筆 overflow checkin（已打卡未繳費）都是一次續約
+        for (const c of overflowCheckins) {
+          cycles.push({
+            expiryDate: c.classDate,
+            renewalDate: c.classDate,
+            isPaid: false,
+            expectedHours: 1,
+            expectedAmount: lastInfo.pricePerHour,
+            paidAmount: 0,
+          });
+        }
+        // 加上未來行事曆事件（尚未打卡）
         for (const evt of futureEvents) {
           cycles.push({
             expiryDate: lastCheckin.classDate,
