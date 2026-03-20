@@ -563,12 +563,29 @@ export async function getCoachMonthlyStats(
     const summary = summaries[i];
     const studentPayments = paymentsByStudentId.get(student.id) ?? [];
 
-    // 無付款記錄的學員：副學員跳過（由主學員代表）；單堂學員從行事曆產生未繳費預測
+    // 無付款記錄的學員：副學員跳過（由主學員代表）；單堂學員從打卡+行事曆產生未繳費預測
     if (buckets.length === 0) {
       if (student.paymentType === '單堂' && student.perSessionFee) {
-        const studentMonthEvents = (futureEventsByStudent.get(student.name) ?? [])
-          .filter(e => e.date.startsWith(monthPrefix));
-        for (const evt of studentMonthEvents) {
+        // 本月已打卡但未繳費的日期
+        const studentMonthCheckins = (checkinsByStudentId.get(student.id) ?? [])
+          .filter(c => c.classDate.startsWith(monthPrefix));
+        for (const c of studentMonthCheckins) {
+          renewalStudents.push({
+            name: student.name,
+            remainingHours: 0,
+            expectedRenewalHours: 1,
+            expectedRenewalAmount: student.perSessionFee,
+            paidAmount: 0,
+            expiryDate: '',
+            renewalDate: c.classDate,
+            isPaid: false,
+          });
+        }
+        // 本月未來行事曆事件（尚未打卡）
+        const checkedDates = new Set(studentMonthCheckins.map(c => c.classDate));
+        const studentMonthFutureEvents = (futureEventsByStudent.get(student.name) ?? [])
+          .filter(e => e.date.startsWith(monthPrefix) && !checkedDates.has(e.date));
+        for (const evt of studentMonthFutureEvents) {
           renewalStudents.push({
             name: student.name,
             remainingHours: 0,
