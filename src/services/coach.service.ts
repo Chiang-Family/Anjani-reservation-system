@@ -4,6 +4,7 @@ import { getCheckinsByDate } from '@/lib/notion/checkins';
 import { getPaymentsByDate } from '@/lib/notion/payments';
 import { getTodayEvents, getEventsForDate } from '@/lib/google/calendar';
 import { todayDateString } from '@/lib/utils/date';
+import { parseEventSummary } from '@/lib/utils/event';
 import type { CalendarEvent } from '@/types';
 
 export interface ScheduleItem {
@@ -48,14 +49,14 @@ export async function getCoachScheduleForDate(
   // 篩選該教練學員的事件，並在記憶體中比對打卡狀態
   const items: ScheduleItem[] = [];
   for (const event of calendarEvents) {
-    const summary = event.summary.trim();
+    const { studentName: parsedName, isMassage } = parseEventSummary(event.summary);
 
     // 精確比對 → 模糊比對
-    let matched = studentByName.get(summary);
+    let matched = studentByName.get(parsedName);
     let isExactMatch = !!matched;
     if (!matched) {
       for (const [name, student] of studentByName) {
-        if (summary.includes(name) || name.includes(summary)) {
+        if (parsedName.includes(name) || name.includes(parsedName)) {
           matched = student;
           break;
         }
@@ -67,7 +68,7 @@ export async function getCoachScheduleForDate(
 
     items.push({
       event,
-      studentName: summary,
+      studentName: isMassage ? `按摩-${parsedName}` : parsedName,
       studentNotionId: matched.id,
       isCheckedIn: checkedInStudentIds.has(matched.id),
       isExactMatch,
