@@ -32,12 +32,17 @@ function getDateRange(prop: Record<string, unknown>): { start: string; end: stri
   return { start: dateObj.start, end: dateObj.end };
 }
 
+const MASSAGE_TITLE_PREFIX = '[按摩] ';
+
 function extractCheckin(page: Record<string, unknown>): CheckinRecord {
   const props = (page as { properties: Record<string, unknown> }).properties as Record<string, Record<string, unknown>>;
   const studentRelation = getRelationIds(props[CHECKIN_PROPS.STUDENT]);
   const coachRelation = getRelationIds(props[CHECKIN_PROPS.COACH]);
   const title = getTitleValue(props[CHECKIN_PROPS.TITLE]);
   const checkinTime = getDateValue(props[CHECKIN_PROPS.CHECKIN_TIME]);
+
+  const isMassage = title.startsWith(MASSAGE_TITLE_PREFIX);
+  const cleanTitle = isMassage ? title.slice(MASSAGE_TITLE_PREFIX.length) : title;
 
   // Parse class time slot from date range
   const timeRange = getDateRange(props[CHECKIN_PROPS.CLASS_TIME_SLOT]);
@@ -58,7 +63,8 @@ function extractCheckin(page: Record<string, unknown>): CheckinRecord {
     classDate: timeRange ? timeRange.start.slice(0, 10) : (checkinTime ? checkinTime.slice(0, 10) : ''),
     classTimeSlot,
     durationMinutes,
-    studentName: title.split(' - ')[0] || undefined,
+    studentName: cleanTitle.split(' - ')[0] || undefined,
+    isMassage,
   };
 }
 
@@ -70,9 +76,12 @@ export async function createCheckinRecord(params: {
   classStartTime: string;  // ISO datetime e.g. "2026-02-21T10:00:00+08:00"
   classEndTime: string;    // ISO datetime e.g. "2026-02-21T11:00:00+08:00"
   checkinTime: string;
+  isMassage?: boolean;
 }): Promise<CheckinRecord> {
   const notion = getNotionClient();
-  const title = `${params.studentName} - ${params.classDate}`;
+  const title = params.isMassage
+    ? `${MASSAGE_TITLE_PREFIX}${params.studentName} - ${params.classDate}`
+    : `${params.studentName} - ${params.classDate}`;
 
   const properties: Record<string, unknown> = {
     [CHECKIN_PROPS.TITLE]: {

@@ -14,6 +14,7 @@ export function annualStatsCard(stats: CoachAnnualStats): FlexBubble {
       margin: 'none',
     } as FlexComponent,
     statRow('✅ 執行堂數', `${stats.totalCheckedInClasses} 堂`),
+    ...(stats.totalMassageClasses > 0 ? [subStatRow('💆 其中按摩', `${stats.totalMassageClasses} 堂`)] : []),
     statRow('🏷️ 執行收入', `$${stats.totalExecutedRevenue.toLocaleString()}`),
     statRow('💰 實際收款', `$${stats.totalCollectedAmount.toLocaleString()}`),
     separator(),
@@ -95,6 +96,18 @@ function statRow(label: string, value: string): FlexComponent {
     contents: [
       { type: 'text', text: label, size: 'sm', color: '#555555', flex: 3 },
       { type: 'text', text: value, size: 'sm', weight: 'bold', color: '#333333', flex: 2, align: 'end' },
+    ],
+  };
+}
+
+function subStatRow(label: string, value: string): FlexComponent {
+  return {
+    type: 'box',
+    layout: 'horizontal',
+    paddingStart: '20px',
+    contents: [
+      { type: 'text', text: label, size: 'xs', color: '#888888', flex: 3 },
+      { type: 'text', text: value, size: 'xs', color: '#888888', flex: 2, align: 'end' },
     ],
   };
 }

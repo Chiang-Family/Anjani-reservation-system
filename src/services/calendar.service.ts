@@ -1,4 +1,5 @@
 import { getTodayEvents, getEventsForDate } from '@/lib/google/calendar';
+import { parseEventSummary } from '@/lib/utils/event';
 import type { CalendarEvent } from '@/types';
 
 /** 從今日事件中比對學員名稱 */
@@ -15,7 +16,7 @@ export async function findStudentEventForDate(studentName: string, dateStr: stri
 
 function matchEventByName(events: CalendarEvent[], studentName: string): CalendarEvent | null {
   for (const event of events) {
-    if (event.summary.trim() === studentName) {
+    if (parseEventSummary(event.summary).studentName === studentName) {
       return event;
     }
   }

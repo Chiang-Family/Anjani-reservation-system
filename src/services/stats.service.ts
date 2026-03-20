@@ -5,6 +5,7 @@ import { assignCheckinsToBuckets, computeSummaryFromBuckets } from '@/lib/notion
 import { getCheckinsByCoach } from '@/lib/notion/checkins';
 import { getMonthEvents, getEventsForDateRange } from '@/lib/google/calendar';
 import { nowTaipei, computeDurationMinutes, todayDateString } from '@/lib/utils/date';
+import { parseEventSummary } from '@/lib/utils/event';
 import { format, addMonths, addDays, parseISO, subDays } from 'date-fns';
 import { HISTORICAL_MONTHLY_STATS } from '@/lib/config/historical-stats';
 import type { CalendarEvent, CheckinRecord, PaymentRecord, Student } from '@/types';
@@ -30,6 +31,7 @@ export interface RenewalForecast {
 export interface DailyBreakdown {
   date: string;         // yyyy-MM-dd
   checkedIn: number;
+  massageCheckedIn: number;
   executedRevenue: number;
   collected: number;
 }
@@ -40,6 +42,8 @@ export interface CoachWeeklyStats {
   weekEnd: string;            // yyyy-MM-dd (Saturday)
   scheduledClasses: number;
   checkedInClasses: number;
+  massageScheduled: number;
+  massageCheckedIn: number;
   executedRevenue: number;
   collectedAmount: number;
   dailyBreakdown: DailyBreakdown[];
@@ -48,6 +52,7 @@ export interface CoachWeeklyStats {
 export interface MonthlyBreakdown {
   month: number;
   checkedIn: number;
+  massageCheckedIn: number;
   executedRevenue: number;
   collected: number;
 }
@@ -58,6 +63,7 @@ export interface CoachAnnualStats {
   startMonth: number;
   endMonth: number;
   totalCheckedInClasses: number;
+  totalMassageClasses: number;
   totalExecutedRevenue: number;
   totalCollectedAmount: number;
   monthsWithData: number;
@@ -73,6 +79,8 @@ export interface CoachMonthlyStats {
   month: number;
   scheduledClasses: number;
   checkedInClasses: number;
+  massageScheduled: number;
+  massageCheckedIn: number;
   estimatedRevenue: number;
   executedRevenue: number;
   collectedAmount: number;
@@ -205,13 +213,8 @@ function buildCheckinPriceMap(
  */
 function filterEventsByStudentNames(events: CalendarEvent[], studentNames: Set<string>): CalendarEvent[] {
   return events.filter((event) => {
-    const summary = event.summary.trim();
-    for (const name of studentNames) {
-      if (summary === name) {
-        return true;
-      }
-    }
-    return false;
+    const { studentName } = parseEventSummary(event.summary);
+    return studentNames.has(studentName);
   });
 }
 
@@ -491,6 +494,8 @@ export async function getCoachMonthlyStats(
   // --- 堂數 ---
   const scheduledClasses = events.length;
   const checkedInClasses = monthCheckins.length;
+  const massageScheduled = events.filter(e => parseEventSummary(e.summary).isMassage).length;
+  const massageCheckedIn = monthCheckins.filter(c => c.isMassage).length;
 
   // --- Build studentName → latest pricePerHour map (via studentId, 避免舊標題名稱不符) ---
   const priceMap = new Map<string, number>();
@@ -532,15 +537,15 @@ export async function getCoachMonthlyStats(
   }
   let estimatedRevenue = 0;
   for (const event of events) {
-    const name = event.summary.trim();
-    const stu = studentByName.get(name);
+    const { studentName } = parseEventSummary(event.summary);
+    const stu = studentByName.get(studentName);
     if (stu?.paymentType === '單堂' && stu.perSessionFee) {
       // 單堂學員：已繳費用實際金額，未繳費用預設單堂費
       const paidAmount = sessionPaidMap.get(`${stu.id}:${event.date}`);
       estimatedRevenue += paidAmount ?? stu.perSessionFee;
     } else {
       const durationHours = computeDurationMinutes(event.startTime, event.endTime) / 60;
-      const price = priceMap.get(name) ?? 0;
+      const price = priceMap.get(studentName) ?? 0;
       estimatedRevenue += durationHours * price;
     }
   }
@@ -764,6 +769,8 @@ export async function getCoachMonthlyStats(
     month,
     scheduledClasses,
     checkedInClasses,
+    massageScheduled,
+    massageCheckedIn,
     estimatedRevenue,
     executedRevenue,
     collectedAmount,
@@ -803,13 +810,14 @@ export async function getCoachWeeklyStats(
   const checkinPriceMap = buildCheckinPriceMap(students, payments, allCoachCheckins);
 
   // Build daily breakdown (Sun to Sat) alongside totals
-  const dailyMap = new Map<string, { checkedIn: number; executedRevenue: number; collected: number }>();
+  const dailyMap = new Map<string, { checkedIn: number; massageCheckedIn: number; executedRevenue: number; collected: number }>();
   const ensureDay = (date: string) => {
-    if (!dailyMap.has(date)) dailyMap.set(date, { checkedIn: 0, executedRevenue: 0, collected: 0 });
+    if (!dailyMap.has(date)) dailyMap.set(date, { checkedIn: 0, massageCheckedIn: 0, executedRevenue: 0, collected: 0 });
     return dailyMap.get(date)!;
   };
 
   let executedRevenue = 0;
+  let massageCheckedIn = 0;
   for (const checkin of weekCheckins) {
     const price = checkinPriceMap.get(checkin.id) ?? 0;
     const rev = (checkin.durationMinutes / 60) * price;
@@ -817,6 +825,10 @@ export async function getCoachWeeklyStats(
     const d = ensureDay(checkin.classDate);
     d.checkedIn += 1;
     d.executedRevenue += rev;
+    if (checkin.isMassage) {
+      massageCheckedIn += 1;
+      d.massageCheckedIn += 1;
+    }
   }
 
   let collectedAmount = 0;
@@ -830,10 +842,12 @@ export async function getCoachWeeklyStats(
     }
   }
 
+  const massageScheduled = weekEvents.filter(e => parseEventSummary(e.summary).isMassage).length;
+
   const dailyBreakdown: DailyBreakdown[] = Array.from({ length: 7 }, (_, i) => {
     const date = format(addDays(weekStartDate, i), 'yyyy-MM-dd');
-    const data = dailyMap.get(date) ?? { checkedIn: 0, executedRevenue: 0, collected: 0 };
-    return { date, checkedIn: data.checkedIn, executedRevenue: Math.round(data.executedRevenue), collected: data.collected };
+    const data = dailyMap.get(date) ?? { checkedIn: 0, massageCheckedIn: 0, executedRevenue: 0, collected: 0 };
+    return { date, checkedIn: data.checkedIn, massageCheckedIn: data.massageCheckedIn, executedRevenue: Math.round(data.executedRevenue), collected: data.collected };
   });
 
   return {
@@ -842,6 +856,8 @@ export async function getCoachWeeklyStats(
     weekEnd,
     scheduledClasses: weekEvents.length,
     checkedInClasses: weekCheckins.length,
+    massageScheduled,
+    massageCheckedIn,
     executedRevenue: Math.round(executedRevenue),
     collectedAmount,
     dailyBreakdown,
@@ -870,9 +886,9 @@ export async function getCoachAnnualStats(
   const checkinPriceMap = buildCheckinPriceMap(students, payments, allCoachCheckins);
 
   // Aggregate per-month data
-  const monthlyData = new Map<number, { checkedIn: number; executedRevenue: number; collected: number }>();
+  const monthlyData = new Map<number, { checkedIn: number; massageCheckedIn: number; executedRevenue: number; collected: number }>();
   const ensureMonth = (m: number) => {
-    if (!monthlyData.has(m)) monthlyData.set(m, { checkedIn: 0, executedRevenue: 0, collected: 0 });
+    if (!monthlyData.has(m)) monthlyData.set(m, { checkedIn: 0, massageCheckedIn: 0, executedRevenue: 0, collected: 0 });
     return monthlyData.get(m)!;
   };
 
@@ -882,6 +898,7 @@ export async function getCoachAnnualStats(
     if (month < startMonth || month > endMonth) continue;
     const d = ensureMonth(month);
     d.checkedIn += 1;
+    if (checkin.isMassage) d.massageCheckedIn += 1;
     const price = checkinPriceMap.get(checkin.id) ?? 0;
     d.executedRevenue += (checkin.durationMinutes / 60) * price;
   }
@@ -899,15 +916,17 @@ export async function getCoachAnnualStats(
   const historicalYearData = HISTORICAL_MONTHLY_STATS[coach.name]?.[year] ?? {};
   for (const [monthStr, hist] of Object.entries(historicalYearData)) {
     const month = parseInt(monthStr);
-    monthlyData.set(month, { checkedIn: hist.checkedIn, executedRevenue: hist.executedRevenue, collected: hist.collected });
+    monthlyData.set(month, { checkedIn: hist.checkedIn, massageCheckedIn: 0, executedRevenue: hist.executedRevenue, collected: hist.collected });
   }
 
   const monthsWithData = monthlyData.size;
   let totalCheckedInClasses = 0;
+  let totalMassageClasses = 0;
   let totalExecutedRevenue = 0;
   let totalCollectedAmount = 0;
   for (const d of monthlyData.values()) {
     totalCheckedInClasses += d.checkedIn;
+    totalMassageClasses += d.massageCheckedIn;
     totalExecutedRevenue += d.executedRevenue;
     totalCollectedAmount += d.collected;
   }
@@ -917,6 +936,7 @@ export async function getCoachAnnualStats(
     .map(([month, d]) => ({
       month,
       checkedIn: d.checkedIn,
+      massageCheckedIn: d.massageCheckedIn,
       executedRevenue: Math.round(d.executedRevenue),
       collected: d.collected,
     }));
@@ -927,6 +947,7 @@ export async function getCoachAnnualStats(
     startMonth,
     endMonth,
     totalCheckedInClasses,
+    totalMassageClasses,
     totalExecutedRevenue: Math.round(totalExecutedRevenue),
     totalCollectedAmount,
     monthsWithData,

@@ -15,6 +15,7 @@ export function weeklyStatsCard(stats: CoachWeeklyStats): FlexBubble {
   const bodyContents: FlexComponent[] = [
     statRow('📅 已預約堂數', `${stats.scheduledClasses} 堂`),
     statRow('✅ 已打卡堂數', `${stats.checkedInClasses} 堂`),
+    ...(stats.massageCheckedIn > 0 ? [subStatRow('💆 其中按摩', `${stats.massageCheckedIn} 堂`)] : []),
     separator(),
     statRow('🏷️ 已執行收入', `$${stats.executedRevenue.toLocaleString()}`),
     statRow('💰 實際收款', `$${stats.collectedAmount.toLocaleString()}`),
@@ -159,6 +160,18 @@ function statRow(label: string, value: string): FlexComponent {
     contents: [
       { type: 'text', text: label, size: 'sm', color: '#555555', flex: 3 },
       { type: 'text', text: value, size: 'sm', weight: 'bold', color: '#333333', flex: 2, align: 'end' },
+    ],
+  };
+}
+
+function subStatRow(label: string, value: string): FlexComponent {
+  return {
+    type: 'box',
+    layout: 'horizontal',
+    paddingStart: '20px',
+    contents: [
+      { type: 'text', text: label, size: 'xs', color: '#888888', flex: 3 },
+      { type: 'text', text: value, size: 'xs', color: '#888888', flex: 2, align: 'end' },
     ],
   };
 }

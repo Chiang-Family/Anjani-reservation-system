@@ -5,6 +5,7 @@ import { createPaymentRecord, getPaymentsByDate, getLatestPaymentByStudent, getP
 import { getStudentOverflowInfo } from '@/lib/notion/hours';
 import { findStudentEventToday, findStudentEventForDate } from './calendar.service';
 import { todayDateString, formatDateTime, nowTaipeiISO, computeDurationMinutes, formatHours } from '@/lib/utils/date';
+import { parseEventSummary } from '@/lib/utils/event';
 import { pushText } from '@/lib/line/push';
 import { studentQuickReply } from '@/templates/quick-reply';
 
@@ -43,6 +44,7 @@ export async function coachCheckinForStudent(
     return { success: false, message: `${targetDate} 沒有 ${student.name} 的課程安排。` };
   }
 
+  const { isMassage } = parseEventSummary(event.summary);
   const now = new Date();
   const checkinTime = nowTaipeiISO();
   const durationMinutes = computeDurationMinutes(event.startTime, event.endTime);
@@ -75,6 +77,7 @@ export async function coachCheckinForStudent(
     classStartTime,
     classEndTime,
     checkinTime,
+    isMassage,
   });
 
   // 用打卡前的資料 + 本次時長，算出新的剩餘時數

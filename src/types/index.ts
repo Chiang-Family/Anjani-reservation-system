@@ -55,6 +55,7 @@ export interface CheckinRecord {
   classTimeSlot: string;
   durationMinutes: number;
   studentName?: string;
+  isMassage?: boolean;
 }
 
 export interface StudentHoursSummary {
