@@ -108,46 +108,40 @@ export async function coachCheckinForStudent(
     const qr = studentQuickReply(student.paymentType);
 
     if (isSessionStudent) {
-      // 單堂學員：查詢未繳費課程 + 發送通知（非阻塞）
-      const lineId = student.lineUserId;
+      // 單堂學員：查詢未繳費課程 + 發送通知
       const fee = student.perSessionFee ?? 0;
-      const sid = student.id;
-      (async () => {
-        try {
-          const [allCheckins, allPayments] = await Promise.all([
-            getCheckinsByStudent(sid),
-            getPaymentsByStudent(sid),
-          ]);
-          const paidDates = new Set(
-            allPayments.filter(p => p.isSessionPayment).map(p => p.createdAt)
-          );
-          // 未繳費的歷史課程（不含本次打卡日期）
-          const unpaidDates = allCheckins
-            .filter(c => c.classDate && c.classDate !== targetDate && !paidDates.has(c.classDate))
-            .map(c => c.classDate)
-            .sort();
+      try {
+        const [allCheckins, allPayments] = await Promise.all([
+          getCheckinsByStudent(student.id),
+          getPaymentsByStudent(student.id),
+        ]);
+        const paidDates = new Set(
+          allPayments.filter(p => p.isSessionPayment).map(p => p.createdAt)
+        );
+        // 未繳費的歷史課程（不含本次打卡日期）
+        const unpaidDates = allCheckins
+          .filter(c => c.classDate && c.classDate !== targetDate && !paidDates.has(c.classDate))
+          .map(c => c.classDate)
+          .sort();
 
-          const lines = [
-            `✅ ${dateLabel}課程已完成打卡！`,
-            `📅 課程時段：${event.startTime}–${event.endTime}`,
-            `⏱️ 課程時長：${durationMinutes} 分鐘`,
-            `💵 本堂費用：$${fee.toLocaleString()}`,
-          ];
-          if (unpaidDates.length > 0) {
-            lines.push('', `⚠️ 尚有未繳費課程：`);
-            for (const d of unpaidDates) {
-              lines.push(`  • ${d.slice(5).replace('-', '/')} $${fee.toLocaleString()}`);
-            }
+        const lines = [
+          `✅ ${dateLabel}課程已完成打卡！`,
+          `📅 課程時段：${event.startTime}–${event.endTime}`,
+          `⏱️ 課程時長：${durationMinutes} 分鐘`,
+          `💵 本堂費用：$${fee.toLocaleString()}`,
+        ];
+        if (unpaidDates.length > 0) {
+          lines.push('', `⚠️ 尚有未繳費課程：`);
+          for (const d of unpaidDates) {
+            lines.push(`  • ${d.slice(5).replace('-', '/')} $${fee.toLocaleString()}`);
           }
-          lines.push('', '繳費完成後再麻煩通知教練，謝謝！');
-
-          pushText(lineId, lines.join('\n'), qr).catch((err) =>
-            console.error('Push checkin notification to student failed:', err)
-          );
-        } catch (err) {
-          console.error('Failed to compose session student notification:', err);
         }
-      })();
+        lines.push('', '繳費完成後再麻煩通知教練，謝謝！');
+
+        await pushText(student.lineUserId, lines.join('\n'), qr);
+      } catch (err) {
+        console.error('Push checkin notification to session student failed:', err);
+      }
     } else {
       // 多堂學員：顯示剩餘時數 + 繳費提醒
       const paymentWarning = summary.remainingHours <= 0 && !periodJustEnded
@@ -162,7 +156,7 @@ export async function coachCheckinForStudent(
         `📊 剩餘時數：${formatHours(summary.remainingHours)}`,
         ...(paymentWarning ? [paymentWarning] : []),
       ].join('\n');
-      pushText(student.lineUserId, studentMsg, qr).catch((err) =>
+      await pushText(student.lineUserId, studentMsg, qr).catch((err) =>
         console.error('Push checkin notification to student failed:', err)
       );
 
@@ -174,7 +168,7 @@ export async function coachCheckinForStudent(
           `您的當期課程時數已全部使用完畢，`,
           `繳費完成後再麻煩通知教練，謝謝！`,
         ].join('\n');
-        pushText(student.lineUserId, reminderMsg, qr).catch((err) =>
+        await pushText(student.lineUserId, reminderMsg, qr).catch((err) =>
           console.error('Push payment reminder to student failed:', err)
         );
       }
@@ -192,7 +186,7 @@ export async function coachCheckinForStudent(
       const relatedStudent = await getStudentById(relatedId);
       if (relatedStudent?.lineUserId) {
         const qr = studentQuickReply(relatedStudent.paymentType);
-        pushText(relatedStudent.lineUserId, sharedMsg, qr).catch((err) =>
+        await pushText(relatedStudent.lineUserId, sharedMsg, qr).catch((err) =>
           console.error('Push checkin notification to related student failed:', err)
         );
       }
@@ -296,7 +290,7 @@ export async function recordSessionPayment(
       `💵 金額：$${fee}`,
       `⏰ 紀錄時間：${formatDateTime(now)}`,
     ].join('\n');
-    pushText(student.lineUserId, studentMsg, studentQuickReply(student.paymentType)).catch((err) =>
+    await pushText(student.lineUserId, studentMsg, studentQuickReply(student.paymentType)).catch((err) =>
       console.error('Push session payment notification failed:', err)
     );
   }
