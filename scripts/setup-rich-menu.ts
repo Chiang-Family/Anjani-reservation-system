@@ -39,56 +39,54 @@ async function deleteAllRichMenus() {
   }
 }
 
-async function generateImage(
-  labels: string[],
-  bgColor: string,
-  textColor: string,
-  cols: number,
-  rows: number,
-): Promise<Blob> {
+interface MenuButton {
+  label: string;
+  action: string;
+  color: string;
+}
+
+async function generateImage(buttons: MenuButton[], cols: number, rows: number): Promise<Blob> {
   const sharp = (await import('sharp')).default;
   const width = 2500;
   const height = 843;
+  const gap = 5;
   const cellW = width / cols;
   const cellH = height / rows;
-  const font = 'PingFang TC, Noto Sans TC, Heiti TC, Arial, sans-serif';
+  const font = 'PingFang TC, Noto Sans TC, Heiti TC, sans-serif';
 
-  const svgParts = labels.map((label, i) => {
-    const x = (i % cols) * cellW + cellW / 2;
-    const y = Math.floor(i / cols) * cellH + cellH / 2;
-    return `<text x="${x}" y="${y}" font-family="${font}" font-size="56" font-weight="500" fill="${textColor}" text-anchor="middle" dominant-baseline="central">${label}</text>`;
+  const cells = buttons.map((btn, i) => {
+    const col = i % cols;
+    const row = Math.floor(i / cols);
+    const x = col * cellW + gap / 2;
+    const y = row * cellH + gap / 2;
+    const w = cellW - gap;
+    const h = cellH - gap;
+    const cx = col * cellW + cellW / 2;
+    const cy = row * cellH + cellH / 2;
+
+    return [
+      `<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="16" fill="${btn.color}"/>`,
+      `<rect x="${x}" y="${y}" width="${w}" height="${h * 0.45}" rx="16" fill="url(#shine)"/>`,
+      `<text x="${cx}" y="${cy + 6}" font-family="${font}" font-size="84" font-weight="600" fill="#FFFFFF" text-anchor="middle" dominant-baseline="central">${btn.label}</text>`,
+    ].join('\n');
   });
 
-  const gridLines: string[] = [];
-  for (let c = 1; c < cols; c++) {
-    gridLines.push(`<line x1="${c * cellW}" y1="0" x2="${c * cellW}" y2="${height}" stroke="${textColor}" stroke-opacity="0.2" stroke-width="2"/>`);
-  }
-  for (let r = 1; r < rows; r++) {
-    gridLines.push(`<line x1="0" y1="${r * cellH}" x2="${width}" y2="${r * cellH}" stroke="${textColor}" stroke-opacity="0.2" stroke-width="2"/>`);
-  }
-
   const svg = `<svg width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg">
-    <rect width="100%" height="100%" fill="${bgColor}"/>
-    ${gridLines.join('\n')}
-    ${svgParts.join('\n')}
-  </svg>`;
+  <defs>
+    <linearGradient id="shine" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.08"/>
+      <stop offset="100%" stop-color="#FFFFFF" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+  <rect width="100%" height="100%" fill="#141C2E"/>
+  ${cells.join('\n')}
+</svg>`;
 
   const buffer = await sharp(Buffer.from(svg)).png().toBuffer();
   return new Blob([buffer as unknown as BlobPart], { type: 'image/png' });
 }
 
-interface MenuButton {
-  label: string;   // 圖片上顯示的文字
-  action: string;  // 點擊後送出的訊息
-}
-
-async function createMenu(
-  name: string,
-  chatBarText: string,
-  buttons: MenuButton[],
-  bgColor: string,
-  textColor: string,
-): Promise<string> {
+async function createMenu(name: string, chatBarText: string, buttons: MenuButton[]): Promise<string> {
   const cols = 2;
   const rows = Math.ceil(buttons.length / cols);
   const cellW = 2500 / cols;
@@ -113,8 +111,7 @@ async function createMenu(
   });
 
   const richMenuId = response.richMenuId;
-  const labels = buttons.map(b => b.label);
-  const imageBlob = await generateImage(labels, bgColor, textColor, cols, rows);
+  const imageBlob = await generateImage(buttons, cols, rows);
   await blobClient.setRichMenuImage(richMenuId, imageBlob);
 
   return richMenuId;
@@ -125,33 +122,21 @@ async function main() {
   await deleteAllRichMenus();
 
   console.log('\n📱 建立學員 Rich Menu...');
-  const studentMenuId = await createMenu(
-    'Student Menu',
-    '選單',
-    [
-      { label: '近期預約', action: '近期預約' },
-      { label: '上課紀錄', action: '當期上課紀錄' },
-      { label: '繳費紀錄', action: '繳費紀錄' },
-      { label: '注意事項', action: '上課注意事項' },
-    ],
-    '#1B4965',
-    '#FFFFFF',
-  );
+  const studentMenuId = await createMenu('Student Menu', '選單', [
+    { label: '近期預約', action: '近期預約', color: '#2C5F7C' },
+    { label: '上課紀錄', action: '當期上課紀錄', color: '#2A7F7F' },
+    { label: '繳費紀錄', action: '繳費紀錄', color: '#4A7C5C' },
+    { label: '注意事項', action: '上課注意事項', color: '#8B6B3E' },
+  ]);
   console.log(`  ✅ ID: ${studentMenuId}`);
 
   console.log('\n📱 建立教練 Rich Menu...');
-  const coachMenuId = await createMenu(
-    'Coach Menu',
-    '教練選單',
-    [
-      { label: '每日課表', action: '每日課表' },
-      { label: '學員管理', action: '學員管理' },
-      { label: '每週統計', action: '每週統計' },
-      { label: '每月統計', action: '每月統計' },
-    ],
-    '#2D6A4F',
-    '#FFFFFF',
-  );
+  const coachMenuId = await createMenu('Coach Menu', '教練選單', [
+    { label: '每日課表', action: '每日課表', color: '#3D4F6F' },
+    { label: '學員管理', action: '學員管理', color: '#5B4878' },
+    { label: '每週統計', action: '每週統計', color: '#2C5F7C' },
+    { label: '每月統計', action: '每月統計', color: '#7C4A5A' },
+  ]);
   console.log(`  ✅ ID: ${coachMenuId}`);
 
   console.log('\n🔗 設定學員選單為預設...');
