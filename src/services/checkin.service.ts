@@ -103,6 +103,7 @@ export async function coachCheckinForStudent(
   // Push notification to student
   const isToday = targetDate === todayDateString();
   const dateLabel = isToday ? '今日' : targetDate;
+  let pushFailed = false;
 
   if (student.lineUserId) {
     const qr = studentQuickReply(student.paymentType);
@@ -140,6 +141,7 @@ export async function coachCheckinForStudent(
 
         await pushText(student.lineUserId, lines.join('\n'), qr);
       } catch (err) {
+        pushFailed = true;
         console.error('Push checkin notification to session student failed:', err);
       }
     } else {
@@ -156,9 +158,10 @@ export async function coachCheckinForStudent(
         `📊 剩餘時數：${formatHours(summary.remainingHours)}`,
         ...(paymentWarning ? [paymentWarning] : []),
       ].join('\n');
-      await pushText(student.lineUserId, studentMsg, qr).catch((err) =>
-        console.error('Push checkin notification to student failed:', err)
-      );
+      await pushText(student.lineUserId, studentMsg, qr).catch((err) => {
+        pushFailed = true;
+        console.error('Push checkin notification to student failed:', err);
+      });
 
       // 當期時數用完 → 發送繳費提醒
       if (periodJustEnded) {
@@ -168,9 +171,9 @@ export async function coachCheckinForStudent(
           `您的當期課程時數已全部使用完畢，`,
           `繳費完成後再麻煩通知教練，謝謝！`,
         ].join('\n');
-        await pushText(student.lineUserId, reminderMsg, qr).catch((err) =>
-          console.error('Push payment reminder to student failed:', err)
-        );
+        await pushText(student.lineUserId, reminderMsg, qr).catch((err) => {
+          console.error('Push payment reminder to student failed:', err);
+        });
       }
     }
   }
@@ -186,9 +189,10 @@ export async function coachCheckinForStudent(
       const relatedStudent = await getStudentById(relatedId);
       if (relatedStudent?.lineUserId) {
         const qr = studentQuickReply(relatedStudent.paymentType);
-        await pushText(relatedStudent.lineUserId, sharedMsg, qr).catch((err) =>
-          console.error('Push checkin notification to related student failed:', err)
-        );
+        await pushText(relatedStudent.lineUserId, sharedMsg, qr).catch((err) => {
+          pushFailed = true;
+          console.error('Push checkin notification to related student failed:', err);
+        });
       }
     }
   }
@@ -201,6 +205,10 @@ export async function coachCheckinForStudent(
 
   const datePrefix = isToday ? '' : `（${targetDate}）`;
 
+  const pushWarning = pushFailed
+    ? `\n⚠️ 學員通知發送失敗（LINE 推播額度可能已用完）`
+    : '';
+
   return {
     success: true,
     message: [
@@ -212,6 +220,7 @@ export async function coachCheckinForStudent(
         ? `🎉 已記錄 ${durationMinutes} 分鐘`
         : `🎉 已記錄 ${durationMinutes} 分鐘，剩餘 ${formatHours(summary.remainingHours)}`,
       balanceWarning,
+      pushWarning,
     ].filter(Boolean).join('\n'),
   };
 }
@@ -281,6 +290,7 @@ export async function recordSessionPayment(
   });
 
   // 推播通知學員
+  let payPushFailed = false;
   if (student.lineUserId) {
     const now = new Date();
     const studentMsg = [
@@ -290,12 +300,16 @@ export async function recordSessionPayment(
       `💵 金額：$${fee}`,
       `⏰ 紀錄時間：${formatDateTime(now)}`,
     ].join('\n');
-    await pushText(student.lineUserId, studentMsg, studentQuickReply(student.paymentType)).catch((err) =>
-      console.error('Push session payment notification failed:', err)
-    );
+    await pushText(student.lineUserId, studentMsg, studentQuickReply(student.paymentType)).catch((err) => {
+      payPushFailed = true;
+      console.error('Push session payment notification failed:', err);
+    });
   }
 
   const timeSlot = checkin?.classTimeSlot ?? '';
+  const payPushWarning = payPushFailed
+    ? `\n⚠️ 學員通知發送失敗（LINE 推播額度可能已用完）`
+    : '';
 
   return {
     success: true,
@@ -303,7 +317,8 @@ export async function recordSessionPayment(
       `💰 已為 ${student.name} 記錄繳費！`,
       `📅 課程時段：${targetDate} ${timeSlot}`.trim(),
       `💵 金額：$${fee}`,
-    ].join('\n'),
+      payPushWarning,
+    ].filter(Boolean).join('\n'),
   };
 }
 

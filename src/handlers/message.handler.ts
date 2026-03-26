@@ -39,6 +39,8 @@ import { studentMgmtList } from '@/templates/flex/student-mgmt-list';
 import { classHistoryCard, sessionMonthlyCard } from '@/templates/flex/class-history';
 import { studentQuickReply, coachQuickReply, menuQuickReply } from '@/templates/quick-reply';
 import { addStudentConfirmCard } from '@/templates/flex/add-student-confirm';
+import { linkRichMenuToUser } from '@/lib/line/rich-menu';
+import { getEnv } from '@/lib/config/env';
 
 export async function handleMessage(event: MessageEvent): Promise<void> {
   if (event.message.type !== 'text') return;
@@ -93,8 +95,14 @@ export async function handleMessage(event: MessageEvent): Promise<void> {
       try {
         const result = await handleBinding(lineUserId, text);
         if (result.success) {
+          const env = getEnv();
           const student = await getStudentInfo(lineUserId);
           if (student) {
+            if (env.RICH_MENU_STUDENT_ID) {
+              linkRichMenuToUser(lineUserId, env.RICH_MENU_STUDENT_ID).catch((err) =>
+                console.error('Failed to link student rich menu on binding:', err)
+              );
+            }
             const coach = student.coachId ? await getCoachById(student.coachId) : null;
             await replyMessages(event.replyToken, [
               { type: 'flex', altText: CLASS_NOTES_TEXT, contents: classNotesCard() },
@@ -109,6 +117,11 @@ export async function handleMessage(event: MessageEvent): Promise<void> {
           }
           const coach = await findCoachByLineId(lineUserId);
           if (coach) {
+            if (env.RICH_MENU_COACH_ID) {
+              linkRichMenuToUser(lineUserId, env.RICH_MENU_COACH_ID).catch((err) =>
+                console.error('Failed to link coach rich menu on binding:', err)
+              );
+            }
             await replyFlex(event.replyToken, '安傑力教練管理系統', coachMenu(coach.name), coachQuickReply());
             return;
           }
