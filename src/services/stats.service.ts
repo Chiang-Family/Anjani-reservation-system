@@ -318,7 +318,17 @@ function findRenewalCycles(
           const isSession = payments.some(p => p.isSessionPayment);
 
           if (isSession) {
-            // 單堂計費：未來行事曆事件不算未繳費（上完課才付費）
+            // 單堂計費：每個剩餘未來事件都是一次續約（尚未繳費）
+            for (let j = evtIdx; j < futureEvents.length; j++) {
+              cycles.push({
+                expiryDate: futureEvents[j].date,
+                renewalDate: futureEvents[j].date,
+                isPaid: false,
+                expectedHours: 1,
+                expectedAmount: curInfo.pricePerHour,
+                paidAmount: 0,
+              });
+            }
           } else {
             // 套時數：用 FIFO 調整後的 bucket.purchasedHours（含結轉），反映實際消耗堂數
             cycles.push({
@@ -364,12 +374,22 @@ function findRenewalCycles(
       const isSession = payments.some(p => p.isSessionPayment);
 
       if (isSession) {
-        // 單堂計費：只列已打卡但未繳費的 overflow checkins
-        // 未來行事曆事件不算未繳費（單堂學員是上完課才付費）
+        // 單堂計費：每筆 overflow checkin（已打卡未繳費）都是一次續約
         for (const c of overflowCheckins) {
           cycles.push({
             expiryDate: c.classDate,
             renewalDate: c.classDate,
+            isPaid: false,
+            expectedHours: 1,
+            expectedAmount: lastInfo.pricePerHour,
+            paidAmount: 0,
+          });
+        }
+        // 加上未來行事曆事件（尚未打卡、尚未繳費）
+        for (const evt of futureEvents) {
+          cycles.push({
+            expiryDate: lastCheckin.classDate,
+            renewalDate: evt.date,
             isPaid: false,
             expectedHours: 1,
             expectedAmount: lastInfo.pricePerHour,
@@ -454,10 +474,11 @@ export async function getCoachMonthlyStats(
   }
 
   // ====== Compute hours summary per student in-memory ======
-  // 有關聯學員時，合併雙方打卡記錄共用同一付款 bucket
+  // 套時數 + 有關聯學員 → 合併雙方打卡記錄共用同一付款 bucket
+  // 單堂計費不合併（各自的打卡對應各自的付款，合併會導致互相消耗）
   const studentBucketData = students.map(s => {
     const studentPayments = paymentsByStudentId.get(s.id) ?? [];
-    if (s.relatedStudentIds?.length) {
+    if (s.relatedStudentIds?.length && s.paymentType !== '單堂') {
       const allIds = [s.id, ...s.relatedStudentIds];
       const combinedCheckins = allIds
         .flatMap(id => checkinsByStudentId.get(id) ?? [])
