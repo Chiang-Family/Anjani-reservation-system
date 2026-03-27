@@ -723,22 +723,20 @@ export async function getCoachMonthlyStats(
     }
   }
 
-  // 合併同一學員的多筆未繳費 cycle（單堂計費學員每堂課各產生一筆 cycle，需彙整為一筆）
-  const unpaidByName = new Map<string, RenewalStudent>();
+  // 合併同一學員的多筆 cycle（單堂計費學員每堂課各產生一筆 cycle，需彙整為一筆）
+  const mergeByName = new Map<string, RenewalStudent>();
   const finalRenewalStudents: RenewalStudent[] = [];
   for (const rs of renewalStudents) {
-    if (!rs.isPaid) {
-      const existing = unpaidByName.get(rs.name);
-      if (existing) {
-        existing.expectedRenewalHours += rs.expectedRenewalHours;
-        existing.expectedRenewalAmount += rs.expectedRenewalAmount;
-      } else {
-        const entry = { ...rs };
-        unpaidByName.set(rs.name, entry);
-        finalRenewalStudents.push(entry);
-      }
+    const key = `${rs.name}:${rs.isPaid}`;
+    const existing = mergeByName.get(key);
+    if (existing) {
+      existing.expectedRenewalHours += rs.expectedRenewalHours;
+      existing.expectedRenewalAmount += rs.expectedRenewalAmount;
+      existing.paidAmount += rs.paidAmount;
     } else {
-      finalRenewalStudents.push(rs);
+      const entry = { ...rs };
+      mergeByName.set(key, entry);
+      finalRenewalStudents.push(entry);
     }
   }
 
