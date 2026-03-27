@@ -83,7 +83,7 @@ function extractPayment(page: Record<string, unknown>): PaymentRecord {
     paidAmount,
     status: status === '已繳費' ? '已繳費' : status === '部分繳費' ? '部分繳費' : '未繳費',
     createdAt: cleanTitle.split(' - ')[1]?.trim() || getDateValue(props[PAYMENT_PROPS.CREATED_AT]),
-    actualDate: getDateValue(props[PAYMENT_PROPS.CREATED_AT]),
+    actualDate: getDateValue(props[PAYMENT_PROPS.CREATED_AT]) || cleanTitle.split(' - ')[1]?.trim() || '',
     isSessionPayment,
   };
 }

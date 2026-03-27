@@ -256,7 +256,7 @@ function findRenewalCycles(
     // 已繳費 → 用實際收費金額（已付金額）；部分/未繳費 → 用公式金額
     const allFullyPaid = ps.length > 0 && ps.every(p => p.status === '已繳費');
     return {
-      actualDate: ps[0]?.actualDate ?? bucket.paymentDate,
+      actualDate: ps[0]?.actualDate || bucket.paymentDate,
       // 用原始付款時數，不含 FIFO 結轉（結轉會膨脹 bucket.purchasedHours）
       purchasedHours: ps.reduce((s, p) => s + p.purchasedHours, 0),
       totalAmount: allFullyPaid ? paidTotal : formulaTotal,
