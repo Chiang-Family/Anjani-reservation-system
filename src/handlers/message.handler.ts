@@ -110,7 +110,6 @@ export async function handleMessage(event: MessageEvent): Promise<void> {
                 type: 'flex',
                 altText: '安傑力課程管理系統',
                 contents: studentMenu(student.name, coach?.lineUrl, student.paymentType),
-                quickReply: { items: studentQuickReply(student.paymentType) },
               },
             ]);
             return;

@@ -67,7 +67,7 @@ async function generateImage(buttons: MenuButton[], cols: number, rows: number):
     return [
       `<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="16" fill="${btn.color}"/>`,
       `<rect x="${x}" y="${y}" width="${w}" height="${h * 0.45}" rx="16" fill="url(#shine)"/>`,
-      `<text x="${cx}" y="${cy + 6}" font-family="${font}" font-size="84" font-weight="600" fill="#FFFFFF" text-anchor="middle" dominant-baseline="central">${btn.label}</text>`,
+      `<text x="${cx}" y="${cy + 6}" font-family="${font}" font-size="96" font-weight="600" letter-spacing="0.15em" fill="#FFFFFF" text-anchor="middle" dominant-baseline="central">${btn.label}</text>`,
     ].join('\n');
   });
 
@@ -78,7 +78,7 @@ async function generateImage(buttons: MenuButton[], cols: number, rows: number):
       <stop offset="100%" stop-color="#FFFFFF" stop-opacity="0"/>
     </linearGradient>
   </defs>
-  <rect width="100%" height="100%" fill="#141C2E"/>
+  <rect width="100%" height="100%" fill="#2B2B2B"/>
   ${cells.join('\n')}
 </svg>`;
 
@@ -123,19 +123,19 @@ async function main() {
 
   console.log('\n📱 建立學員 Rich Menu...');
   const studentMenuId = await createMenu('Student Menu', '選單', [
-    { label: '近期預約', action: '近期預約', color: '#2C5F7C' },
-    { label: '上課紀錄', action: '當期上課紀錄', color: '#2A7F7F' },
-    { label: '繳費紀錄', action: '繳費紀錄', color: '#4A7C5C' },
-    { label: '注意事項', action: '上課注意事項', color: '#8B6B3E' },
+    { label: '近期預約', action: '近期預約', color: '#5B7065' },
+    { label: '上課紀錄', action: '當期上課紀錄', color: '#6B7B8D' },
+    { label: '繳費紀錄', action: '繳費紀錄', color: '#7D6B5D' },
+    { label: '注意事項', action: '上課注意事項', color: '#8D7B6B' },
   ]);
   console.log(`  ✅ ID: ${studentMenuId}`);
 
   console.log('\n📱 建立教練 Rich Menu...');
   const coachMenuId = await createMenu('Coach Menu', '教練選單', [
-    { label: '每日課表', action: '每日課表', color: '#3D4F6F' },
-    { label: '學員管理', action: '學員管理', color: '#5B4878' },
-    { label: '每週統計', action: '每週統計', color: '#2C5F7C' },
-    { label: '每月統計', action: '每月統計', color: '#7C4A5A' },
+    { label: '每日課表', action: '每日課表', color: '#5D6B7D' },
+    { label: '學員管理', action: '學員管理', color: '#6B5D6B' },
+    { label: '每週統計', action: '每週統計', color: '#5B7065' },
+    { label: '每月統計', action: '每月統計', color: '#7B6B5B' },
   ]);
   console.log(`  ✅ ID: ${coachMenuId}`);
 

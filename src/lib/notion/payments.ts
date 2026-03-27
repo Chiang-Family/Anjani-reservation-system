@@ -171,20 +171,29 @@ export async function getPaymentsByStudents(studentIds: string[]): Promise<Payme
   if (studentIds.length === 1) return getPaymentsByStudent(studentIds[0]);
 
   const notion = getNotionClient();
-  const res = await notion.databases.query({
-    database_id: getEnv().NOTION_PAYMENTS_DB_ID,
-    filter: {
-      or: studentIds.map((id) => ({
-        property: PAYMENT_PROPS.STUDENT,
-        relation: { contains: id },
-      })),
-    } as NotionFilter,
-    sorts: [{ property: PAYMENT_PROPS.CREATED_AT, direction: 'descending' }],
-  });
+  const payments: PaymentRecord[] = [];
+  let cursor: string | undefined;
 
-  const payments = res.results.map((page) =>
-    extractPayment(page as unknown as Record<string, unknown>)
-  );
+  do {
+    const res = await notion.databases.query({
+      database_id: getEnv().NOTION_PAYMENTS_DB_ID,
+      filter: {
+        or: studentIds.map((id) => ({
+          property: PAYMENT_PROPS.STUDENT,
+          relation: { contains: id },
+        })),
+      } as NotionFilter,
+      sorts: [{ property: PAYMENT_PROPS.CREATED_AT, direction: 'descending' }],
+      page_size: 100,
+      start_cursor: cursor,
+    });
+
+    for (const page of res.results) {
+      payments.push(extractPayment(page as unknown as Record<string, unknown>));
+    }
+    cursor = res.has_more ? (res.next_cursor ?? undefined) : undefined;
+  } while (cursor);
+
   payments.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   return payments;
 }
