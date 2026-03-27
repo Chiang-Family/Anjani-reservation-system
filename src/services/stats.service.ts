@@ -318,17 +318,7 @@ function findRenewalCycles(
           const isSession = payments.some(p => p.isSessionPayment);
 
           if (isSession) {
-            // 單堂計費：每個剩餘未來事件都是一次續約
-            for (let j = evtIdx; j < futureEvents.length; j++) {
-              cycles.push({
-                expiryDate: futureEvents[j].date,
-                renewalDate: futureEvents[j].date,
-                isPaid: false,
-                expectedHours: 1,
-                expectedAmount: curInfo.pricePerHour,
-                paidAmount: 0,
-              });
-            }
+            // 單堂計費：未來行事曆事件不算未繳費（上完課才付費）
           } else {
             // 套時數：用 FIFO 調整後的 bucket.purchasedHours（含結轉），反映實際消耗堂數
             cycles.push({
@@ -374,22 +364,12 @@ function findRenewalCycles(
       const isSession = payments.some(p => p.isSessionPayment);
 
       if (isSession) {
-        // 單堂計費：每筆 overflow checkin（已打卡未繳費）都是一次續約
+        // 單堂計費：只列已打卡但未繳費的 overflow checkins
+        // 未來行事曆事件不算未繳費（單堂學員是上完課才付費）
         for (const c of overflowCheckins) {
           cycles.push({
             expiryDate: c.classDate,
             renewalDate: c.classDate,
-            isPaid: false,
-            expectedHours: 1,
-            expectedAmount: lastInfo.pricePerHour,
-            paidAmount: 0,
-          });
-        }
-        // 加上未來行事曆事件（尚未打卡）
-        for (const evt of futureEvents) {
-          cycles.push({
-            expiryDate: lastCheckin.classDate,
-            renewalDate: evt.date,
             isPaid: false,
             expectedHours: 1,
             expectedAmount: lastInfo.pricePerHour,
@@ -564,11 +544,11 @@ export async function getCoachMonthlyStats(
   // Group future events by student name
   const futureEventsByStudent = new Map<string, CalendarEvent[]>();
   for (const event of futureEvents) {
-    const name = event.summary.trim();
-    if (!futureEventsByStudent.has(name)) {
-      futureEventsByStudent.set(name, []);
+    const { studentName } = parseEventSummary(event.summary);
+    if (!futureEventsByStudent.has(studentName)) {
+      futureEventsByStudent.set(studentName, []);
     }
-    futureEventsByStudent.get(name)!.push(event);
+    futureEventsByStudent.get(studentName)!.push(event);
   }
 
   // Find renewal cycles per student (all in-memory, no API calls)
