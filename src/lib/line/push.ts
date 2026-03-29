@@ -1,7 +1,6 @@
 import { getLineClient } from './client';
 import type { messagingApi } from '@line/bot-sdk';
 
-type Message = messagingApi.Message;
 type FlexContainer = messagingApi.FlexContainer;
 type QuickReplyItem = messagingApi.QuickReplyItem;
 
@@ -32,16 +31,6 @@ export async function pushFlex(
         ...(quickReplyItems ? { quickReply: { items: quickReplyItems } } : {}),
       },
     ],
-  });
-}
-
-export async function pushMessages(
-  userId: string,
-  messages: Message[]
-): Promise<void> {
-  await getLineClient().pushMessage({
-    to: userId,
-    messages,
   });
 }
 

@@ -89,45 +89,6 @@ export interface CoachMonthlyStats {
 }
 
 /**
- * Build priceMap (name → price) and priceByStudentId (id → price) from students + payments.
- */
-function buildPriceMaps(
-  students: Student[],
-  payments: PaymentRecord[],
-): { priceMap: Map<string, number>; priceByStudentId: Map<string, number> } {
-  const paymentsByStudentId = new Map<string, PaymentRecord[]>();
-  for (const p of payments) {
-    const arr = paymentsByStudentId.get(p.studentId) ?? [];
-    arr.push(p);
-    paymentsByStudentId.set(p.studentId, arr);
-  }
-  const studentById = new Map(students.map(s => [s.id, s]));
-
-  const priceMap = new Map<string, number>();
-  for (const s of students) {
-    const sp = paymentsByStudentId.get(s.id);
-    if (sp?.length) priceMap.set(s.name, sp[0].pricePerHour);
-  }
-  // 副學員（無付款）繼承主學員單價
-  for (const s of students) {
-    if (!priceMap.has(s.name) && s.relatedStudentIds?.length) {
-      for (const relatedId of s.relatedStudentIds) {
-        const related = studentById.get(relatedId);
-        if (related && priceMap.has(related.name)) {
-          priceMap.set(s.name, priceMap.get(related.name)!);
-          break;
-        }
-      }
-    }
-  }
-  const priceByStudentId = new Map<string, number>();
-  for (const s of students) {
-    if (priceMap.has(s.name)) priceByStudentId.set(s.id, priceMap.get(s.name)!);
-  }
-  return { priceMap, priceByStudentId };
-}
-
-/**
  * 從 FIFO 分桶結果建立 checkinId → pricePerHour 映射。
  * 每筆打卡對應其所屬 bucket 的單價；overflow checkins fallback 到最新付款單價。
  */
