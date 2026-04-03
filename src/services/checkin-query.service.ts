@@ -4,6 +4,7 @@ import { getEventsForDateRange } from '@/lib/google/calendar';
 import { getCheckinsByCoach } from '@/lib/notion/checkins';
 import { startOfMonth, endOfMonth, format } from 'date-fns';
 import { toZonedTime } from 'date-fns-tz';
+import { todayDateString } from '@/lib/utils/date';
 
 const TZ = 'Asia/Taipei';
 
@@ -37,12 +38,14 @@ export async function getMissingCheckinsForMonth(
     return { missing: [], coachName: coach.name, monthLabel: `${year}年${month}月` };
   }
 
-  // 只保留該教練學員名稱的課程，且確保日期在 requested month 內（避免 Google API 傳回過多或跨月事件）
+  // 只保留該教練學員名稱的課程，且確保日期在 requested month 內，且不包含未來日期
+  const today = todayDateString();
   const studentNames = new Set(students.map(s => s.name));
   const monthEvents = allEvents.filter(e => 
     studentNames.has(e.summary.trim()) && 
     e.date >= start && 
-    e.date <= end
+    e.date <= end &&
+    e.date <= today
   );
 
   // 該月打卡紀錄集合：`studentId:classDate`
