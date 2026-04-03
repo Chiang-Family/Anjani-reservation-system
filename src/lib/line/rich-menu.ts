@@ -103,15 +103,17 @@ export async function setupStudentRichMenu(): Promise<string> {
 export async function setupCoachRichMenu(): Promise<string> {
   const client = getLineClient();
 
-  const labels = ['每日課表', '學員管理', '每週統計', '每月統計'];
+  const labels = ['每日課表', '未打卡查詢', '學員管理', '每週統計', '每月統計', '年度統計'];
   const actions = [
     KEYWORD.TODAY_SCHEDULE,
+    KEYWORD.MISSING_CHECKINS,
     KEYWORD.STUDENT_MGMT,
     KEYWORD.WEEKLY_STATS,
     KEYWORD.MONTHLY_STATS,
+    KEYWORD.ANNUAL_STATS,
   ];
 
-  const cols = 2;
+  const cols = 3;
   const rows = 2;
   const areas = createRichMenuAreas(actions, cols, rows);
 
