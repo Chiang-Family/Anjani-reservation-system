@@ -160,6 +160,7 @@ export function coachMenu(name: string): FlexBubble {
       contents: [
         sectionLabel('課程管理', 'sm'),
         menuButton(KEYWORD.TODAY_SCHEDULE, '#3E6B8A'),
+        menuButton(KEYWORD.MISSING_CHECKINS, '#5B4B6D'),
         menuButton(KEYWORD.STUDENT_MGMT, '#5A7E92'),
         menuButton(KEYWORD.ADD_STUDENT, '#5A8E72'),
         sectionLabel('統計報表', 'xl'),
