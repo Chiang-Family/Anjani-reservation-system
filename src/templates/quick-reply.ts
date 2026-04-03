@@ -12,6 +12,7 @@ export function coachQuickReply(): QuickReplyItem[] {
   // Rich Menu 已常駐：每日課表、學員管理、每週統計、每月統計
   return [
     quickReplyButton(KEYWORD.ADD_STUDENT),
+    quickReplyButton(KEYWORD.MISSING_CHECKINS),
     quickReplyButton(KEYWORD.ANNUAL_STATS),
     quickReplyButton(KEYWORD.MONTHLY_REPORT),
     quickReplyButton(KEYWORD.MENU),

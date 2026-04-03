@@ -35,6 +35,7 @@ import { monthlyStatsCard } from '@/templates/flex/monthly-stats';
 import { weeklyStatsCard } from '@/templates/flex/weekly-stats';
 import { annualStatsCard } from '@/templates/flex/annual-stats';
 import { reportSelectorCard } from '@/templates/flex/report-selector';
+import { missingCheckinSelectorCard } from '@/templates/flex/missing-checkin-selector';
 import { studentMgmtList } from '@/templates/flex/student-mgmt-list';
 import { classHistoryCard, sessionMonthlyCard } from '@/templates/flex/class-history';
 import { studentQuickReply, coachQuickReply, menuQuickReply } from '@/templates/quick-reply';
@@ -354,6 +355,11 @@ async function handleCoachMessage(
 
     case KEYWORD.MONTHLY_REPORT: {
       await replyFlex(replyToken, '上課明細月報表 — 選擇月份', reportSelectorCard(name), qr);
+      return;
+    }
+
+    case KEYWORD.MISSING_CHECKINS: {
+      await replyFlex(replyToken, '未打卡查詢 — 選擇月份', missingCheckinSelectorCard(name), qr);
       return;
     }
 

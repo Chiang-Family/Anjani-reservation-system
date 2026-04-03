@@ -20,6 +20,8 @@ import { getCoachMonthlyStats, getCoachWeeklyStats } from '@/services/stats.serv
 import { weeklyStatsCard } from '@/templates/flex/weekly-stats';
 import { formatDateLabel, todayDateString, computeDurationMinutes } from '@/lib/utils/date';
 import { menuQuickReply, coachQuickReply } from '@/templates/quick-reply';
+import { getMissingCheckinsForMonth } from '@/services/checkin-query.service';
+import { missingCheckinReportCard } from '@/templates/flex/missing-checkin-report';
 
 function replyTextWithMenu(replyToken: string, text: string) {
   return replyMessages(replyToken, [
@@ -386,6 +388,25 @@ export async function handlePostback(event: PostbackEvent): Promise<void> {
           const msg = reportError instanceof Error ? reportError.message : String(reportError);
           await replyTextWithMenu(event.replyToken, `❌ 報表生成失敗：${msg}`);
         }
+        return;
+      }
+
+      case ACTION.VIEW_MISSING_CHECKINS: {
+        // data = view_missing_checkins:YYYY-MM
+        const match = id?.match(/^(\d{4})-(\d{1,2})$/);
+        if (!match) {
+          await replyTextWithMenu(event.replyToken, '查詢格式錯誤。');
+          return;
+        }
+        const repYear = parseInt(match[1]);
+        const repMonth = parseInt(match[2]);
+        const result = await getMissingCheckinsForMonth(lineUserId, repYear, repMonth);
+        if (!result) {
+          await replyTextWithMenu(event.replyToken, '找不到教練資料。');
+          return;
+        }
+        const card = missingCheckinReportCard(result.monthLabel, result.missing);
+        await replyFlex(event.replyToken, `${result.monthLabel} 未打卡清單`, card, coachQuickReply());
         return;
       }
 

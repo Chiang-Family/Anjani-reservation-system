@@ -11,6 +11,7 @@ export const KEYWORD = {
   ANNUAL_STATS: '年度統計',
 
   MONTHLY_REPORT: '上課明細月報表',
+  MISSING_CHECKINS: '未打卡查詢',
   UPCOMING_CLASSES: '近期預約',
   CLASS_NOTES: '上課注意事項',
   MENU: '選單',
@@ -37,6 +38,7 @@ export const ACTION = {
   VIEW_MONTH_STATS: 'view_month_stats',
   VIEW_WEEK_STATS: 'view_week_stats',
   GENERATE_REPORT: 'gen_report',
+  VIEW_MISSING_CHECKINS: 'view_missing_checkins',
   ADJUST_PRICE: 'adjust_price',
 } as const;
 
