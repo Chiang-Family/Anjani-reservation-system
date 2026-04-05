@@ -1,8 +1,8 @@
 import { findCoachByLineId } from '@/lib/notion/coaches';
 import { getStudentsByCoachId } from '@/lib/notion/students';
-import { getPaymentsByStudent, getPaymentsByStudents } from '@/lib/notion/payments';
-import { assignCheckinsToBuckets, computeSummaryFromBuckets, resolveOverflowIds } from '@/lib/notion/hours';
-import { getCheckinsByCoach, getCheckinsByStudent, getCheckinsByStudents } from '@/lib/notion/checkins';
+import { getPaymentsByStudents } from '@/lib/notion/payments';
+import { assignCheckinsToBuckets, computeSummaryFromBuckets } from '@/lib/notion/hours';
+import { getCheckinsByCoach } from '@/lib/notion/checkins';
 import { getMonthEvents, getEventsForDateRange } from '@/lib/google/calendar';
 import { nowTaipei, computeDurationMinutes, todayDateString } from '@/lib/utils/date';
 import { parseEventSummary } from '@/lib/utils/event';
@@ -937,24 +937,53 @@ export async function getCoachPrepaidBalance(lineUserId: string): Promise<CoachP
   const coach = await findCoachByLineId(lineUserId);
   if (!coach) return null;
 
+  // 批次載入所有資料（3 次 API call，不論學員數量）
   const students = await getStudentsByCoachId(coach.id);
+  const allStudentIds = students.map(s => s.id);
+  const [allPayments, allCheckins] = await Promise.all([
+    getPaymentsByStudents(allStudentIds),
+    getCheckinsByCoach(coach.id),
+  ]);
+
+  // 建立 in-memory 索引
+  const paymentsByStudent = new Map<string, PaymentRecord[]>();
+  for (const p of allPayments) {
+    if (!paymentsByStudent.has(p.studentId)) paymentsByStudent.set(p.studentId, []);
+    paymentsByStudent.get(p.studentId)!.push(p);
+  }
+  const checkinsByStudent = new Map<string, CheckinRecord[]>();
+  for (const c of allCheckins) {
+    if (!checkinsByStudent.has(c.studentId)) checkinsByStudent.set(c.studentId, []);
+    checkinsByStudent.get(c.studentId)!.push(c);
+  }
+
   const rows: StudentPrepaidRow[] = [];
 
   for (const student of students) {
-    // 單堂學員不會有預收
     if (student.paymentType === '單堂') continue;
 
-    // 處理共用時數池：副學員跳過，由主學員計算
-    const { primaryId, relatedIds } = await resolveOverflowIds(student);
-    if (primaryId !== student.id) continue;
+    // 用 in-memory 資料判斷主/副學員（取代 resolveOverflowIds 的 API call）
+    let primaryId = student.id;
+    let relatedIds = student.relatedStudentIds;
+    if (relatedIds?.length) {
+      const hasOwnPayments = (paymentsByStudent.get(student.id)?.length ?? 0) > 0;
+      if (!hasOwnPayments) {
+        // 副學員：跳過
+        continue;
+      }
+    }
 
-    const allIds = [primaryId, ...(relatedIds ?? [])];
-    const [payments, checkins] = await Promise.all([
-      getPaymentsByStudent(primaryId),
-      allIds.length > 1 ? getCheckinsByStudents(allIds) : getCheckinsByStudent(primaryId),
-    ]);
-
+    // 取得繳費和打卡紀錄
+    const payments = paymentsByStudent.get(primaryId) ?? [];
     if (payments.length === 0) continue;
+
+    // 合併共用池的打卡紀錄
+    const poolIds = [primaryId, ...(relatedIds ?? [])];
+    const checkins: CheckinRecord[] = [];
+    for (const id of poolIds) {
+      const sc = checkinsByStudent.get(id);
+      if (sc) checkins.push(...sc);
+    }
 
     const { buckets, overflowCheckins } = assignCheckinsToBuckets(payments, checkins);
     const summary = computeSummaryFromBuckets(buckets, overflowCheckins);
