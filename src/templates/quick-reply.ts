@@ -13,6 +13,7 @@ export function coachQuickReply(): QuickReplyItem[] {
   return [
     quickReplyButton(KEYWORD.ADD_STUDENT),
     quickReplyButton(KEYWORD.MISSING_CHECKINS),
+    quickReplyButton(KEYWORD.PREPAID_BALANCE),
     quickReplyButton(KEYWORD.ANNUAL_STATS),
     quickReplyButton(KEYWORD.MONTHLY_REPORT),
     quickReplyButton(KEYWORD.MENU),

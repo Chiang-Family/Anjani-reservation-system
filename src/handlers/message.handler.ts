@@ -1,7 +1,7 @@
 import type { MessageEvent, TextEventMessage } from '@line/bot-sdk';
 import { identifyUser, getStudentInfo } from '@/services/student.service';
 import { getCoachScheduleForDate } from '@/services/coach.service';
-import { getCoachMonthlyStats, getCoachWeeklyStats, getCoachAnnualStats } from '@/services/stats.service';
+import { getCoachMonthlyStats, getCoachWeeklyStats, getCoachAnnualStats, getCoachPrepaidBalance } from '@/services/stats.service';
 import { getStudentsByCoachId } from '@/lib/notion/students';
 import { findCoachByLineId, getCoachById } from '@/lib/notion/coaches';
 import { findStudentByLineId, getAllStudentIds, getStudentById } from '@/lib/notion/students';
@@ -35,6 +35,7 @@ import { monthlyStatsCard } from '@/templates/flex/monthly-stats';
 import { weeklyStatsCard } from '@/templates/flex/weekly-stats';
 import { annualStatsCard } from '@/templates/flex/annual-stats';
 import { reportSelectorCard } from '@/templates/flex/report-selector';
+import { prepaidBalanceCard } from '@/templates/flex/prepaid-balance';
 import { missingCheckinSelectorCard } from '@/templates/flex/missing-checkin-selector';
 import { studentMgmtList } from '@/templates/flex/student-mgmt-list';
 import { classHistoryCard, sessionMonthlyCard } from '@/templates/flex/class-history';
@@ -360,6 +361,24 @@ async function handleCoachMessage(
 
     case KEYWORD.MISSING_CHECKINS: {
       await replyFlex(replyToken, '未打卡查詢 — 選擇月份', missingCheckinSelectorCard(name), qr);
+      return;
+    }
+
+    case KEYWORD.PREPAID_BALANCE: {
+      const prepaid = await getCoachPrepaidBalance(lineUserId);
+      if (!prepaid) {
+        await replyMessages(replyToken, [
+          { type: 'text', text: '找不到教練資料。', quickReply: { items: qr } },
+        ]);
+        return;
+      }
+      if (prepaid.rows.length === 0) {
+        await replyMessages(replyToken, [
+          { type: 'text', text: '目前沒有學員有預收餘額。', quickReply: { items: qr } },
+        ]);
+        return;
+      }
+      await replyFlex(replyToken, '預收餘額', prepaidBalanceCard(prepaid), coachQuickReply());
       return;
     }
 

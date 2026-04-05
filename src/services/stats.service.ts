@@ -1,8 +1,8 @@
 import { findCoachByLineId } from '@/lib/notion/coaches';
 import { getStudentsByCoachId } from '@/lib/notion/students';
-import { getPaymentsByStudents } from '@/lib/notion/payments';
-import { assignCheckinsToBuckets, computeSummaryFromBuckets } from '@/lib/notion/hours';
-import { getCheckinsByCoach } from '@/lib/notion/checkins';
+import { getPaymentsByStudent, getPaymentsByStudents } from '@/lib/notion/payments';
+import { assignCheckinsToBuckets, computeSummaryFromBuckets, resolveOverflowIds } from '@/lib/notion/hours';
+import { getCheckinsByCoach, getCheckinsByStudent, getCheckinsByStudents } from '@/lib/notion/checkins';
 import { getMonthEvents, getEventsForDateRange } from '@/lib/google/calendar';
 import { nowTaipei, computeDurationMinutes, todayDateString } from '@/lib/utils/date';
 import { parseEventSummary } from '@/lib/utils/event';
@@ -916,4 +916,85 @@ export async function getCoachAnnualStats(
     avgCollectedAmount: monthsWithData > 0 ? Math.round(totalCollectedAmount / monthsWithData) : 0,
     monthlyBreakdown,
   };
+}
+
+// ====== 預收餘額查詢 ======
+
+export interface StudentPrepaidRow {
+  name: string;
+  pricePerHour: number;
+  remainingHours: number;
+  prepaidAmount: number;
+}
+
+export interface CoachPrepaidBalance {
+  coachName: string;
+  rows: StudentPrepaidRow[];
+  totalPrepaid: number;
+}
+
+export async function getCoachPrepaidBalance(lineUserId: string): Promise<CoachPrepaidBalance | null> {
+  const coach = await findCoachByLineId(lineUserId);
+  if (!coach) return null;
+
+  const students = await getStudentsByCoachId(coach.id);
+  const rows: StudentPrepaidRow[] = [];
+
+  for (const student of students) {
+    // 單堂學員不會有預收
+    if (student.paymentType === '單堂') continue;
+
+    // 處理共用時數池：副學員跳過，由主學員計算
+    const { primaryId, relatedIds } = await resolveOverflowIds(student);
+    if (primaryId !== student.id) continue;
+
+    const allIds = [primaryId, ...(relatedIds ?? [])];
+    const [payments, checkins] = await Promise.all([
+      getPaymentsByStudent(primaryId),
+      allIds.length > 1 ? getCheckinsByStudents(allIds) : getCheckinsByStudent(primaryId),
+    ]);
+
+    if (payments.length === 0) continue;
+
+    const { buckets, overflowCheckins } = assignCheckinsToBuckets(payments, checkins);
+    const summary = computeSummaryFromBuckets(buckets, overflowCheckins);
+
+    if (summary.remainingHours <= 0) continue;
+
+    // 加權平均單價（跨桶時不同單價）
+    const activeIdx = buckets.findIndex(b => b.consumedMinutes < b.purchasedHours * 60);
+    let weightedPrice = 0;
+    let totalRemainingHrs = 0;
+    if (activeIdx >= 0) {
+      for (let i = activeIdx; i < buckets.length; i++) {
+        const b = buckets[i];
+        const remainHrs = i === activeIdx
+          ? (b.purchasedHours * 60 - b.consumedMinutes) / 60
+          : b.purchasedHours;
+        if (remainHrs > 0) {
+          weightedPrice += remainHrs * b.pricePerHour;
+          totalRemainingHrs += remainHrs;
+        }
+      }
+    }
+    const avgPrice = totalRemainingHrs > 0
+      ? weightedPrice / totalRemainingHrs
+      : (payments[0]?.pricePerHour ?? 0);
+
+    const displayName = relatedIds?.length
+      ? `${student.name}(共用)`
+      : student.name;
+
+    rows.push({
+      name: displayName,
+      pricePerHour: Math.round(avgPrice),
+      remainingHours: summary.remainingHours,
+      prepaidAmount: Math.round(summary.remainingHours * avgPrice),
+    });
+  }
+
+  rows.sort((a, b) => b.prepaidAmount - a.prepaidAmount);
+  const totalPrepaid = rows.reduce((sum, r) => sum + r.prepaidAmount, 0);
+
+  return { coachName: coach.name, rows, totalPrepaid };
 }

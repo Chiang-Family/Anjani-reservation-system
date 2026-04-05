@@ -12,6 +12,7 @@ export const KEYWORD = {
 
   MONTHLY_REPORT: '上課明細月報表',
   MISSING_CHECKINS: '未打卡查詢',
+  PREPAID_BALANCE: '預收餘額',
   UPCOMING_CLASSES: '近期預約',
   CLASS_NOTES: '上課注意事項',
   MENU: '選單',

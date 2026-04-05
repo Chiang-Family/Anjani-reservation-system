@@ -164,6 +164,7 @@ export function coachMenu(name: string): FlexBubble {
         menuButton(KEYWORD.STUDENT_MGMT, '#5A7E92'),
         menuButton(KEYWORD.ADD_STUDENT, '#5A8E72'),
         sectionLabel('統計報表', 'xl'),
+        menuButton(KEYWORD.PREPAID_BALANCE, '#5A7B5D'),
         menuButton(KEYWORD.WEEKLY_STATS, '#4A7A6A'),
         menuButton(KEYWORD.MONTHLY_STATS, '#6D5D85'),
         menuButton(KEYWORD.ANNUAL_STATS, '#7A5B3D'),
