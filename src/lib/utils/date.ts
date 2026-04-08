@@ -50,9 +50,11 @@ export function computeDurationMinutes(startTime: string, endTime: string): numb
 /** 格式化小時數為中文顯示（如 7 小時 30 分） */
 export function formatHours(hours: number): string {
   const totalMinutes = Math.round(hours * 60);
-  const h = Math.floor(totalMinutes / 60);
-  const m = totalMinutes % 60;
-  if (h === 0) return `${m} 分`;
-  if (m === 0) return `${h} 小時`;
-  return `${h} 小時 ${m} 分`;
+  const sign = totalMinutes < 0 ? '-' : '';
+  const abs = Math.abs(totalMinutes);
+  const h = Math.floor(abs / 60);
+  const m = abs % 60;
+  if (h === 0) return `${sign}${m} 分`;
+  if (m === 0) return `${sign}${h} 小時`;
+  return `${sign}${h} 小時 ${m} 分`;
 }
