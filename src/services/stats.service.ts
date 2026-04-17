@@ -533,6 +533,16 @@ export async function getCoachMonthlyStats(
     futureEventsByStudent.get(studentName)!.push(event);
   }
 
+  // Group this-month events by student name (for new student unpaid detection)
+  const monthEventsByStudent = new Map<string, CalendarEvent[]>();
+  for (const event of events) {
+    const { studentName } = parseEventSummary(event.summary);
+    if (!monthEventsByStudent.has(studentName)) {
+      monthEventsByStudent.set(studentName, []);
+    }
+    monthEventsByStudent.get(studentName)!.push(event);
+  }
+
   // Find renewal cycles per student (all in-memory, no API calls)
   const renewalStudents: RenewalStudent[] = [];
   for (let i = 0; i < students.length; i++) {
@@ -572,6 +582,22 @@ export async function getCoachMonthlyStats(
             paidAmount: 0,
             expiryDate: '',
             renewalDate: evt.date,
+            isPaid: false,
+          });
+        }
+      } else {
+        // 套時數新學員尚無繳費紀錄：本月有行事曆事件則列入未繳費
+        const studentMonthEvents = monthEventsByStudent.get(student.name) ?? [];
+        if (studentMonthEvents.length > 0) {
+          renewalStudents.push({
+            name: student.name,
+            partnerName: undefined,
+            remainingHours: 0,
+            expectedRenewalHours: 0,
+            expectedRenewalAmount: 0,
+            paidAmount: 0,
+            expiryDate: '',
+            renewalDate: studentMonthEvents[0].date,
             isPaid: false,
           });
         }
@@ -652,6 +678,31 @@ export async function getCoachMonthlyStats(
             paidAmount: paidTotal,
           });
           capturedRenewalDates.add(p.actualDate);
+        }
+      }
+    }
+
+    // 有活躍桶但尚未付款（新學員首次繳費尚未繳）：本月有課則列入未繳費
+    const activeBucketForNew = buckets.findIndex(b => b.consumedMinutes < b.purchasedHours * 60);
+    if (activeBucketForNew >= 0 && !cycles.some(c => !c.isPaid)) {
+      const activePmts = studentPayments.filter(p => p.createdAt === buckets[activeBucketForNew].paymentDate);
+      const isUnpaid = activePmts.some(p => p.status !== '已繳費');
+      if (isUnpaid) {
+        const studentMonthEvents = monthEventsByStudent.get(student.name) ?? [];
+        const studentMonthCheckins = (checkinsByStudentId.get(student.id) ?? [])
+          .filter(c => c.classDate.startsWith(monthPrefix));
+        const firstDate = studentMonthEvents[0]?.date || studentMonthCheckins[0]?.classDate || '';
+        if (firstDate) {
+          const formulaTotal = activePmts.reduce((s, p) => s + p.totalAmount, 0);
+          const paidTotal = activePmts.reduce((s, p) => s + p.paidAmount, 0);
+          cycles.push({
+            expiryDate: '',
+            renewalDate: firstDate,
+            isPaid: false,
+            expectedHours: activePmts.reduce((s, p) => s + p.purchasedHours, 0),
+            expectedAmount: formulaTotal,
+            paidAmount: paidTotal,
+          });
         }
       }
     }

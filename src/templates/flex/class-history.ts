@@ -4,84 +4,84 @@ import { formatHours } from '@/lib/utils/date';
 import { ACTION } from '@/lib/config/constants';
 
 type FlexBubble = messagingApi.FlexBubble;
+type FlexCarousel = messagingApi.FlexCarousel;
+type FlexContainer = messagingApi.FlexContainer;
 type FlexComponent = messagingApi.FlexComponent;
 
-export function classHistoryCard(
-  studentName: string,
-  records: CheckinRecord[],
-  remainingHours: number,
-  periodLabel?: string
-): FlexBubble {
-  const totalCount = records.length;
+const ROWS_PER_PAGE = 15;
 
-  // records 目前是從近到遠 (newest first)
-  // 加上序號（i=0 是最新一筆，對應總數 totalCount）
-  const withSequence = records.map((r, i) => ({
-    ...r,
-    sequence: totalCount - i
-  }));
-
-  // 取最近 10 筆，並反轉陣列（變成由遠至近，如 "第 19 堂", "第 20 堂", "第 21 堂" 往下排）
-  const recent = withSequence.slice(0, 10).reverse();
-
-  // 共用時數池判斷：全部紀錄中出現多於一位學員時，每筆都標示姓氏首字
-  const allNames = new Set(records.map(r => r.studentName).filter(Boolean));
-  const isSharedPool = allNames.size > 1;
-
-  const rows: FlexComponent[] = recent.length > 0
-    ? recent.map((r) => ({
-      type: 'box',
-      layout: 'horizontal',
-      contents: [
-        {
-          type: 'text',
-          text: `${r.sequence}`, // 移除 #
-          size: 'sm',
-          color: '#888888',
-          flex: 1, // 減小：堂數與日期靠近
-        },
-        {
-          type: 'text',
-          text: (() => {
-            const [y, m, d] = r.classDate.split('-');
-            const date = `${parseInt(y, 10) - 1911}-${m}-${d}`;
-            // 共用時數池時，標示每筆紀錄的上課學員姓氏首字
-            if (r.studentName && isSharedPool) {
-              return `${date}(${r.studentName.slice(0, 1)})`;
-            }
-            return date;
-          })(),
-          size: 'sm',
-          color: '#555555',
-          flex: 4, // 增加比例，拉開與時段的距離
-        },
-        {
-          type: 'text',
-          text: r.classTimeSlot,
-          size: 'sm',
-          color: '#333333',
-          flex: 4, // 相對應縮小比例
-        },
-        {
-          type: 'text',
-          text: r.durationMinutes > 0 ? `${r.durationMinutes}分` : '-',
-          size: 'sm',
-          color: '#333333',
-          flex: 2,
-          align: 'end',
-        },
-      ],
-      margin: 'sm',
-    } as FlexComponent))
-    : [
+function buildClassHistoryRows(
+  pageRecords: Array<CheckinRecord & { sequence: number }>,
+  isSharedPool: boolean,
+): FlexComponent[] {
+  return pageRecords.map((r) => ({
+    type: 'box',
+    layout: 'horizontal',
+    contents: [
       {
         type: 'text',
-        text: '目前沒有上課紀錄。',
+        text: `${r.sequence}`,
         size: 'sm',
-        color: '#999999',
-        margin: 'md',
-      } as FlexComponent,
-    ];
+        color: '#888888',
+        flex: 1,
+      },
+      {
+        type: 'text',
+        text: (() => {
+          const [y, m, d] = r.classDate.split('-');
+          const date = `${parseInt(y, 10) - 1911}-${m}-${d}`;
+          if (r.studentName && isSharedPool) {
+            return `${date}(${r.studentName.slice(0, 1)})`;
+          }
+          return date;
+        })(),
+        size: 'sm',
+        color: '#555555',
+        flex: 4,
+      },
+      {
+        type: 'text',
+        text: r.classTimeSlot,
+        size: 'sm',
+        color: '#333333',
+        flex: 4,
+      },
+      {
+        type: 'text',
+        text: r.durationMinutes > 0 ? `${r.durationMinutes}分` : '-',
+        size: 'sm',
+        color: '#333333',
+        flex: 2,
+        align: 'end',
+      },
+    ],
+    margin: 'sm',
+  } as FlexComponent));
+}
+
+function buildClassHistoryBubble(
+  studentName: string,
+  pageRecords: Array<CheckinRecord & { sequence: number }>,
+  remainingHours: number,
+  isSharedPool: boolean,
+  periodLabel?: string,
+  pageInfo?: { page: number; total: number },
+): FlexBubble {
+  const rows: FlexComponent[] = pageRecords.length > 0
+    ? buildClassHistoryRows(pageRecords, isSharedPool)
+    : [{
+      type: 'text',
+      text: '目前沒有上課紀錄。',
+      size: 'sm',
+      color: '#999999',
+      margin: 'md',
+    } as FlexComponent];
+
+  const subtitle = pageInfo
+    ? `${studentName}｜第 ${pageRecords[0].sequence}–${pageRecords[pageRecords.length - 1].sequence} 堂（${pageInfo.page}/${pageInfo.total}）`
+    : periodLabel
+      ? `${studentName}｜${periodLabel}`
+      : `${studentName}｜剩餘 ${formatHours(remainingHours)}`;
 
   return {
     type: 'bubble',
@@ -99,9 +99,7 @@ export function classHistoryCard(
         },
         {
           type: 'text',
-          text: periodLabel
-            ? `${studentName}｜${periodLabel}`
-            : `${studentName}｜剩餘 ${formatHours(remainingHours)}`,
+          text: subtitle,
           size: 'sm',
           color: '#FFFFFFCC',
           margin: 'sm',
@@ -118,63 +116,60 @@ export function classHistoryCard(
           type: 'box',
           layout: 'horizontal',
           contents: [
-            {
-              type: 'text',
-              text: '堂數',
-              size: 'xs',
-              color: '#999999',
-              weight: 'bold',
-              flex: 1, // 對齊資料列
-            },
-            {
-              type: 'text',
-              text: '日期',
-              size: 'xs',
-              color: '#999999',
-              weight: 'bold',
-              flex: 4, // 與資料列一致
-            },
-            {
-              type: 'text',
-              text: '時段',
-              size: 'xs',
-              color: '#999999',
-              weight: 'bold',
-              flex: 4, // 與資料列一致
-            },
-            {
-              type: 'text',
-              text: '時長',
-              size: 'xs',
-              color: '#999999',
-              weight: 'bold',
-              flex: 2,
-              align: 'end',
-            },
+            { type: 'text', text: '堂數', size: 'xs', color: '#999999', weight: 'bold', flex: 1 },
+            { type: 'text', text: '日期', size: 'xs', color: '#999999', weight: 'bold', flex: 4 },
+            { type: 'text', text: '時段', size: 'xs', color: '#999999', weight: 'bold', flex: 4 },
+            { type: 'text', text: '時長', size: 'xs', color: '#999999', weight: 'bold', flex: 2, align: 'end' },
           ],
         },
-        {
-          type: 'separator',
-          margin: 'sm',
-        } as FlexComponent,
+        { type: 'separator', margin: 'sm' } as FlexComponent,
         ...rows,
-        ...(records.length > 10
-          ? [
-            {
-              type: 'text',
-              text: `⋯ 還有 ${records.length - 10} 筆紀錄`,
-              size: 'xs',
-              color: '#999999',
-              margin: 'md',
-              align: 'center',
-            } as FlexComponent,
-          ]
-          : []),
       ],
       paddingAll: '16px',
       spacing: 'none',
     },
   };
+}
+
+export function classHistoryCard(
+  studentName: string,
+  records: CheckinRecord[],
+  remainingHours: number,
+  periodLabel?: string
+): FlexContainer {
+  const totalCount = records.length;
+
+  // records 目前是從近到遠 (newest first)，加上序號後反轉為由遠至近
+  const withSequence = records
+    .map((r, i) => ({ ...r, sequence: totalCount - i }))
+    .reverse();
+
+  const allNames = new Set(records.map(r => r.studentName).filter(Boolean));
+  const isSharedPool = allNames.size > 1;
+
+  if (totalCount <= ROWS_PER_PAGE) {
+    return buildClassHistoryBubble(studentName, withSequence, remainingHours, isSharedPool, periodLabel);
+  }
+
+  // 超過一頁：分頁成 carousel（最多 12 頁）
+  const pages: Array<Array<CheckinRecord & { sequence: number }>> = [];
+  for (let i = 0; i < withSequence.length; i += ROWS_PER_PAGE) {
+    pages.push(withSequence.slice(i, i + ROWS_PER_PAGE));
+  }
+  const cappedPages = pages.slice(0, 12);
+
+  const bubbles = cappedPages.map((pageRecords, idx) =>
+    buildClassHistoryBubble(
+      studentName,
+      pageRecords,
+      remainingHours,
+      isSharedPool,
+      periodLabel,
+      { page: idx + 1, total: cappedPages.length },
+    )
+  );
+
+  return { type: 'carousel', contents: bubbles } as FlexCarousel;
 }
 
 /** 單堂學員當月上課 + 繳費狀態合併卡片 */
@@ -188,7 +183,7 @@ export function sessionMonthlyCard(
     ...r,
     sequence: totalCount - i,
   }));
-  const recent = withSequence.slice(0, 10).reverse();
+  const recent = withSequence.slice(0, ROWS_PER_PAGE).reverse();
 
   const rows: FlexComponent[] = recent.length > 0
     ? recent.map((r) => ({
@@ -347,10 +342,10 @@ export function sessionMonthlyCard(
         } as FlexComponent,
         { type: 'separator', margin: 'sm' } as FlexComponent,
         ...rows,
-        ...(records.length > 10
+        ...(records.length > ROWS_PER_PAGE
           ? [{
             type: 'text',
-            text: `⋯ 還有 ${records.length - 10} 筆紀錄`,
+            text: `⋯ 還有 ${records.length - ROWS_PER_PAGE} 筆紀錄`,
             size: 'xs',
             color: '#999999',
             margin: 'md',
