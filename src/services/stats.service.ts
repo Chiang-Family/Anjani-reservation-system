@@ -648,7 +648,7 @@ export async function getCoachMonthlyStats(
         cycles.push({
           expiryDate: '',
           renewalDate: p.actualDate,
-          isPaid: true,
+          isPaid: paidTotal > 0,
           expectedHours: sameDatePayments.reduce((s, sp) => s + sp.purchasedHours, 0),
           expectedAmount: allFullyPaid ? paidTotal : formulaTotal,
           paidAmount: paidTotal,
@@ -672,7 +672,7 @@ export async function getCoachMonthlyStats(
           cycles.push({
             expiryDate: '',
             renewalDate: p.actualDate,
-            isPaid: true,
+            isPaid: paidTotal > 0,
             expectedHours: sameDatePayments.reduce((s, sp) => s + sp.purchasedHours, 0),
             expectedAmount: allFullyPaid ? paidTotal : formulaTotal,
             paidAmount: paidTotal,
