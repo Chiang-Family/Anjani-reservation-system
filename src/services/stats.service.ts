@@ -553,6 +553,13 @@ export async function getCoachMonthlyStats(
 
     // 無付款記錄的學員：副學員跳過（由主學員代表）；單堂學員從打卡+行事曆產生未繳費預測
     if (buckets.length === 0) {
+      // 副學員：關聯學員中有人有付款紀錄，代表自己是副學員，跳過（由主學員代表）
+      if (student.relatedStudentIds?.length) {
+        const relatedHasPayments = student.relatedStudentIds.some(
+          id => (paymentsByStudentId.get(id)?.length ?? 0) > 0
+        );
+        if (relatedHasPayments) continue;
+      }
       if (student.paymentType === '單堂' && student.perSessionFee) {
         // 本月已打卡但未繳費的日期
         const studentMonthCheckins = (checkinsByStudentId.get(student.id) ?? [])
