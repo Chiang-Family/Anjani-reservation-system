@@ -38,8 +38,8 @@ export async function getCoachScheduleForDate(
   // 建立學員名稱→學員物件的查找表
   const studentByName = new Map(students.map(s => [s.name, s]));
 
-  // 建立當日已打卡的學員 ID 集合
-  const checkedInStudentIds = new Set(checkins.map(c => c.studentId));
+  // 建立當日已打卡的學員 ID 集合（只計算該教練的打卡紀錄，避免其他教練的打卡干擾補打卡判斷）
+  const checkedInStudentIds = new Set(checkins.filter(c => c.coachId === coach.id).map(c => c.studentId));
 
   // 建立當日「單堂繳費」的學員 ID 集合（只認標題有 [單堂] 標記的紀錄）
   const sessionPaidStudentIds = new Set(
