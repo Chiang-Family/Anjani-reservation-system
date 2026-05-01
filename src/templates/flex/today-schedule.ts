@@ -148,9 +148,9 @@ export function scheduleList(items: ScheduleItem[], dateStr: string, mode: Sched
       } as FlexComponent,
     ];
 
-  // Date picker (±7 days from today)
-  const minDate = addDays(today, -7);
-  const maxDate = addDays(today, 7);
+  // Date picker range: checkin mode allows past 60 days; schedule mode is ±7 days
+  const minDate = mode === 'checkin' ? addDays(today, -60) : addDays(today, -7);
+  const maxDate = mode === 'checkin' ? today : addDays(today, 7);
 
   return {
     type: 'bubble',
