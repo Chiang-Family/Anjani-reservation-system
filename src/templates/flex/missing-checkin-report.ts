@@ -57,9 +57,13 @@ export function missingCheckinReportCard(
 
   for (const date of uniqueDates) {
     const entries = groupedByDate[date];
+    const massageCount = entries.filter(e => e.isMassage).length;
+    const label = massageCount > 0
+      ? `${fmtDate(date)}（${entries.length} 堂，含 ${massageCount} 按摩）`
+      : `${fmtDate(date)}（${entries.length} 堂）`;
     bodyContents.push({
       type: 'text',
-      text: `${fmtDate(date)}（${entries.length} 堂）`,
+      text: label,
       weight: 'bold',
       size: 'sm',
       margin: 'md',
@@ -72,7 +76,7 @@ export function missingCheckinReportCard(
         layout: 'horizontal',
         spacing: 'sm',
         contents: [
-          { type: 'text', text: entry.name, size: 'sm', color: '#666666', flex: 3 },
+          { type: 'text', text: entry.isMassage ? `💆 ${entry.name}` : entry.name, size: 'sm', color: '#666666', flex: 3 },
           { type: 'text', text: entry.time, size: 'sm', color: '#999999', flex: 2, align: 'end' },
         ],
         margin: 'xs',
