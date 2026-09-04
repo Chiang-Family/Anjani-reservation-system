@@ -490,7 +490,18 @@ export async function getCoachMonthlyStats(
     }
   }
 
+  // --- 已執行收入: checked-in classes × 所屬付款 bucket 的單價 ---
+  const checkinPriceMap = buildCheckinPriceMap(students, payments, allCoachCheckins);
+  let executedRevenue = 0;
+  for (const checkin of monthCheckins) {
+    const price = checkinPriceMap.get(checkin.id) ?? 0;
+    executedRevenue += (checkin.durationMinutes / 60) * price;
+  }
+  executedRevenue = Math.round(executedRevenue);
+
   // --- 預計執行收入: all scheduled events × student hourly rate ---
+  // 已打卡的課程：沿用該打卡實際消耗的時數包單價（與已執行收入一致，避免月中調漲學費造成的落差）
+  // 尚未打卡的課程（未來課或漏打卡）：用目前最新單價估算
   // 建立學員名稱 → Student 對應表（用於判斷單堂學員）
   const studentByName = new Map(students.map(s => [s.name, s]));
   // 單堂已繳費：studentId:date → paidAmount（已調整的金額優先）
@@ -500,11 +511,25 @@ export async function getCoachMonthlyStats(
       sessionPaidMap.set(`${p.studentId}:${p.actualDate}`, p.paidAmount);
     }
   }
+  // studentId:date → 當日打卡紀錄（同一天多堂時依序配對）
+  const checkinsByStudentDate = new Map<string, CheckinRecord[]>();
+  for (const c of monthCheckins) {
+    const key = `${c.studentId}:${c.classDate}`;
+    const arr = checkinsByStudentDate.get(key) ?? [];
+    arr.push(c);
+    checkinsByStudentDate.set(key, arr);
+  }
   let estimatedRevenue = 0;
   for (const event of events) {
     const { studentName } = parseEventSummary(event.summary);
     const stu = studentByName.get(studentName);
-    if (stu?.paymentType === '單堂' && stu.perSessionFee) {
+    const matchedCheckins = stu ? checkinsByStudentDate.get(`${stu.id}:${event.date}`) : undefined;
+    const matchedCheckin = matchedCheckins?.shift();
+
+    if (matchedCheckin) {
+      const price = checkinPriceMap.get(matchedCheckin.id) ?? 0;
+      estimatedRevenue += (matchedCheckin.durationMinutes / 60) * price;
+    } else if (stu?.paymentType === '單堂' && stu.perSessionFee) {
       // 單堂學員：已繳費用實際金額，未繳費用預設單堂費
       const paidAmount = sessionPaidMap.get(`${stu.id}:${event.date}`);
       estimatedRevenue += paidAmount ?? stu.perSessionFee;
@@ -515,15 +540,6 @@ export async function getCoachMonthlyStats(
     }
   }
   estimatedRevenue = Math.round(estimatedRevenue);
-
-  // --- 已執行收入: checked-in classes × 所屬付款 bucket 的單價 ---
-  const checkinPriceMap = buildCheckinPriceMap(students, payments, allCoachCheckins);
-  let executedRevenue = 0;
-  for (const checkin of monthCheckins) {
-    const price = checkinPriceMap.get(checkin.id) ?? 0;
-    executedRevenue += (checkin.durationMinutes / 60) * price;
-  }
-  executedRevenue = Math.round(executedRevenue);
 
   // --- Calendar-based renewal prediction ---
   // Group future events by student name
