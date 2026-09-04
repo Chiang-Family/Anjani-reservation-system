@@ -115,21 +115,24 @@ function buildCheckinPriceMap(
 
   for (const student of students) {
     if (processed.has(student.id)) continue;
-    const poolIds = [student.id, ...(student.relatedStudentIds ?? [])];
+    // 單堂計費不合併：各自的打卡對應各自的付款，合併會導致互相消耗或定價錯誤
+    const isPerSession = student.paymentType === '單堂' && !!student.perSessionFee;
+    const poolIds = (isPerSession || !student.relatedStudentIds?.length)
+      ? [student.id]
+      : [student.id, ...(student.relatedStudentIds ?? [])];
     poolIds.forEach(id => processed.add(id));
 
+    // 單堂：直接用自己的付款；套時數：沿用原本的 pool 搜尋（副學員可能無付款）
     let primaryPayments: PaymentRecord[] = [];
-    for (const id of poolIds) {
-      const ps = paymentsByStudentId.get(id) ?? [];
-      if (ps.length > 0) { primaryPayments = ps; break; }
+    if (isPerSession) {
+      primaryPayments = paymentsByStudentId.get(student.id) ?? [];
+    } else {
+      for (const id of poolIds) {
+        const ps = paymentsByStudentId.get(id) ?? [];
+        if (ps.length > 0) { primaryPayments = ps; break; }
+      }
     }
-    const isPerSession = poolIds.some(pid => {
-      const s = students.find(st => st.id === pid);
-      return s?.paymentType === '單堂' && s.perSessionFee;
-    });
-    const sessionFee = isPerSession
-      ? students.find(s => poolIds.includes(s.id) && s.perSessionFee)?.perSessionFee ?? 0
-      : 0;
+    const sessionFee = isPerSession ? (student.perSessionFee ?? 0) : 0;
 
     const poolCheckins: CheckinRecord[] = [];
     for (const id of poolIds) {
