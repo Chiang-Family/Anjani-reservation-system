@@ -6,6 +6,7 @@ import { ROLE } from '@/lib/config/constants';
 import { getEnv } from '@/lib/config/env';
 import { TEXT } from '@/templates/text-messages';
 import { studentMenu, coachMenu } from '@/templates/flex/main-menu';
+import { getViewableCoachNames } from '@/lib/config/cross-coach-access';
 import { startBinding } from '@/services/student-management.service';
 
 export async function handleFollow(event: FollowEvent): Promise<void> {
@@ -40,6 +41,6 @@ export async function handleFollow(event: FollowEvent): Promise<void> {
         console.error('Failed to link coach rich menu:', err);
       }
     }
-    await replyFlex(event.replyToken, '安傑力教練管理系統', coachMenu(user.name));
+    await replyFlex(event.replyToken, '安傑力教練管理系統', coachMenu(user.name, getViewableCoachNames(user.name)));
   }
 }

@@ -10,7 +10,8 @@ type FlexComponent = messagingApi.FlexComponent;
 const FIRST_YEAR = 2026;
 const FIRST_MONTH = 2;
 
-export function monthlyStatsCard(stats: CoachMonthlyStats): FlexBubble {
+export function monthlyStatsCard(stats: CoachMonthlyStats, targetCoachId?: string): FlexBubble {
+  const coachSuffix = targetCoachId ? `:${targetCoachId}` : '';
   const now = nowTaipei();
   const currentYear = now.getFullYear();
   const currentMonth = now.getMonth() + 1;
@@ -70,7 +71,7 @@ export function monthlyStatsCard(stats: CoachMonthlyStats): FlexBubble {
       action: {
         type: 'postback',
         label: `← ${prevMonth}月`,
-        data: `${ACTION.VIEW_MONTH_STATS}:${prevYear}:${prevMonth}`,
+        data: `${ACTION.VIEW_MONTH_STATS}:${prevYear}:${prevMonth}${coachSuffix}`,
       },
       style: 'secondary',
       height: 'sm',
@@ -85,7 +86,7 @@ export function monthlyStatsCard(stats: CoachMonthlyStats): FlexBubble {
       action: {
         type: 'postback',
         label: `${nextMonth}月 →`,
-        data: `${ACTION.VIEW_MONTH_STATS}:${nextYear}:${nextMonth}`,
+        data: `${ACTION.VIEW_MONTH_STATS}:${nextYear}:${nextMonth}${coachSuffix}`,
       },
       style: 'secondary',
       height: 'sm',
@@ -115,7 +116,7 @@ export function monthlyStatsCard(stats: CoachMonthlyStats): FlexBubble {
         action: {
           type: 'postback',
           label: `未繳費 (${unpaidCount})`,
-          data: `${ACTION.VIEW_RENEWAL_UNPAID}:${renewalData}`,
+          data: `${ACTION.VIEW_RENEWAL_UNPAID}:${renewalData}${coachSuffix}`,
         },
         style: 'secondary',
         height: 'sm',
@@ -126,7 +127,7 @@ export function monthlyStatsCard(stats: CoachMonthlyStats): FlexBubble {
         action: {
           type: 'postback',
           label: `已繳費 (${paidCount})`,
-          data: `${ACTION.VIEW_RENEWAL_PAID}:${renewalData}`,
+          data: `${ACTION.VIEW_RENEWAL_PAID}:${renewalData}${coachSuffix}`,
         },
         style: 'secondary',
         height: 'sm',

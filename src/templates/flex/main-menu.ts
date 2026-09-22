@@ -115,7 +115,7 @@ function sectionLabel(text: string, margin: 'sm' | 'md' | 'lg' | 'xl' | 'xxl' = 
   };
 }
 
-export function coachMenu(name: string): FlexBubble {
+export function coachMenu(name: string, crossCoachTargets: string[] = []): FlexBubble {
   return {
     type: 'bubble',
     size: 'mega',
@@ -169,6 +169,61 @@ export function coachMenu(name: string): FlexBubble {
         menuButton(KEYWORD.MONTHLY_STATS, '#6D5D85'),
         menuButton(KEYWORD.ANNUAL_STATS, '#7A5B3D'),
         menuButton(KEYWORD.MONTHLY_REPORT, '#3A6B8A'),
+        ...(crossCoachTargets.length > 0
+          ? [
+              sectionLabel('其他教練', 'xl'),
+              ...crossCoachTargets.map((t) => menuButton(`${t}教練統計`, '#8A5A3D')),
+            ]
+          : []),
+      ] as messagingApi.FlexComponent[],
+      paddingAll: '16px',
+      spacing: 'sm',
+    },
+  };
+}
+
+export function otherCoachStatsMenu(targetName: string): FlexBubble {
+  return {
+    type: 'bubble',
+    size: 'mega',
+    header: {
+      type: 'box',
+      layout: 'vertical',
+      contents: [
+        {
+          type: 'text',
+          text: `${targetName} 教練統計`,
+          weight: 'bold',
+          size: 'lg',
+          color: '#FFFFFF',
+        },
+      ],
+      paddingAll: '20px',
+      backgroundColor: '#8A5A3D',
+    },
+    body: {
+      type: 'box',
+      layout: 'vertical',
+      contents: [
+        {
+          type: 'text',
+          text: '請選擇要查看的統計資料：',
+          size: 'sm',
+          color: '#555555',
+        },
+      ],
+      paddingAll: '20px',
+    },
+    footer: {
+      type: 'box',
+      layout: 'vertical',
+      contents: [
+        menuButton(`${targetName}-${KEYWORD.PREPAID_BALANCE}`, '#5A7B5D'),
+        menuButton(`${targetName}-${KEYWORD.WEEKLY_STATS}`, '#4A7A6A'),
+        menuButton(`${targetName}-${KEYWORD.MONTHLY_STATS}`, '#6D5D85'),
+        menuButton(`${targetName}-${KEYWORD.ANNUAL_STATS}`, '#7A5B3D'),
+        menuButton(`${targetName}-${KEYWORD.MONTHLY_REPORT}`, '#3A6B8A'),
+        menuButton(KEYWORD.MENU, '#888888'),
       ] as messagingApi.FlexComponent[],
       paddingAll: '16px',
       spacing: 'sm',

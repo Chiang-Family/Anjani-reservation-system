@@ -9,7 +9,8 @@ type FlexComponent = messagingApi.FlexComponent;
 
 const DAY_NAMES = ['日', '一', '二', '三', '四', '五', '六'];
 
-export function weeklyStatsCard(stats: CoachWeeklyStats): FlexBubble {
+export function weeklyStatsCard(stats: CoachWeeklyStats, targetCoachId?: string): FlexBubble {
+  const coachSuffix = targetCoachId ? `:${targetCoachId}` : '';
   const fmtDate = (d: string) => `${d.slice(5, 7)}/${d.slice(8, 10)}`;
 
   const bodyContents: FlexComponent[] = [
@@ -73,7 +74,7 @@ export function weeklyStatsCard(stats: CoachWeeklyStats): FlexBubble {
       action: {
         type: 'postback',
         label: `← 上週`,
-        data: `${ACTION.VIEW_WEEK_STATS}:${prevWeekStart}`,
+        data: `${ACTION.VIEW_WEEK_STATS}:${prevWeekStart}${coachSuffix}`,
       },
       style: 'secondary',
       height: 'sm',
@@ -88,7 +89,7 @@ export function weeklyStatsCard(stats: CoachWeeklyStats): FlexBubble {
       action: {
         type: 'postback',
         label: `下週 →`,
-        data: `${ACTION.VIEW_WEEK_STATS}:${nextWeekStart}`,
+        data: `${ACTION.VIEW_WEEK_STATS}:${nextWeekStart}${coachSuffix}`,
       },
       style: 'secondary',
       height: 'sm',

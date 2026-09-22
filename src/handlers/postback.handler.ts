@@ -6,7 +6,8 @@ import { getStudentById } from '@/lib/notion/students';
 import { getCheckinsByStudent, findCheckinToday } from '@/lib/notion/checkins';
 import { getStudentOverflowInfo, resolveOverflowIds } from '@/lib/notion/hours';
 import { replyText, replyFlex, replyMessages } from '@/lib/line/reply';
-import { findCoachByLineId } from '@/lib/notion/coaches';
+import { findCoachByLineId, getCoachById } from '@/lib/notion/coaches';
+import { canViewCoachStats } from '@/lib/config/cross-coach-access';
 import { generateReportToken } from '@/lib/utils/report-token';
 import { ACTION } from '@/lib/config/constants';
 import { TEXT } from '@/templates/text-messages';
@@ -27,6 +28,22 @@ function replyTextWithMenu(replyToken: string, text: string) {
   return replyMessages(replyToken, [
     { type: 'text', text, quickReply: { items: menuQuickReply() } },
   ]);
+}
+
+// 跨教練導覽（月/週統計上下切換、續約清單、報表）：驗證 sender 是否有權限查看 targetCoachId
+async function resolveOverrideCoach(
+  lineUserId: string,
+  targetCoachId?: string
+): Promise<{ ok: boolean; coachId?: string }> {
+  if (!targetCoachId) return { ok: true };
+  const [viewer, target] = await Promise.all([
+    findCoachByLineId(lineUserId),
+    getCoachById(targetCoachId),
+  ]);
+  if (!viewer || !target || !canViewCoachStats(viewer.name, target.name)) {
+    return { ok: false };
+  }
+  return { ok: true, coachId: targetCoachId };
 }
 
 export async function handlePostback(event: PostbackEvent): Promise<void> {
@@ -316,10 +333,15 @@ export async function handlePostback(event: PostbackEvent): Promise<void> {
 
       case ACTION.VIEW_RENEWAL_UNPAID:
       case ACTION.VIEW_RENEWAL_PAID: {
-        // data = renewal_paid:YYYY:M 或 renewal_unpaid:YYYY:M
+        // data = renewal_paid:YYYY:M[:coachId] 或 renewal_unpaid:YYYY:M[:coachId]
         const targetYear = parts[1] ? parseInt(parts[1]) : undefined;
         const targetMonth = parts[2] ? parseInt(parts[2]) : undefined;
-        const stats = await getCoachMonthlyStats(lineUserId, targetYear, targetMonth);
+        const override = await resolveOverrideCoach(lineUserId, parts[3]);
+        if (!override.ok) {
+          await replyTextWithMenu(event.replyToken, '無權限查看此教練資料。');
+          return;
+        }
+        const stats = await getCoachMonthlyStats(lineUserId, targetYear, targetMonth, override.coachId);
         if (!stats || stats.renewalForecast.students.length === 0) {
           await replyTextWithMenu(event.replyToken, '本月沒有續約學員資料。');
           return;
@@ -334,22 +356,32 @@ export async function handlePostback(event: PostbackEvent): Promise<void> {
       }
 
       case ACTION.VIEW_WEEK_STATS: {
-        // data = view_week_stats:YYYY-MM-DD
+        // data = view_week_stats:YYYY-MM-DD[:coachId]
         const targetWeekStart = parts[1]; // "YYYY-MM-DD"
-        const wStats = await getCoachWeeklyStats(lineUserId, targetWeekStart);
+        const override = await resolveOverrideCoach(lineUserId, parts[2]);
+        if (!override.ok) {
+          await replyTextWithMenu(event.replyToken, '無權限查看此教練資料。');
+          return;
+        }
+        const wStats = await getCoachWeeklyStats(lineUserId, targetWeekStart, override.coachId);
         if (!wStats) {
           await replyTextWithMenu(event.replyToken, '找不到教練資料。');
           return;
         }
-        await replyFlex(event.replyToken, '週統計', weeklyStatsCard(wStats), coachQuickReply());
+        await replyFlex(event.replyToken, '週統計', weeklyStatsCard(wStats, override.coachId), coachQuickReply());
         return;
       }
 
       case ACTION.VIEW_MONTH_STATS: {
-        // data = view_month_stats:YYYY:M
+        // data = view_month_stats:YYYY:M[:coachId]
         const targetYear = parts[1] ? parseInt(parts[1]) : undefined;
         const targetMonth = parts[2] ? parseInt(parts[2]) : undefined;
-        const stats = await getCoachMonthlyStats(lineUserId, targetYear, targetMonth);
+        const override = await resolveOverrideCoach(lineUserId, parts[3]);
+        if (!override.ok) {
+          await replyTextWithMenu(event.replyToken, '無權限查看此教練資料。');
+          return;
+        }
+        const stats = await getCoachMonthlyStats(lineUserId, targetYear, targetMonth, override.coachId);
         if (!stats) {
           await replyTextWithMenu(event.replyToken, '找不到教練資料。');
           return;
@@ -357,14 +389,14 @@ export async function handlePostback(event: PostbackEvent): Promise<void> {
         await replyFlex(
           event.replyToken,
           `${stats.year}/${stats.month} 月度統計`,
-          monthlyStatsCard(stats),
+          monthlyStatsCard(stats, override.coachId),
           coachQuickReply(),
         );
         return;
       }
 
       case ACTION.GENERATE_REPORT: {
-        // data = gen_report:YYYY-MM
+        // data = gen_report:YYYY-MM[:coachId]
         const match = id?.match(/^(\d{4})-(\d{2})$/);
         if (!match) {
           await replyTextWithMenu(event.replyToken, '報表格式錯誤。');
@@ -373,7 +405,14 @@ export async function handlePostback(event: PostbackEvent): Promise<void> {
         const repYear = parseInt(match[1]);
         const repMonth = parseInt(match[2]);
         try {
-          const coach = await findCoachByLineId(lineUserId);
+          const override = await resolveOverrideCoach(lineUserId, parts[2]);
+          if (!override.ok) {
+            await replyTextWithMenu(event.replyToken, '無權限查看此教練資料。');
+            return;
+          }
+          const coach = override.coachId
+            ? await getCoachById(override.coachId)
+            : await findCoachByLineId(lineUserId);
           if (!coach) {
             await replyTextWithMenu(event.replyToken, '找不到教練資料。');
             return;

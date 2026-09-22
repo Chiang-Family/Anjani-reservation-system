@@ -3,7 +3,8 @@ import { identifyUser, getStudentInfo } from '@/services/student.service';
 import { getCoachScheduleForDate } from '@/services/coach.service';
 import { getCoachMonthlyStats, getCoachWeeklyStats, getCoachAnnualStats, getCoachPrepaidBalance } from '@/services/stats.service';
 import { getStudentsByCoachId } from '@/lib/notion/students';
-import { findCoachByLineId, getCoachById } from '@/lib/notion/coaches';
+import { findCoachByLineId, findCoachByName, getCoachById } from '@/lib/notion/coaches';
+import { getViewableCoachNames, canViewCoachStats } from '@/lib/config/cross-coach-access';
 import { findStudentByLineId, getAllStudentIds, getStudentById } from '@/lib/notion/students';
 import { getCheckinsByStudent, getCheckinsByStudents } from '@/lib/notion/checkins';
 import { getPaymentsByStudent, getPaymentsByStudents } from '@/lib/notion/payments';
@@ -26,7 +27,7 @@ import { KEYWORD, ROLE } from '@/lib/config/constants';
 import { TEXT, CLASS_NOTES_TEXT } from '@/templates/text-messages';
 import { classNotesCard } from '@/templates/flex/class-notes';
 import { paymentHistoryCard } from '@/templates/flex/payment-history';
-import { studentMenu, coachMenu } from '@/templates/flex/main-menu';
+import { studentMenu, coachMenu, otherCoachStatsMenu } from '@/templates/flex/main-menu';
 import { scheduleList } from '@/templates/flex/today-schedule';
 import { getEventsForDateRange } from '@/lib/google/calendar';
 import { todayDateString, addDays } from '@/lib/utils/date';
@@ -123,7 +124,7 @@ export async function handleMessage(event: MessageEvent): Promise<void> {
                 console.error('Failed to link coach rich menu on binding:', err)
               );
             }
-            await replyFlex(event.replyToken, '安傑力教練管理系統', coachMenu(coach.name), coachQuickReply());
+            await replyFlex(event.replyToken, '安傑力教練管理系統', coachMenu(coach.name, getViewableCoachNames(coach.name)), coachQuickReply());
             return;
           }
         }
@@ -395,11 +396,85 @@ async function handleCoachMessage(
     }
 
     case KEYWORD.MENU: {
-      await replyFlex(replyToken, '安傑力教練管理系統', coachMenu(name), coachQuickReply());
+      await replyFlex(replyToken, '安傑力教練管理系統', coachMenu(name, getViewableCoachNames(name)), coachQuickReply());
       return;
     }
 
     default: {
+      // 跨教練統計選單，例如「Andy教練統計」
+      const crossMenuMatch = text.match(/^(.+)教練統計$/);
+      if (crossMenuMatch) {
+        const targetName = crossMenuMatch[1];
+        if (canViewCoachStats(name, targetName)) {
+          await replyFlex(replyToken, `${targetName} 教練統計`, otherCoachStatsMenu(targetName), coachQuickReply());
+          return;
+        }
+      }
+
+      // 跨教練統計項目，例如「Andy-每月統計」
+      const crossActionMatch = text.match(
+        /^(.+)-(每週統計|每月統計|年度統計|預收餘額|上課明細月報表)$/
+      );
+      if (crossActionMatch) {
+        const [, targetName, crossAction] = crossActionMatch;
+        if (!canViewCoachStats(name, targetName)) {
+          await replyText(replyToken, '您沒有權限查看該教練的資料。', qr);
+          return;
+        }
+        const targetCoach = await findCoachByName(targetName);
+        if (!targetCoach) {
+          await replyText(replyToken, '找不到教練資料。', qr);
+          return;
+        }
+        switch (crossAction) {
+          case KEYWORD.WEEKLY_STATS: {
+            const wStats = await getCoachWeeklyStats(lineUserId, undefined, targetCoach.id);
+            if (!wStats) {
+              await replyText(replyToken, '找不到教練資料。', qr);
+              return;
+            }
+            await replyFlex(replyToken, `${targetName} 每週統計`, weeklyStatsCard(wStats, targetCoach.id), coachQuickReply());
+            return;
+          }
+          case KEYWORD.MONTHLY_STATS: {
+            const stats = await getCoachMonthlyStats(lineUserId, undefined, undefined, targetCoach.id);
+            if (!stats) {
+              await replyText(replyToken, '找不到教練資料。', qr);
+              return;
+            }
+            await replyFlex(replyToken, `${stats.year}/${stats.month} ${targetName} 月度統計`, monthlyStatsCard(stats, targetCoach.id), coachQuickReply());
+            return;
+          }
+          case KEYWORD.ANNUAL_STATS: {
+            const aStats = await getCoachAnnualStats(lineUserId, undefined, targetCoach.id);
+            if (!aStats) {
+              await replyText(replyToken, '找不到教練資料。', qr);
+              return;
+            }
+            await replyFlex(replyToken, `${aStats.year} 年度統計`, annualStatsCard(aStats), coachQuickReply());
+            return;
+          }
+          case KEYWORD.PREPAID_BALANCE: {
+            const prepaid = await getCoachPrepaidBalance(lineUserId, targetCoach.id);
+            if (!prepaid) {
+              await replyText(replyToken, '找不到教練資料。', qr);
+              return;
+            }
+            if (prepaid.rows.length === 0) {
+              await replyText(replyToken, '目前沒有學員有預收餘額。', qr);
+              return;
+            }
+            await replyFlex(replyToken, `${targetName} 預收餘額`, prepaidBalanceCard(prepaid), coachQuickReply());
+            return;
+          }
+          case KEYWORD.MONTHLY_REPORT: {
+            await replyFlex(replyToken, `上課明細月報表 — 選擇月份（${targetName}）`, reportSelectorCard(targetName, targetCoach.id), qr);
+            return;
+          }
+        }
+        return;
+      }
+
       // "上課明細月報表 YYYY-MM" — generate report for a specific month
       if (text.startsWith('上課明細月報表 ')) {
         const parts = text.split(' ');
@@ -489,7 +564,7 @@ async function handleCoachMessage(
           return;
         }
       }
-      await replyFlex(replyToken, '安傑力教練管理系統', coachMenu(name), coachQuickReply());
+      await replyFlex(replyToken, '安傑力教練管理系統', coachMenu(name, getViewableCoachNames(name)), coachQuickReply());
     }
   }
 }

@@ -1,4 +1,4 @@
-import { findCoachByLineId } from '@/lib/notion/coaches';
+import { findCoachByLineId, getCoachById } from '@/lib/notion/coaches';
 import { getStudentsByCoachId } from '@/lib/notion/students';
 import { getPaymentsByStudents } from '@/lib/notion/payments';
 import { assignCheckinsToBuckets, computeSummaryFromBuckets } from '@/lib/notion/hours';
@@ -9,6 +9,13 @@ import { parseEventSummary } from '@/lib/utils/event';
 import { format, addMonths, addDays, parseISO, subDays } from 'date-fns';
 import { HISTORICAL_MONTHLY_STATS } from '@/lib/config/historical-stats';
 import type { CalendarEvent, CheckinRecord, PaymentRecord, Student } from '@/types';
+
+// overrideCoachId 用於跨教練查看（例如 Winnie 教練查看 Andy 教練統計），
+// 由呼叫端事先驗證權限（見 canViewCoachStats）後再傳入。
+async function resolveStatsCoach(lineUserId: string, overrideCoachId?: string) {
+  if (overrideCoachId) return getCoachById(overrideCoachId);
+  return findCoachByLineId(lineUserId);
+}
 
 export interface RenewalStudent {
   name: string;
@@ -381,8 +388,9 @@ export async function getCoachMonthlyStats(
   lineUserId: string,
   targetYear?: number,
   targetMonth?: number,
+  overrideCoachId?: string,
 ): Promise<CoachMonthlyStats | null> {
-  const coach = await findCoachByLineId(lineUserId);
+  const coach = await resolveStatsCoach(lineUserId, overrideCoachId);
   if (!coach) return null;
 
   const now = nowTaipei();
@@ -819,8 +827,9 @@ export async function getCoachMonthlyStats(
 export async function getCoachWeeklyStats(
   lineUserId: string,
   targetWeekStart?: string, // yyyy-MM-dd (must be a Sunday)
+  overrideCoachId?: string,
 ): Promise<CoachWeeklyStats | null> {
-  const coach = await findCoachByLineId(lineUserId);
+  const coach = await resolveStatsCoach(lineUserId, overrideCoachId);
   if (!coach) return null;
 
   const now = nowTaipei();
@@ -904,8 +913,9 @@ export async function getCoachWeeklyStats(
 export async function getCoachAnnualStats(
   lineUserId: string,
   targetYear?: number,
+  overrideCoachId?: string,
 ): Promise<CoachAnnualStats | null> {
-  const coach = await findCoachByLineId(lineUserId);
+  const coach = await resolveStatsCoach(lineUserId, overrideCoachId);
   if (!coach) return null;
 
   const now = nowTaipei();
@@ -1010,8 +1020,8 @@ export interface CoachPrepaidBalance {
   totalPrepaid: number;
 }
 
-export async function getCoachPrepaidBalance(lineUserId: string): Promise<CoachPrepaidBalance | null> {
-  const coach = await findCoachByLineId(lineUserId);
+export async function getCoachPrepaidBalance(lineUserId: string, overrideCoachId?: string): Promise<CoachPrepaidBalance | null> {
+  const coach = await resolveStatsCoach(lineUserId, overrideCoachId);
   if (!coach) return null;
 
   // 批次載入所有資料（3 次 API call，不論學員數量）

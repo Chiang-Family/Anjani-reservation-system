@@ -11,7 +11,8 @@ type FlexBubble = messagingApi.FlexBubble;
 const REPORT_START_YEAR = 2026;
 const REPORT_START_MONTH = 2; // February 2026
 
-export function reportSelectorCard(coachName: string): FlexBubble {
+export function reportSelectorCard(coachName: string, targetCoachId?: string): FlexBubble {
+  const coachSuffix = targetCoachId ? `:${targetCoachId}` : '';
   const now = new Date();
   const months: { label: string; value: string }[] = [];
 
@@ -77,7 +78,7 @@ export function reportSelectorCard(coachName: string): FlexBubble {
         action: {
           type: 'postback',
           label,
-          data: `${ACTION.GENERATE_REPORT}:${value}`,
+          data: `${ACTION.GENERATE_REPORT}:${value}${coachSuffix}`,
           displayText: `生成 ${label} 報表`,
         },
         style: 'secondary',
