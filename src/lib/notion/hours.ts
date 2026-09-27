@@ -61,6 +61,20 @@ export function assignCheckinsToBuckets(
     } else {
       buckets[bucketIdx].checkins.push(checkin);
       buckets[bucketIdx].consumedMinutes += checkin.durationMinutes;
+
+      // 這堂課讓當期超收（例如當期只剩 20 分鐘卻上了 60 分鐘）：
+      // 若已經有下一期繳費紀錄，把超收的分鐘數轉記到下一期（可連續轉多期）；
+      // 若還沒有下一期，就讓 consumedMinutes 超過 purchasedHours，
+      // 讓 computeSummaryFromBuckets 呈現負的剩餘時數，提示教練該收下一期費用了。
+      let spillIdx = bucketIdx;
+      while (spillIdx + 1 < buckets.length) {
+        const capacity = buckets[spillIdx].purchasedHours * 60;
+        const excess = buckets[spillIdx].consumedMinutes - capacity;
+        if (excess <= 0) break;
+        buckets[spillIdx].consumedMinutes = capacity;
+        buckets[spillIdx + 1].consumedMinutes += excess;
+        spillIdx++;
+      }
     }
   }
 
@@ -74,7 +88,14 @@ export function computeSummaryFromBuckets(
 ): StudentHoursSummary {
   // 找到正在消耗中的桶（第一個尚未耗盡的）
   let activeIdx = buckets.findIndex(b => b.consumedMinutes < b.purchasedHours * 60);
-  if (activeIdx === -1) activeIdx = buckets.length;
+  if (activeIdx === -1) {
+    // 沒有任何桶還有剩餘容量：若最後一桶是「剛好用完」則沒有欠款；
+    // 若最後一桶已超收（沒有下一期承接），視為當期，呈現負的剩餘時數
+    const lastBucket = buckets[buckets.length - 1];
+    activeIdx = lastBucket && lastBucket.consumedMinutes > lastBucket.purchasedHours * 60
+      ? buckets.length - 1
+      : buckets.length;
+  }
 
   // 購買時數 = 當前桶 + 未來桶
   const purchasedHours = buckets.slice(activeIdx).reduce((sum, b) => sum + b.purchasedHours, 0);
