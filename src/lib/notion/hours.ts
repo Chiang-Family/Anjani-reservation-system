@@ -30,7 +30,10 @@ export function assignCheckinsToBuckets(
     };
   });
 
-  const sorted = [...checkins].sort((a, b) => a.classDate.localeCompare(b.classDate));
+  // 以完整日期+開始時間排序，避免同一天有多筆打卡時，因日期相同而退回查詢原始順序
+  // （Notion 查詢是依課程時段「倒序」排列，同一天會把較晚的課排在前面，導致桶的分配錯誤）
+  const sortKey = (c: CheckinRecord) => `${c.classDate}T${c.classTimeSlot.split('-')[0] || ''}`;
+  const sorted = [...checkins].sort((a, b) => sortKey(a).localeCompare(sortKey(b)));
   let bucketIdx = 0;
   const overflowCheckins: CheckinRecord[] = [];
 

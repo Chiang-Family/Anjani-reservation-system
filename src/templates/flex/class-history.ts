@@ -48,9 +48,11 @@ function buildClassHistoryRows(
       },
       {
         type: 'text',
-        text: r.durationMinutes > 0 ? `${r.durationMinutes}分` : '-',
+        text: r.durationMinutes > 0
+          ? (r.splitPart && r.splitTotal ? `${r.durationMinutes}分 ✂${r.splitPart}/${r.splitTotal}` : `${r.durationMinutes}分`)
+          : '-',
         size: 'sm',
-        color: '#333333',
+        color: r.splitPart ? '#C0392B' : '#333333',
         flex: 2,
         align: 'end',
       },
@@ -124,6 +126,16 @@ function buildClassHistoryBubble(
         },
         { type: 'separator', margin: 'sm' } as FlexComponent,
         ...rows,
+        ...(pageRecords.some(r => r.splitPart)
+          ? [{
+            type: 'text',
+            text: '✂️ 表示該堂課因當期時數不足，已拆分計入前後兩期',
+            size: 'xxs',
+            color: '#C0392B',
+            margin: 'md',
+            wrap: true,
+          } as FlexComponent]
+          : []),
       ],
       paddingAll: '16px',
       spacing: 'none',

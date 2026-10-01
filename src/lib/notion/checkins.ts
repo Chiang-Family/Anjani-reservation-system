@@ -33,13 +33,20 @@ function getDateRange(prop: Record<string, unknown>): { start: string; end: stri
 }
 
 const MASSAGE_TITLE_PREFIX = '[按摩] ';
+/** 同一堂課因時數跨期不足被拆分時的標題標註，例如 [拆帳 1/2] */
+const SPLIT_TAG_PATTERN = /^\[拆帳 (\d+)\/(\d+)\]\s*/;
 
 function extractCheckin(page: Record<string, unknown>): CheckinRecord {
   const props = (page as { properties: Record<string, unknown> }).properties as Record<string, Record<string, unknown>>;
   const studentRelation = getRelationIds(props[CHECKIN_PROPS.STUDENT]);
   const coachRelation = getRelationIds(props[CHECKIN_PROPS.COACH]);
-  const title = getTitleValue(props[CHECKIN_PROPS.TITLE]);
+  const rawTitle = getTitleValue(props[CHECKIN_PROPS.TITLE]);
   const checkinTime = getDateValue(props[CHECKIN_PROPS.CHECKIN_TIME]);
+
+  const splitMatch = rawTitle.match(SPLIT_TAG_PATTERN);
+  const splitPart = splitMatch ? parseInt(splitMatch[1], 10) : undefined;
+  const splitTotal = splitMatch ? parseInt(splitMatch[2], 10) : undefined;
+  const title = splitMatch ? rawTitle.slice(splitMatch[0].length) : rawTitle;
 
   const isMassage = title.startsWith(MASSAGE_TITLE_PREFIX);
   const cleanTitle = isMassage ? title.slice(MASSAGE_TITLE_PREFIX.length) : title;
@@ -65,6 +72,8 @@ function extractCheckin(page: Record<string, unknown>): CheckinRecord {
     durationMinutes,
     studentName: cleanTitle.split(' - ')[0] || undefined,
     isMassage,
+    splitPart,
+    splitTotal,
   };
 }
 
@@ -77,11 +86,14 @@ export async function createCheckinRecord(params: {
   classEndTime: string;    // ISO datetime e.g. "2026-02-21T11:00:00+08:00"
   checkinTime: string;
   isMassage?: boolean;
+  /** 同一堂課因時數跨期不足被拆分時標註，例如 splitPart=1, splitTotal=2 */
+  splitPart?: number;
+  splitTotal?: number;
 }): Promise<CheckinRecord> {
   const notion = getNotionClient();
-  const title = params.isMassage
-    ? `${MASSAGE_TITLE_PREFIX}${params.studentName} - ${params.classDate}`
-    : `${params.studentName} - ${params.classDate}`;
+  const splitTag = params.splitPart && params.splitTotal ? `[拆帳 ${params.splitPart}/${params.splitTotal}] ` : '';
+  const massageTag = params.isMassage ? MASSAGE_TITLE_PREFIX : '';
+  const title = `${splitTag}${massageTag}${params.studentName} - ${params.classDate}`;
 
   const properties: Record<string, unknown> = {
     [CHECKIN_PROPS.TITLE]: {

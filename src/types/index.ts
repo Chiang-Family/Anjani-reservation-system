@@ -56,6 +56,9 @@ export interface CheckinRecord {
   durationMinutes: number;
   studentName?: string;
   isMassage?: boolean;
+  /** 同一堂課因時數跨期不足被拆分時的標註，例如 1/2、2/2 */
+  splitPart?: number;
+  splitTotal?: number;
 }
 
 export interface StudentHoursSummary {
