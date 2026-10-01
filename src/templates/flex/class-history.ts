@@ -14,51 +14,66 @@ function buildClassHistoryRows(
   pageRecords: Array<CheckinRecord & { sequence: number }>,
   isSharedPool: boolean,
 ): FlexComponent[] {
-  return pageRecords.map((r) => ({
-    type: 'box',
-    layout: 'horizontal',
-    contents: [
-      {
+  const rows: FlexComponent[] = [];
+  for (const r of pageRecords) {
+    rows.push({
+      type: 'box',
+      layout: 'horizontal',
+      contents: [
+        {
+          type: 'text',
+          text: `${r.sequence}`,
+          size: 'sm',
+          color: '#888888',
+          flex: 1,
+        },
+        {
+          type: 'text',
+          text: (() => {
+            const [y, m, d] = r.classDate.split('-');
+            const date = `${parseInt(y, 10) - 1911}-${m}-${d}`;
+            if (r.studentName && isSharedPool) {
+              return `${date}(${r.studentName.slice(0, 1)})`;
+            }
+            return date;
+          })(),
+          size: 'sm',
+          color: '#555555',
+          flex: 4,
+        },
+        {
+          type: 'text',
+          text: r.classTimeSlot,
+          size: 'sm',
+          color: '#333333',
+          flex: 4,
+        },
+        {
+          type: 'text',
+          text: r.durationMinutes > 0 ? `${r.durationMinutes}分` : '-',
+          size: 'sm',
+          color: '#333333',
+          flex: 2,
+          align: 'end',
+        },
+      ],
+      margin: 'sm',
+    } as FlexComponent);
+
+    // 拆帳標註獨立一行、全寬顯示，避免擠在窄欄位裡看不清楚
+    if (r.splitPart && r.splitTotal) {
+      rows.push({
         type: 'text',
-        text: `${r.sequence}`,
+        text: `✂️ 拆帳 ${r.splitPart}/${r.splitTotal}：本堂課時數跨期，已拆分計費`,
         size: 'sm',
-        color: '#888888',
-        flex: 1,
-      },
-      {
-        type: 'text',
-        text: (() => {
-          const [y, m, d] = r.classDate.split('-');
-          const date = `${parseInt(y, 10) - 1911}-${m}-${d}`;
-          if (r.studentName && isSharedPool) {
-            return `${date}(${r.studentName.slice(0, 1)})`;
-          }
-          return date;
-        })(),
-        size: 'sm',
-        color: '#555555',
-        flex: 4,
-      },
-      {
-        type: 'text',
-        text: r.classTimeSlot,
-        size: 'sm',
-        color: '#333333',
-        flex: 4,
-      },
-      {
-        type: 'text',
-        text: r.durationMinutes > 0
-          ? (r.splitPart && r.splitTotal ? `${r.durationMinutes}分 ✂${r.splitPart}/${r.splitTotal}` : `${r.durationMinutes}分`)
-          : '-',
-        size: 'sm',
-        color: r.splitPart ? '#C0392B' : '#333333',
-        flex: 2,
-        align: 'end',
-      },
-    ],
-    margin: 'sm',
-  } as FlexComponent));
+        weight: 'bold',
+        color: '#C0392B',
+        margin: 'xs',
+        wrap: true,
+      } as FlexComponent);
+    }
+  }
+  return rows;
 }
 
 function buildClassHistoryBubble(
@@ -130,7 +145,7 @@ function buildClassHistoryBubble(
           ? [{
             type: 'text',
             text: '✂️ 表示該堂課因當期時數不足，已拆分計入前後兩期',
-            size: 'xxs',
+            size: 'xs',
             color: '#C0392B',
             margin: 'md',
             wrap: true,

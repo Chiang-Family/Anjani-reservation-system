@@ -536,7 +536,20 @@ export async function getCoachMonthlyStats(
 
     if (matchedCheckin) {
       const price = checkinPriceMap.get(matchedCheckin.id) ?? 0;
-      estimatedRevenue += (matchedCheckin.durationMinutes / 60) * price;
+      let revenue = (matchedCheckin.durationMinutes / 60) * price;
+
+      // 若該堂課因時數跨期不足被拆成多筆打卡（[拆帳] 標註），這些片段共用同一個行事曆事件，
+      // 要把同一天其餘的拆帳片段也一併算進這次事件的收入，否則多出來的片段會因為配對不到
+      // 行事曆事件而漏算（executedRevenue 是直接加總所有打卡，不會有這個問題）
+      if (matchedCheckin.splitTotal && matchedCheckin.splitTotal > 1 && matchedCheckins) {
+        for (let i = 1; i < matchedCheckin.splitTotal && matchedCheckins.length > 0; i++) {
+          const sibling = matchedCheckins.shift()!;
+          const siblingPrice = checkinPriceMap.get(sibling.id) ?? 0;
+          revenue += (sibling.durationMinutes / 60) * siblingPrice;
+        }
+      }
+
+      estimatedRevenue += revenue;
     } else if (stu?.paymentType === '單堂' && stu.perSessionFee) {
       // 單堂學員：已繳費用實際金額，未繳費用預設單堂費
       const paidAmount = sessionPaidMap.get(`${stu.id}:${event.date}`);
